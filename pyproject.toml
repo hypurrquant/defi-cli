@@ -43,6 +43,7 @@ select = ["E", "F", "I", "N", "W"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["live: tests that make real RPC calls (skipped by default)"]
 
 [tool.mypy]
 python_version = "3.11"

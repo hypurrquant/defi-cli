@@ -204,6 +204,33 @@ def _handle_quote(action: dict) -> dict:
     return {"success": True, "tx": call}
 
 
+def _handle_fetch_rates(action: dict) -> dict:
+    from defi_cli.dashboard import fetch_all_rates
+    assets = action.get("assets", ["USDC", "WETH"])
+    rates = fetch_all_rates(assets)
+    return {"success": True, "data": rates}
+
+
+def _handle_fetch_portfolio(action: dict) -> dict:
+    from defi_cli.dashboard import fetch_portfolio
+    result = fetch_portfolio(
+        chain=action["chain"],
+        address=action["address"],
+        tokens=action.get("tokens"),
+    )
+    return {"success": True, "data": result}
+
+
+def _handle_fetch_position(action: dict) -> dict:
+    from defi_cli.fetcher import fetch_user_position
+    result = fetch_user_position(
+        protocol=action["protocol"],
+        chain=action["chain"],
+        user=action["address"],
+    )
+    return result
+
+
 _HANDLERS = {
     "swap": _handle_swap,
     "supply": _handle_supply,
@@ -220,4 +247,7 @@ _HANDLERS = {
     "unwrap": _handle_unwrap,
     "pipeline_supply": _handle_pipeline_supply,
     "pipeline_swap": _handle_pipeline_swap,
+    "fetch_rates": _handle_fetch_rates,
+    "fetch_portfolio": _handle_fetch_portfolio,
+    "fetch_position": _handle_fetch_position,
 }

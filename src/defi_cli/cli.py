@@ -1074,6 +1074,71 @@ def fetch_position_cmd(protocol, chain, user, json_output):
         console.print(f"[red]Error:[/red] {result['error']}")
 
 
+@fetch.command("dashboard")
+@click.option("--assets", "-a", multiple=True, help="Assets to query (default: USDC,WETH)")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def fetch_dashboard_cmd(assets, json_output):
+    """Live yield dashboard — rates across all lending protocols."""
+    from defi_cli.dashboard import fetch_all_rates
+
+    asset_list = list(assets) if assets else None
+    rates = fetch_all_rates(asset_list)
+
+    if json_output:
+        click.echo(json.dumps(rates, indent=2))
+    else:
+        table = Table(title="Yield Dashboard")
+        table.add_column("Asset", style="bold")
+        table.add_column("Protocol", style="cyan")
+        table.add_column("Chain", style="green")
+        table.add_column("Supply APY", style="yellow")
+        table.add_column("Borrow APY", style="red")
+
+        for r in rates:
+            table.add_row(
+                r["asset"], r["protocol"], r["chain"],
+                f"{r['supply_apy']:.4f}%",
+                f"{r['borrow_apy']:.4f}%",
+            )
+
+        if not rates:
+            console.print("[yellow]No rates available[/yellow]")
+        else:
+            console.print(table)
+
+
+@fetch.command("portfolio")
+@click.argument("chain")
+@click.argument("address")
+@click.option("--tokens", "-t", multiple=True, help="Specific tokens to check")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def fetch_portfolio_cmd(chain, address, tokens, json_output):
+    """Fetch portfolio overview — native + token balances."""
+    from defi_cli.dashboard import fetch_portfolio
+
+    token_list = list(tokens) if tokens else None
+    portfolio = fetch_portfolio(chain, address, token_list)
+
+    if json_output:
+        click.echo(json.dumps(portfolio, indent=2, default=str))
+    else:
+        console.print(f"[bold]Portfolio on {chain}[/bold]\n")
+
+        if portfolio["native"]["success"]:
+            n = portfolio["native"]
+            console.print(f"  [cyan]Native:[/cyan] {n['balance_eth']:.6f}")
+
+        if portfolio["tokens"]:
+            table = Table()
+            table.add_column("Token", style="cyan")
+            table.add_column("Balance", style="green")
+            for t in portfolio["tokens"]:
+                table.add_row(t["token"], f"{t['balance']}")
+            console.print(table)
+        else:
+            console.print("  [dim]No token balances found[/dim]")
+
+
 # ─── Execute Commands ─────────────────────────────────────────────────────
 
 
@@ -1176,6 +1241,85 @@ def execute_receipt(tx_hash, chain, json_output):
         console.print(f"  Gas Used: {int(receipt.get('gasUsed', '0x0'), 16)}")
     else:
         console.print("[yellow]Receipt not found (tx may be pending)[/yellow]")
+
+
+# ─── Transaction History ──────────────────────────────────────────────────
+
+
+@cli.group()
+def history():
+    """Transaction history tracking."""
+    pass
+
+
+@history.command("list")
+@click.option("--chain", help="Filter by chain")
+@click.option("--action", help="Filter by action type")
+@click.option("--limit", default=20, help="Max results")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def history_list(chain, action, limit, json_output):
+    """List transaction history."""
+    from defi_cli.tracker import get_history
+
+    entries = get_history(chain=chain, action=action, limit=limit)
+    if json_output:
+        click.echo(json.dumps(entries, indent=2))
+    elif not entries:
+        console.print("[dim]No transactions recorded[/dim]")
+    else:
+        table = Table(title="Transaction History")
+        table.add_column("Hash", style="cyan", max_width=16)
+        table.add_column("Chain", style="green")
+        table.add_column("Action", style="yellow")
+        table.add_column("Status")
+        table.add_column("Gas Used")
+
+        for e in entries:
+            status = e["status"]
+            color = {"confirmed": "green", "failed": "red", "pending": "yellow"}.get(
+                status, "white"
+            )
+            gas = str(e.get("gas_used", "-"))
+            table.add_row(
+                e["tx_hash"][:16] + "...",
+                e["chain"], e["action"],
+                f"[{color}]{status}[/{color}]",
+                gas,
+            )
+        console.print(table)
+
+
+@history.command("pending")
+@click.option("--check", is_flag=True, help="Check pending txs against RPC")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def history_pending(check, json_output):
+    """Show or check pending transactions."""
+    if check:
+        from defi_cli.tracker import check_and_update_pending
+
+        updated = check_and_update_pending()
+        if json_output:
+            click.echo(json.dumps(updated, indent=2))
+        elif updated:
+            for u in updated:
+                color = "green" if u["status"] == "confirmed" else "red"
+                console.print(
+                    f"  [{color}]{u['status']}[/{color}] "
+                    f"{u['tx_hash'][:16]}... ({u['chain']})"
+                )
+        else:
+            console.print("[dim]No pending transactions updated[/dim]")
+    else:
+        from defi_cli.tracker import get_pending_txs
+
+        pending = get_pending_txs()
+        if json_output:
+            click.echo(json.dumps(pending, indent=2))
+        elif pending:
+            for p in pending:
+                console.print(f"  [yellow]pending[/yellow] {p['tx_hash'][:16]}... ({p['chain']})")
+        else:
+            console.print("[dim]No pending transactions[/dim]")
 
 
 @cli.command("agent")

@@ -213,3 +213,74 @@ def test_agent_quote():
 
     assert result["success"] is True
     assert result["tx"]["data"][:10] == "0xc6a5026a"
+
+
+def test_agent_fetch_rates():
+    """Agent fetch_rates action returns rate data."""
+    from unittest.mock import patch
+
+    from defi_cli.agent import process_action
+
+    mock_rates = [
+        {"protocol": "aave_v3", "chain": "arbitrum", "asset": "USDC",
+         "supply_apy": 5.0, "borrow_apy": 3.0},
+    ]
+
+    with patch("defi_cli.dashboard.fetch_all_rates", return_value=mock_rates):
+        result = process_action({
+            "type": "fetch_rates",
+            "assets": ["USDC"],
+        })
+
+    assert result["success"] is True
+    assert len(result["data"]) == 1
+    assert result["data"][0]["supply_apy"] == 5.0
+
+
+def test_agent_fetch_portfolio():
+    """Agent fetch_portfolio action returns portfolio data."""
+    from unittest.mock import patch
+
+    from defi_cli.agent import process_action
+
+    mock_portfolio = {
+        "chain": "arbitrum",
+        "native": {"success": True, "balance_wei": 10**18, "balance_eth": 1.0},
+        "tokens": [{"token": "USDC", "balance_raw": 1000000, "balance": 1.0}],
+    }
+
+    with patch("defi_cli.dashboard.fetch_portfolio", return_value=mock_portfolio):
+        result = process_action({
+            "type": "fetch_portfolio",
+            "chain": "arbitrum",
+            "address": SENDER,
+        })
+
+    assert result["success"] is True
+    assert result["data"]["chain"] == "arbitrum"
+
+
+def test_agent_fetch_position():
+    """Agent fetch_position action returns position data."""
+    from unittest.mock import patch
+
+    from defi_cli.agent import process_action
+
+    mock_position = {
+        "success": True,
+        "health_status": "healthy",
+        "health_factor": 2.0,
+        "total_collateral_usd": 10000.0,
+        "total_debt_usd": 5000.0,
+    }
+
+    with patch("defi_cli.fetcher.fetch_user_position", return_value=mock_position):
+        result = process_action({
+            "type": "fetch_position",
+            "protocol": "aave_v3",
+            "chain": "arbitrum",
+            "address": SENDER,
+        })
+
+    assert result["success"] is True
+    assert result["health_status"] == "healthy"

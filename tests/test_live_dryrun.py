@@ -8,8 +8,6 @@ Skip by default in CI/normal test runs.
 
 import pytest
 
-from prepare import PROTOCOLS, TOKENS
-
 SENDER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 # Mark all tests in this file as "live"
@@ -83,8 +81,8 @@ def test_live_lending_rates():
 
 def test_live_dry_run_balance_of():
     """Dry-run a balanceOf call on Arbitrum."""
-    from defi_cli.fetcher import eth_call
     from defi_cli.decimals import build_balanceof_call
+    from defi_cli.fetcher import eth_call
 
     call = build_balanceof_call("arbitrum", "USDC", SENDER)
     result = eth_call("arbitrum", call)
