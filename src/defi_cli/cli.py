@@ -170,6 +170,59 @@ def dex_swap(protocol, chain, token_in, token_out, amount_in, recipient,
         _execute_dry_run(tx)
 
 
+@dex.command("quote")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("token_in")
+@click.argument("token_out")
+@click.argument("amount_in", type=int)
+@click.option("--fee", default=3000, help="Pool fee tier")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def dex_quote(protocol, chain, token_in, token_out, amount_in,
+              fee, json_output):
+    """Get a swap price quote via QuoterV2."""
+    from defi_cli.quote import build_quote_call
+
+    call = build_quote_call(
+        protocol=protocol, chain=chain,
+        token_in=token_in, token_out=token_out,
+        amount_in=amount_in, fee=fee,
+    )
+    if json_output:
+        click.echo(json.dumps(call, indent=2))
+    else:
+        console.print("[green]QuoterV2 call:[/green]")
+        console.print(f"  to:   {call['to']}")
+        console.print(f"  data: {call['data'][:20]}...")
+
+
+@dex.command("compare")
+@click.argument("chain")
+@click.argument("token_in")
+@click.argument("token_out")
+@click.argument("amount_in", type=int)
+@click.option("--fee", default=3000, help="Pool fee tier")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def dex_compare(chain, token_in, token_out, amount_in, fee, json_output):
+    """Compare swap quotes across all DEXes on a chain."""
+    from defi_cli.quote import build_multi_quote_calls
+
+    results = build_multi_quote_calls(
+        chain=chain, token_in=token_in, token_out=token_out,
+        amount_in=amount_in, fee=fee,
+    )
+    if json_output:
+        output = [
+            {"protocol": r["protocol"], **r["call"]}
+            for r in results
+        ]
+        click.echo(json.dumps(output, indent=2))
+    else:
+        console.print(f"[green]Found {len(results)} DEX(es) on {chain}:[/green]")
+        for r in results:
+            console.print(f"  [cyan]{r['protocol']}[/cyan]: {r['call']['to']}")
+
+
 # ─── Lending Commands ─────────────────────────────────────────────────────────
 
 
