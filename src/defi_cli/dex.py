@@ -70,6 +70,42 @@ def build_swap_tx(
     }
 
 
+def build_v2_swap_tx(
+    protocol: str,
+    chain: str,
+    token_in: str,
+    token_out: str,
+    amount_in: int,
+    recipient: str,
+    deadline: int = 2**32 - 1,
+) -> dict:
+    """Build a Uniswap V2 style swap via swapExactTokensForTokens.
+
+    swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin,
+                             address[] path, address to, uint256 deadline)
+    selector: 38ed1739
+    """
+    config = _get_protocol_chain(protocol, chain)
+    chain_id = CHAINS[chain]["chain_id"]
+
+    v2_router = config.get("v2_router")
+    if not v2_router:
+        raise ValueError(f"{protocol} on {chain} has no v2_router")
+
+    selector = "38ed1739"
+    params = encode(
+        ["uint256", "uint256", "address[]", "address", "uint256"],
+        [amount_in, 0, [token_in, token_out], recipient, deadline],
+    )
+
+    return {
+        "to": v2_router,
+        "data": "0x" + selector + params.hex(),
+        "chainId": chain_id,
+        "value": 0,
+    }
+
+
 def build_add_liquidity_tx(
     protocol: str,
     chain: str,

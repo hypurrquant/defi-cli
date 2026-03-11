@@ -82,6 +82,25 @@ def test_kittenswap_swap(sender):
     assert tx["chainId"] == CHAINS["hyperevm"]["chain_id"]
 
 
+def test_hyperswap_v2_swap(sender):
+    """Build HyperSwap V2 swap via swapExactTokensForTokens."""
+    from defi_cli.dex import build_v2_swap_tx
+
+    tx = build_v2_swap_tx(
+        protocol="hyperswap",
+        chain="hyperevm",
+        token_in=TOKENS["hyperevm"]["USDC"],
+        token_out=TOKENS["hyperevm"]["WHYPE"],
+        amount_in=100 * 10**6,
+        recipient=sender,
+    )
+
+    v2_router = PROTOCOLS["hyperswap"]["chains"]["hyperevm"]["v2_router"]
+    assert tx["to"].lower() == v2_router.lower()
+    assert tx["data"][:10] == "0x38ed1739"
+    assert tx["chainId"] == CHAINS["hyperevm"]["chain_id"]
+
+
 def test_dex_add_liquidity(sender):
     """Build add liquidity tx via NonfungiblePositionManager.mint()."""
     from defi_cli.dex import build_add_liquidity_tx
