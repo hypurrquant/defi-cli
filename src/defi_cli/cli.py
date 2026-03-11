@@ -916,6 +916,213 @@ def _print_tx(tx: dict, label: str, json_output: bool) -> None:
             console.print(f"  value:   {tx['value']}")
 
 
+# ─── Fetch Commands (live RPC) ────────────────────────────────────────────
+
+
+@cli.group()
+def fetch():
+    """Live on-chain data queries via RPC."""
+    pass
+
+
+@fetch.command("balance")
+@click.argument("chain")
+@click.argument("address")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def fetch_balance_cmd(chain, address, json_output):
+    """Fetch native token balance (live RPC call)."""
+    from defi_cli.fetcher import fetch_balance
+
+    result = fetch_balance(chain, address)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        from defi_cli.registry import CHAINS as CHAIN_DATA
+        native = CHAIN_DATA[chain]["native_token"] if chain in CHAIN_DATA else "?"
+        console.print(
+            f"[green]{result['balance_eth']:.6f} {native}[/green]"
+            f" ({result['balance_wei']} wei)"
+        )
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+@fetch.command("token-balance")
+@click.argument("chain")
+@click.argument("token")
+@click.argument("address")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def fetch_token_balance_cmd(chain, token, address, json_output):
+    """Fetch ERC20 token balance (live RPC call)."""
+    from defi_cli.decimals import format_amount
+    from defi_cli.fetcher import fetch_token_balance
+
+    result = fetch_token_balance(chain, token, address)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        try:
+            formatted = format_amount(result["balance_raw"], token)
+            console.print(f"[green]{formatted}[/green]")
+        except ValueError:
+            console.print(f"[green]{result['balance_raw']} {token}[/green]")
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+@fetch.command("price")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("asset")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def fetch_price_cmd(protocol, chain, asset, json_output):
+    """Fetch asset price from oracle (live RPC call)."""
+    from defi_cli.fetcher import fetch_asset_price
+
+    result = fetch_asset_price(protocol, chain, asset)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        console.print(f"[green]{asset}: ${result['price_usd']:,.2f}[/green]")
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+@fetch.command("position")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("user")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def fetch_position_cmd(protocol, chain, user, json_output):
+    """Fetch lending position with health factor (live RPC call)."""
+    from defi_cli.fetcher import fetch_user_position
+
+    result = fetch_user_position(protocol, chain, user)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        status = result["health_status"]
+        color = {
+            "safe": "green", "healthy": "green",
+            "moderate": "yellow", "at_risk": "red",
+            "critical": "bold red",
+        }.get(status, "white")
+        console.print(f"[{color}]Status: {status}[/{color}]")
+        console.print(
+            f"  Collateral: ${result['total_collateral_usd']:,.2f}"
+        )
+        console.print(f"  Debt:       ${result['total_debt_usd']:,.2f}")
+        console.print(f"  Health:     {result['health_factor']:.4f}")
+        for rec in result.get("recommendations", []):
+            console.print(f"  [dim]> {rec}[/dim]")
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+# ─── Execute Commands ─────────────────────────────────────────────────────
+
+
+@cli.group()
+def execute():
+    """Transaction execution commands (sign + send)."""
+    pass
+
+
+@execute.command("dry-run")
+@click.argument("tx_json")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def execute_dry_run(tx_json, json_output):
+    """Dry-run a transaction via eth_call.
+
+    TX_JSON: JSON string or file path with transaction dict.
+    """
+    import os
+
+    from defi_cli.executor import dry_run
+
+    if os.path.exists(tx_json):
+        with open(tx_json) as f:
+            tx = json.load(f)
+    else:
+        tx = json.loads(tx_json)
+
+    result = dry_run(tx)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        console.print(f"[green]SUCCESS[/green]: {result['result'][:80]}...")
+    else:
+        console.print(f"[red]FAILED[/red]: {result['result']}")
+
+
+@execute.command("sign")
+@click.argument("tx_json")
+@click.argument("private_key")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def execute_sign(tx_json, private_key, json_output):
+    """Sign a transaction and output raw signed hex.
+
+    TX_JSON: JSON string or file with prepared transaction.
+    """
+    import os
+
+    from defi_cli.executor import sign_tx
+
+    if os.path.exists(tx_json):
+        with open(tx_json) as f:
+            tx = json.load(f)
+    else:
+        tx = json.loads(tx_json)
+
+    raw = sign_tx(tx, private_key)
+    if json_output:
+        click.echo(json.dumps({"raw_tx": raw}, indent=2))
+    else:
+        console.print(f"[green]Signed TX:[/green] {raw[:40]}...({len(raw)} chars)")
+
+
+@execute.command("send")
+@click.argument("raw_tx")
+@click.argument("chain")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def execute_send(raw_tx, chain, json_output):
+    """Send a signed transaction to the network."""
+    from defi_cli.executor import send_raw_tx
+    from defi_cli.registry import CHAINS
+
+    rpc_url = CHAINS[chain]["rpc_url"]
+    result = send_raw_tx(raw_tx, rpc_url)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        console.print(f"[green]TX Hash:[/green] {result['tx_hash']}")
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+@execute.command("receipt")
+@click.argument("tx_hash")
+@click.argument("chain")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def execute_receipt(tx_hash, chain, json_output):
+    """Get transaction receipt."""
+    from defi_cli.executor import get_tx_receipt
+    from defi_cli.registry import CHAINS
+
+    rpc_url = CHAINS[chain]["rpc_url"]
+    receipt = get_tx_receipt(tx_hash, rpc_url)
+    if json_output:
+        click.echo(json.dumps(receipt, indent=2))
+    elif receipt:
+        status = "SUCCESS" if receipt.get("status") == "0x1" else "FAILED"
+        color = "green" if status == "SUCCESS" else "red"
+        console.print(f"[{color}]{status}[/{color}]")
+        console.print(f"  Block:    {int(receipt.get('blockNumber', '0x0'), 16)}")
+        console.print(f"  Gas Used: {int(receipt.get('gasUsed', '0x0'), 16)}")
+    else:
+        console.print("[yellow]Receipt not found (tx may be pending)[/yellow]")
+
+
 @cli.command("agent")
 @click.argument("json_input")
 def agent_execute(json_input):
