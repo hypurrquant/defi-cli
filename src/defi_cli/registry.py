@@ -201,6 +201,15 @@ PROTOCOLS = {
     },
 }
 
+def resolve_token(chain: str, token: str) -> str:
+    """Resolve a token symbol to its address. Pass-through if already 0x."""
+    if token.startswith("0x"):
+        return token
+    if chain not in TOKENS or token not in TOKENS[chain]:
+        raise ValueError(f"Unknown token {token} on {chain}")
+    return TOKENS[chain][token]
+
+
 SELECTORS = {
     "erc20_balanceOf": "70a08231",
     "erc20_approve": "095ea7b3",

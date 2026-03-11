@@ -156,10 +156,12 @@ def dex_swap(protocol, chain, token_in, token_out, amount_in, recipient,
              fee, dry_run, json_output):
     """Build a swap transaction."""
     from defi_cli.dex import build_swap_tx
+    from defi_cli.registry import resolve_token
 
     tx = build_swap_tx(
         protocol=protocol, chain=chain,
-        token_in=token_in, token_out=token_out,
+        token_in=resolve_token(chain, token_in),
+        token_out=resolve_token(chain, token_out),
         amount_in=amount_in, recipient=recipient, fee=fee,
     )
 
@@ -189,8 +191,10 @@ def lending_supply(protocol, chain, asset, amount, on_behalf_of,
                    dry_run, json_output):
     """Build a supply/deposit transaction."""
     from defi_cli.lending import build_supply_tx
+    from defi_cli.registry import resolve_token
 
-    tx = build_supply_tx(protocol=protocol, chain=chain, asset=asset,
+    tx = build_supply_tx(protocol=protocol, chain=chain,
+                         asset=resolve_token(chain, asset),
                          amount=amount, on_behalf_of=on_behalf_of)
     _print_tx(tx, "Supply", json_output)
     if dry_run:
@@ -209,8 +213,10 @@ def lending_borrow(protocol, chain, asset, amount, on_behalf_of,
                    dry_run, json_output):
     """Build a borrow transaction."""
     from defi_cli.lending import build_borrow_tx
+    from defi_cli.registry import resolve_token
 
-    tx = build_borrow_tx(protocol=protocol, chain=chain, asset=asset,
+    tx = build_borrow_tx(protocol=protocol, chain=chain,
+                         asset=resolve_token(chain, asset),
                          amount=amount, on_behalf_of=on_behalf_of)
     _print_tx(tx, "Borrow", json_output)
     if dry_run:
@@ -229,8 +235,10 @@ def lending_repay(protocol, chain, asset, amount, on_behalf_of,
                   dry_run, json_output):
     """Build a repay transaction."""
     from defi_cli.lending import build_repay_tx
+    from defi_cli.registry import resolve_token
 
-    tx = build_repay_tx(protocol=protocol, chain=chain, asset=asset,
+    tx = build_repay_tx(protocol=protocol, chain=chain,
+                        asset=resolve_token(chain, asset),
                         amount=amount, on_behalf_of=on_behalf_of)
     _print_tx(tx, "Repay", json_output)
     if dry_run:
@@ -249,8 +257,10 @@ def lending_withdraw(protocol, chain, asset, amount, to_address,
                      dry_run, json_output):
     """Build a withdraw transaction."""
     from defi_cli.lending import build_withdraw_tx
+    from defi_cli.registry import resolve_token
 
-    tx = build_withdraw_tx(protocol=protocol, chain=chain, asset=asset,
+    tx = build_withdraw_tx(protocol=protocol, chain=chain,
+                           asset=resolve_token(chain, asset),
                            amount=amount, to=to_address)
     _print_tx(tx, "Withdraw", json_output)
     if dry_run:
@@ -265,8 +275,10 @@ def lending_withdraw(protocol, chain, asset, amount, to_address,
 def lending_rates(protocol, chain, asset, json_output):
     """Build a getReserveData query."""
     from defi_cli.lending import build_get_rates_call
+    from defi_cli.registry import resolve_token
 
-    call = build_get_rates_call(protocol=protocol, chain=chain, asset=asset)
+    call = build_get_rates_call(protocol=protocol, chain=chain,
+                                asset=resolve_token(chain, asset))
     if json_output:
         click.echo(json.dumps(call, indent=2))
     else:
@@ -290,14 +302,18 @@ def cdp():
 @click.argument("debt_amount", type=int)
 @click.argument("owner")
 @click.option("--chain", default="hyperevm", help="Chain (default: hyperevm)")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-def cdp_open(collateral, coll_amount, debt_amount, owner, chain, json_output):
+def cdp_open(collateral, coll_amount, debt_amount, owner, chain,
+             dry_run, json_output):
     """Build an openTrove transaction."""
     from defi_cli.cdp import build_open_trove_tx
 
     tx = build_open_trove_tx(chain=chain, collateral=collateral,
                              coll_amount=coll_amount, debt_amount=debt_amount, owner=owner)
     _print_tx(tx, "Open Trove", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
 
 
 @cdp.command("close")
@@ -305,14 +321,17 @@ def cdp_open(collateral, coll_amount, debt_amount, owner, chain, json_output):
 @click.argument("trove_id", type=int)
 @click.argument("owner")
 @click.option("--chain", default="hyperevm")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-def cdp_close(collateral, trove_id, owner, chain, json_output):
+def cdp_close(collateral, trove_id, owner, chain, dry_run, json_output):
     """Build a closeTrove transaction."""
     from defi_cli.cdp import build_close_trove_tx
 
     tx = build_close_trove_tx(chain=chain, collateral=collateral,
                               trove_id=trove_id, owner=owner)
     _print_tx(tx, "Close Trove", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
 
 
 # ─── Bridge Commands ──────────────────────────────────────────────────────────
@@ -402,6 +421,121 @@ def yield_compare(json_output):
             table.add_row(r["protocol"], r["chain"],
                           f"{r['supply_apy']:.1f}%", f"{r['borrow_apy']:.1f}%")
         console.print(table)
+
+
+# ─── Gas Commands ─────────────────────────────────────────────────────────
+
+
+@cli.group()
+def gas():
+    """Gas estimation and fee commands."""
+    pass
+
+
+@gas.command("price")
+@click.argument("chain")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def gas_price(chain, json_output):
+    """Get current gas price on a chain."""
+    from defi_cli.gas import get_gas_price
+
+    result = get_gas_price(chain)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        console.print(f"[green]Gas price on {chain}:[/green]")
+        console.print(f"  {result['gas_price_gwei']:.4f} gwei")
+        console.print(f"  {result['gas_price_wei']} wei")
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+@gas.command("nonce")
+@click.argument("chain")
+@click.argument("address")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def gas_nonce(chain, address, json_output):
+    """Get transaction count (nonce) for an address."""
+    from defi_cli.gas import get_nonce
+
+    result = get_nonce(chain, address)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        console.print(f"[green]Nonce:[/green] {result['nonce']}")
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+@gas.command("estimate")
+@click.argument("to_address")
+@click.argument("data")
+@click.argument("chain_id", type=int)
+@click.option("--value", default=0, type=int, help="ETH value in wei")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def gas_estimate(to_address, data, chain_id, value, json_output):
+    """Estimate gas for a transaction."""
+    from defi_cli.gas import estimate_gas
+
+    tx = {"to": to_address, "data": data, "chainId": chain_id, "value": value}
+    result = estimate_gas(tx)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    elif result["success"]:
+        console.print(f"[green]Estimated gas:[/green] {result['gas']}")
+    else:
+        console.print(f"[red]Error:[/red] {result['error']}")
+
+
+# ─── Approve Commands ────────────────────────────────────────────────────────
+
+
+@cli.group()
+def approve():
+    """ERC20 token approval commands."""
+    pass
+
+
+@approve.command("build")
+@click.argument("chain")
+@click.argument("token")
+@click.argument("spender")
+@click.option("--amount", default=None, type=int,
+              help="Amount to approve (default: max uint256)")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def approve_build(chain, token, spender, amount, dry_run, json_output):
+    """Build an ERC20 approve transaction."""
+    from defi_cli.approve import build_approve_tx
+
+    kwargs = {"chain": chain, "token": token, "spender": spender}
+    if amount is not None:
+        kwargs["amount"] = amount
+    tx = build_approve_tx(**kwargs)
+    _print_tx(tx, "Approve", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
+
+
+@approve.command("check")
+@click.argument("chain")
+@click.argument("token")
+@click.argument("owner")
+@click.argument("spender")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def approve_check(chain, token, owner, spender, json_output):
+    """Check ERC20 allowance."""
+    from defi_cli.approve import build_check_allowance_call
+
+    call = build_check_allowance_call(
+        chain=chain, token=token, owner=owner, spender=spender,
+    )
+    if json_output:
+        click.echo(json.dumps(call, indent=2))
+    else:
+        console.print("[green]Allowance call:[/green]")
+        console.print(f"  to:   {call['to']}")
+        console.print(f"  data: {call['data'][:20]}...")
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
