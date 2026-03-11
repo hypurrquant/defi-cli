@@ -423,6 +423,73 @@ def yield_compare(json_output):
         console.print(table)
 
 
+# ─── Pipeline Commands ────────────────────────────────────────────────────
+
+
+@cli.group()
+def pipeline():
+    """Multi-step transaction pipelines (approve + execute)."""
+    pass
+
+
+@pipeline.command("supply")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("token")
+@click.argument("amount", type=int)
+@click.argument("sender")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def pipeline_supply(protocol, chain, token, amount, sender, json_output):
+    """Build approve + supply pipeline."""
+    from defi_cli.pipeline import build_supply_pipeline
+
+    steps = build_supply_pipeline(
+        protocol=protocol, chain=chain, token=token,
+        amount=amount, sender=sender,
+    )
+    _print_pipeline(steps, json_output)
+
+
+@pipeline.command("swap")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("token_in")
+@click.argument("token_out")
+@click.argument("amount_in", type=int)
+@click.argument("recipient")
+@click.option("--fee", default=3000, help="Pool fee tier")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def pipeline_swap(protocol, chain, token_in, token_out, amount_in,
+                  recipient, fee, json_output):
+    """Build approve + swap pipeline."""
+    from defi_cli.pipeline import build_swap_pipeline
+
+    steps = build_swap_pipeline(
+        protocol=protocol, chain=chain, token_in=token_in,
+        token_out=token_out, amount_in=amount_in,
+        recipient=recipient, fee=fee,
+    )
+    _print_pipeline(steps, json_output)
+
+
+@pipeline.command("repay")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("token")
+@click.argument("amount", type=int)
+@click.argument("sender")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def pipeline_repay(protocol, chain, token, amount, sender, json_output):
+    """Build approve + repay pipeline."""
+    from defi_cli.pipeline import build_repay_pipeline
+
+    steps = build_repay_pipeline(
+        protocol=protocol, chain=chain, token=token,
+        amount=amount, sender=sender,
+    )
+    _print_pipeline(steps, json_output)
+
+
 # ─── Gas Commands ─────────────────────────────────────────────────────────
 
 
@@ -552,6 +619,21 @@ def _print_tx(tx: dict, label: str, json_output: bool) -> None:
         console.print(f"  data:    {tx['data'][:20]}...({len(tx['data'])} chars)")
         if tx.get("value", 0) > 0:
             console.print(f"  value:   {tx['value']}")
+
+
+def _print_pipeline(steps: list[dict], json_output: bool) -> None:
+    """Print a multi-step transaction pipeline."""
+    if json_output:
+        click.echo(json.dumps(steps, indent=2))
+    else:
+        console.print(f"[green]Pipeline ({len(steps)} steps):[/green]")
+        for i, step in enumerate(steps):
+            label = step.get("label", f"Step {i + 1}")
+            console.print(f"\n  [cyan]Step {i + 1}:[/cyan] {label}")
+            console.print(f"    to:      {step['to']}")
+            console.print(f"    chainId: {step['chainId']}")
+            data = step.get("data", "")
+            console.print(f"    data:    {data[:20]}...({len(data)} chars)")
 
 
 def _execute_dry_run(tx: dict) -> None:

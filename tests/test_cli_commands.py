@@ -122,6 +122,39 @@ def test_cli_bridge_quote_json():
     assert "fromChainId" in data or "fromChain" in data
 
 
+def test_cli_pipeline_supply_json():
+    """Pipeline supply --json-output returns list of tx dicts."""
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "pipeline", "supply", "aave_v3", "arbitrum",
+        "USDC", "1000000",
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "--json-output",
+    ])
+    assert result.exit_code == 0
+    import json
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+    assert len(data) == 2
+    assert "label" in data[0]
+
+
+def test_cli_pipeline_swap_json():
+    """Pipeline swap --json-output returns list of tx dicts."""
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "pipeline", "swap", "uniswap_v3", "arbitrum",
+        "USDC", "WETH", "1000000",
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "--json-output",
+    ])
+    assert result.exit_code == 0
+    import json
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+
 def test_cli_yield_compare_json():
     """Yield compare --json-output returns valid JSON."""
     runner = CliRunner()
