@@ -58,3 +58,44 @@ def test_felix_close_trove(sender):
     assert tx["to"].lower() == _felix_whype_borrower_ops().lower()
     assert len(tx["data"]) > 10
     assert tx["chainId"] == CHAINS["hyperevm"]["chain_id"]
+
+
+def _felix_whype_trove_manager() -> str:
+    return PROTOCOLS["felix"]["chains"]["hyperevm"]["branches"]["WHYPE"]["trove_manager"]
+
+
+def test_felix_get_trove_debt():
+    """Build getTroveDebt call targeting TroveManager."""
+    from defi_cli.cdp import build_get_trove_debt_call
+
+    call = build_get_trove_debt_call(
+        chain="hyperevm", collateral="WHYPE", trove_id=1,
+    )
+
+    assert call["to"].lower() == _felix_whype_trove_manager().lower()
+    assert len(call["data"]) > 10
+    assert call["chainId"] == 999
+
+
+def test_felix_get_trove_coll():
+    """Build getTroveColl call targeting TroveManager."""
+    from defi_cli.cdp import build_get_trove_coll_call
+
+    call = build_get_trove_coll_call(
+        chain="hyperevm", collateral="WHYPE", trove_id=42,
+    )
+
+    assert call["to"].lower() == _felix_whype_trove_manager().lower()
+    assert len(call["data"]) > 10
+
+
+def test_felix_get_trove_info():
+    """Build Troves mapping call."""
+    from defi_cli.cdp import build_get_trove_info_call
+
+    call = build_get_trove_info_call(
+        chain="hyperevm", collateral="WHYPE", trove_id=1,
+    )
+
+    assert call["to"].lower() == _felix_whype_trove_manager().lower()
+    assert call["chainId"] == 999

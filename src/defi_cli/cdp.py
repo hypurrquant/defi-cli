@@ -125,3 +125,73 @@ def build_close_trove_tx(
         "chainId": chain_id,
         "value": 0,
     }
+
+
+def build_get_trove_info_call(
+    chain: str,
+    collateral: str,
+    trove_id: int,
+) -> dict:
+    """Build TroveManager.Troves(uint256) eth_call to get trove info.
+
+    Returns call dict for querying trove state.
+    """
+    branch = _get_felix_branch(chain, collateral)
+    chain_id = CHAINS[chain]["chain_id"]
+
+    # Troves(uint256) — public mapping getter
+    from web3 import Web3
+
+    selector = Web3.keccak(text="Troves(uint256)")[:4].hex()
+    params = encode(["uint256"], [trove_id])
+
+    return {
+        "to": branch["trove_manager"],
+        "data": "0x" + selector + params.hex(),
+        "chainId": chain_id,
+        "method_info": "Troves(uint256)",
+    }
+
+
+def build_get_trove_debt_call(
+    chain: str,
+    collateral: str,
+    trove_id: int,
+) -> dict:
+    """Build TroveManager.getTroveDebt(uint256) eth_call."""
+    branch = _get_felix_branch(chain, collateral)
+    chain_id = CHAINS[chain]["chain_id"]
+
+    from web3 import Web3
+
+    selector = Web3.keccak(text="getTroveDebt(uint256)")[:4].hex()
+    params = encode(["uint256"], [trove_id])
+
+    return {
+        "to": branch["trove_manager"],
+        "data": "0x" + selector + params.hex(),
+        "chainId": chain_id,
+        "method_info": "getTroveDebt(uint256)",
+    }
+
+
+def build_get_trove_coll_call(
+    chain: str,
+    collateral: str,
+    trove_id: int,
+) -> dict:
+    """Build TroveManager.getTroveColl(uint256) eth_call."""
+    branch = _get_felix_branch(chain, collateral)
+    chain_id = CHAINS[chain]["chain_id"]
+
+    from web3 import Web3
+
+    selector = Web3.keccak(text="getTroveColl(uint256)")[:4].hex()
+    params = encode(["uint256"], [trove_id])
+
+    return {
+        "to": branch["trove_manager"],
+        "data": "0x" + selector + params.hex(),
+        "chainId": chain_id,
+        "method_info": "getTroveColl(uint256)",
+    }

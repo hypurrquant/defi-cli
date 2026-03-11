@@ -461,6 +461,54 @@ def cdp_open(collateral, coll_amount, debt_amount, owner, chain,
         _execute_dry_run(tx)
 
 
+@cdp.command("adjust")
+@click.argument("collateral")
+@click.argument("trove_id", type=int)
+@click.argument("owner")
+@click.option("--coll-change", default=0, type=int, help="Collateral change amount")
+@click.option("--debt-change", default=0, type=int, help="Debt change amount")
+@click.option("--coll-increase/--coll-decrease", default=True)
+@click.option("--debt-increase/--debt-decrease", default=True)
+@click.option("--chain", default="hyperevm")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def cdp_adjust(collateral, trove_id, owner, coll_change, debt_change,
+               coll_increase, debt_increase, chain, dry_run, json_output):
+    """Build an adjustTrove transaction."""
+    from defi_cli.cdp import build_adjust_trove_tx
+
+    tx = build_adjust_trove_tx(
+        chain=chain, collateral=collateral, trove_id=trove_id,
+        coll_change=coll_change, debt_change=debt_change,
+        is_coll_increase=coll_increase, is_debt_increase=debt_increase,
+        owner=owner,
+    )
+    _print_tx(tx, "Adjust Trove", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
+
+
+@cdp.command("info")
+@click.argument("collateral")
+@click.argument("trove_id", type=int)
+@click.option("--chain", default="hyperevm")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def cdp_info(collateral, trove_id, chain, json_output):
+    """Query trove info (debt and collateral)."""
+    from defi_cli.cdp import build_get_trove_coll_call, build_get_trove_debt_call
+
+    debt_call = build_get_trove_debt_call(chain, collateral, trove_id)
+    coll_call = build_get_trove_coll_call(chain, collateral, trove_id)
+
+    result = {"debt_call": debt_call, "coll_call": coll_call}
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        console.print("[green]Trove query calls:[/green]")
+        console.print(f"  Debt: {debt_call['to']} | {debt_call['data'][:20]}...")
+        console.print(f"  Coll: {coll_call['to']} | {coll_call['data'][:20]}...")
+
+
 @cdp.command("close")
 @click.argument("collateral")
 @click.argument("trove_id", type=int)
