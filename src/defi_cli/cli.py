@@ -133,6 +133,55 @@ def wallet_balance(chain, address, token, json_output):
             console.print(f"  params: {call['params']}")
 
 
+# ─── Transfer Commands ────────────────────────────────────────────────────
+
+
+@cli.group()
+def transfer():
+    """Token transfer commands."""
+    pass
+
+
+@transfer.command("erc20")
+@click.argument("chain")
+@click.argument("token")
+@click.argument("to_address")
+@click.argument("amount", type=int)
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def transfer_erc20(chain, token, to_address, amount, dry_run, json_output):
+    """Build an ERC20 transfer transaction."""
+    from defi_cli.transfer import build_erc20_transfer_tx
+
+    tx = build_erc20_transfer_tx(
+        chain=chain, token=token, to=to_address, amount=amount,
+    )
+    _print_tx(tx, "ERC20 Transfer", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
+
+
+@transfer.command("native")
+@click.argument("chain")
+@click.argument("to_address")
+@click.argument("amount_wei", type=int)
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def transfer_native(chain, to_address, amount_wei, json_output):
+    """Build a native token transfer transaction."""
+    from defi_cli.transfer import build_native_transfer_tx
+
+    tx = build_native_transfer_tx(
+        chain=chain, to=to_address, amount_wei=amount_wei,
+    )
+    if json_output:
+        click.echo(json.dumps(tx, indent=2))
+    else:
+        console.print("[green]Native Transfer TX:[/green]")
+        console.print(f"  to:      {tx['to']}")
+        console.print(f"  value:   {tx['value']} wei")
+        console.print(f"  chainId: {tx['chainId']}")
+
+
 # ─── DEX Commands ─────────────────────────────────────────────────────────────
 
 
