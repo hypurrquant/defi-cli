@@ -79,3 +79,22 @@ def test_debridge_quote_params(sender):
     assert params["dstChainId"] == str(debridge_chain_ids["hyperevm"])
     assert params["srcChainTokenIn"].lower() == TOKENS["arbitrum"]["USDC"].lower()
     assert params["srcChainTokenInAmount"] == str(1000 * 10**6)
+
+
+def test_across_deposit_tx(sender):
+    """Build Across depositV3 on-chain tx."""
+    from defi_cli.bridge import build_across_deposit_tx
+
+    tx = build_across_deposit_tx(
+        from_chain="arbitrum",
+        to_chain="base",
+        token="USDC",
+        amount=1000 * 10**6,
+        recipient=sender,
+    )
+
+    spoke_pool = PROTOCOLS["across"]["chains"]["arbitrum"]["spoke_pool"]
+    assert tx["to"].lower() == spoke_pool.lower()
+    assert tx["data"][:10] == "0xe7a7ed02"
+    assert tx["chainId"] == CHAINS["arbitrum"]["chain_id"]
+    assert tx["value"] == 0
