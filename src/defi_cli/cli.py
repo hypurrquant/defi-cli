@@ -988,6 +988,61 @@ def fetch_price_cmd(protocol, chain, asset, json_output):
         console.print(f"[red]Error:[/red] {result['error']}")
 
 
+@fetch.command("rates")
+@click.argument("asset")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def fetch_rates_cmd(asset, json_output):
+    """Fetch and compare lending rates across all protocols (live RPC)."""
+    from defi_cli.fetcher import eth_call
+    from defi_cli.rates import build_rate_comparison_calls, parse_reserve_data
+
+    calls = build_rate_comparison_calls(asset)
+    results = []
+
+    for entry in calls:
+        rpc_result = eth_call(entry["chain"], entry["call"])
+        if rpc_result["success"]:
+            parsed = parse_reserve_data(rpc_result["result"])
+            results.append({
+                "protocol": entry["protocol"],
+                "chain": entry["chain"],
+                "asset": asset,
+                "supply_apy": round(parsed["supply_apy"], 4),
+                "borrow_apy": round(parsed["borrow_apy"], 4),
+            })
+        else:
+            results.append({
+                "protocol": entry["protocol"],
+                "chain": entry["chain"],
+                "asset": asset,
+                "error": rpc_result.get("error", "unknown"),
+            })
+
+    # Sort by supply_apy descending
+    results.sort(
+        key=lambda r: r.get("supply_apy", -1), reverse=True,
+    )
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2))
+    else:
+        table = Table(title=f"Live Lending Rates - {asset}")
+        table.add_column("Protocol", style="cyan")
+        table.add_column("Chain", style="green")
+        table.add_column("Supply APY", style="yellow")
+        table.add_column("Borrow APY", style="red")
+        for r in results:
+            if "error" in r:
+                table.add_row(r["protocol"], r["chain"], "error", r["error"])
+            else:
+                table.add_row(
+                    r["protocol"], r["chain"],
+                    f"{r['supply_apy']:.4f}%",
+                    f"{r['borrow_apy']:.4f}%",
+                )
+        console.print(table)
+
+
 @fetch.command("position")
 @click.argument("protocol")
 @click.argument("chain")
