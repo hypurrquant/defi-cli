@@ -340,6 +340,49 @@ def lending_rates(protocol, chain, asset, json_output):
         console.print(f"  data: {call['data'][:20]}...")
 
 
+@lending.command("position")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("user")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def lending_position(protocol, chain, user, json_output):
+    """Build getUserAccountData query for a lending position."""
+    from defi_cli.positions import build_user_account_data_call
+
+    call = build_user_account_data_call(
+        protocol=protocol, chain=chain, user=user,
+    )
+    if json_output:
+        click.echo(json.dumps(call, indent=2))
+    else:
+        console.print("[green]getUserAccountData call:[/green]")
+        console.print(f"  to:   {call['to']}")
+        console.print(f"  data: {call['data'][:20]}...")
+
+
+@lending.command("positions-all")
+@click.argument("user")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def lending_positions_all(user, json_output):
+    """Query positions across all lending protocols."""
+    from defi_cli.positions import build_multi_position_calls
+
+    results = build_multi_position_calls(user=user)
+    if json_output:
+        output = [
+            {"protocol": r["protocol"], "chain": r["chain"], **r["call"]}
+            for r in results
+        ]
+        click.echo(json.dumps(output, indent=2))
+    else:
+        console.print(f"[green]Positions across {len(results)} pools:[/green]")
+        for r in results:
+            console.print(
+                f"  [cyan]{r['protocol']}[/cyan] on {r['chain']}: "
+                f"{r['call']['to']}"
+            )
+
+
 # ─── CDP Commands ─────────────────────────────────────────────────────────────
 
 
