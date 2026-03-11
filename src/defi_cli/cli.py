@@ -900,6 +900,54 @@ def approve_check(chain, token, owner, spender, json_output):
         console.print(f"  data: {call['data'][:20]}...")
 
 
+@approve.command("revoke")
+@click.argument("chain")
+@click.argument("token")
+@click.argument("spender")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def approve_revoke(chain, token, spender, dry_run, json_output):
+    """Revoke ERC20 token approval (set allowance to 0)."""
+    from defi_cli.approve import build_revoke_tx
+
+    tx = build_revoke_tx(chain=chain, token=token, spender=spender)
+    _print_tx(tx, "Revoke", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
+
+
+@approve.command("scan")
+@click.argument("chain")
+@click.argument("owner")
+@click.option("--tokens", "-t", multiple=True, help="Tokens to check")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def approve_scan(chain, owner, tokens, json_output):
+    """Scan token approvals across all known protocols."""
+    from defi_cli.approve import get_protocol_spenders
+    from defi_cli.registry import TOKENS
+
+    token_list = list(tokens) if tokens else list(TOKENS.get(chain, {}).keys())
+    spenders = get_protocol_spenders(chain)
+
+    if json_output:
+        click.echo(json.dumps({
+            "chain": chain,
+            "owner": owner,
+            "tokens": token_list,
+            "spenders": [{"protocol": s["protocol"], "address": s["address"]}
+                         for s in spenders],
+        }, indent=2))
+    else:
+        table = Table(title=f"Approval Scan - {chain}")
+        table.add_column("Protocol", style="cyan")
+        table.add_column("Type", style="green")
+        table.add_column("Address", max_width=18)
+        for s in spenders:
+            table.add_row(s["protocol"], s["type"], s["address"][:18] + "...")
+        console.print(table)
+        console.print(f"\n[dim]Tokens to check: {', '.join(token_list[:5])}...[/dim]")
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
