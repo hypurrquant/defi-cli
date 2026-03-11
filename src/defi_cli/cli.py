@@ -1243,6 +1243,64 @@ def execute_receipt(tx_hash, chain, json_output):
         console.print("[yellow]Receipt not found (tx may be pending)[/yellow]")
 
 
+# ─── Simulate Commands ────────────────────────────────────────────────────
+
+
+@cli.group()
+def simulate():
+    """Simulate transactions before execution."""
+    pass
+
+
+@simulate.command("swap")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("token_in")
+@click.argument("token_out")
+@click.argument("amount_in", type=int)
+@click.option("--fee", default=3000, help="Pool fee tier")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def simulate_swap_cmd(protocol, chain, token_in, token_out, amount_in, fee, json_output):
+    """Simulate a swap and show expected output."""
+    from defi_cli.simulator import simulate_swap
+
+    result = simulate_swap(protocol, chain, token_in, token_out, amount_in, fee)
+    if json_output:
+        click.echo(json.dumps(result, indent=2, default=str))
+    elif result["success"]:
+        console.print(f"[green]Expected output:[/green] {result['amount_out']}")
+        console.print(f"  Gas estimate: {result['gas_estimate']}")
+    else:
+        console.print(f"[red]Simulation failed:[/red] {result.get('error', '')}")
+
+
+@simulate.command("gas")
+@click.argument("actions_json")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def simulate_gas_cmd(actions_json, json_output):
+    """Estimate total gas for a batch of actions.
+
+    ACTIONS_JSON: JSON string or file path with list of actions.
+    """
+    import os
+
+    from defi_cli.simulator import estimate_total_gas
+
+    if os.path.exists(actions_json):
+        with open(actions_json) as f:
+            actions = json.load(f)
+    else:
+        actions = json.loads(actions_json)
+
+    result = estimate_total_gas(actions)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        console.print(f"[green]Total gas estimate:[/green] {result['total_gas']:,}")
+        for i, gas in enumerate(result["per_action"]):
+            console.print(f"  Action {i + 1}: {gas:,}")
+
+
 # ─── Transaction History ──────────────────────────────────────────────────
 
 
