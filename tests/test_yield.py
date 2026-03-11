@@ -80,6 +80,109 @@ def test_yield_suggest_optimization():
     assert "recommended" in suggestion
     assert "net_apy_gain" in suggestion
     assert "bridge_cost" in suggestion
+    assert "payback_days" in suggestion
     # If a recommendation is made, net gain should be positive
     if suggestion["recommended"] is not None:
         assert suggestion["net_apy_gain"] > 0
+
+
+def test_yield_payback_period():
+    """Payback period is calculated when bridge cost applies."""
+    from defi_cli.yield_optimizer import suggest_optimization
+
+    current = {
+        "protocol": "aave_v3", "chain": "arbitrum",
+        "asset": "USDC", "supply_apy": 3.0, "amount": 10000,
+    }
+    options = [
+        {"protocol": "hyperlend", "chain": "hyperevm", "supply_apy": 5.0},
+    ]
+    bridge_costs = {("arbitrum", "hyperevm"): 5.0}
+
+    suggestion = suggest_optimization(current, options, bridge_costs)
+
+    assert suggestion["recommended"] is not None
+    assert suggestion["payback_days"] is not None
+    assert suggestion["payback_days"] > 0
+    # $200/year extra yield, $5 bridge cost = ~9.1 days
+    assert suggestion["payback_days"] < 15
+
+
+def test_rank_all_opportunities():
+    """Rank opportunities by net APY gain."""
+    from defi_cli.yield_optimizer import rank_all_opportunities
+
+    positions = [
+        {"protocol": "aave_v3", "chain": "arbitrum", "asset": "USDC",
+         "supply_apy": 3.0, "amount": 10000},
+        {"protocol": "aave_v3", "chain": "base", "asset": "USDC",
+         "supply_apy": 4.0, "amount": 5000},
+    ]
+    rates = [
+        {"protocol": "aave_v3", "chain": "arbitrum", "asset": "USDC",
+         "supply_apy": 3.0},
+        {"protocol": "aave_v3", "chain": "base", "asset": "USDC",
+         "supply_apy": 4.0},
+        {"protocol": "hyperlend", "chain": "hyperevm", "asset": "USDC",
+         "supply_apy": 6.0},
+    ]
+    bridge_costs = {
+        ("arbitrum", "hyperevm"): 3.0,
+        ("base", "hyperevm"): 3.0,
+    }
+
+    moves = rank_all_opportunities(positions, rates, bridge_costs)
+
+    assert len(moves) > 0
+    # Should be sorted by net_apy_gain descending
+    for i in range(len(moves) - 1):
+        assert moves[i]["net_apy_gain"] >= moves[i + 1]["net_apy_gain"]
+
+
+def test_generate_rebalance_plan():
+    """Rebalance plan includes steps for each move."""
+    from defi_cli.yield_optimizer import generate_rebalance_plan
+
+    positions = [
+        {"protocol": "aave_v3", "chain": "arbitrum", "asset": "USDC",
+         "supply_apy": 3.0, "amount": 10000},
+    ]
+    rates = [
+        {"protocol": "hyperlend", "chain": "hyperevm", "asset": "USDC",
+         "supply_apy": 6.0},
+    ]
+    bridge_costs = {("arbitrum", "hyperevm"): 2.0}
+
+    plan = generate_rebalance_plan(positions, rates, bridge_costs)
+
+    assert len(plan) > 0
+    move = plan[0]
+    assert "steps" in move
+    # Should have: withdraw, bridge, approve_and_supply
+    actions = [s["action"] for s in move["steps"]]
+    assert "withdraw" in actions
+    assert "bridge" in actions
+    assert "approve_and_supply" in actions
+
+
+def test_rebalance_plan_same_chain_no_bridge():
+    """Same-chain move doesn't include bridge step."""
+    from defi_cli.yield_optimizer import generate_rebalance_plan
+
+    positions = [
+        {"protocol": "aave_v3", "chain": "arbitrum", "asset": "USDC",
+         "supply_apy": 3.0, "amount": 10000},
+    ]
+    rates = [
+        {"protocol": "aave_v3", "chain": "arbitrum", "asset": "USDC",
+         "supply_apy": 3.0},
+        {"protocol": "aave_v3", "chain": "base", "asset": "USDC",
+         "supply_apy": 5.0},
+    ]
+    bridge_costs = {("arbitrum", "base"): 1.0}
+
+    plan = generate_rebalance_plan(positions, rates, bridge_costs)
+
+    assert len(plan) > 0
+    move = plan[0]
+    assert move["to"]["chain"] == "base"
