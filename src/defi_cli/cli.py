@@ -766,6 +766,37 @@ def _print_tx(tx: dict, label: str, json_output: bool) -> None:
             console.print(f"  value:   {tx['value']}")
 
 
+@cli.command("agent")
+@click.argument("json_input")
+def agent_execute(json_input):
+    """Process a JSON action or batch for AI agents.
+
+    JSON_INPUT: JSON string or path to JSON file with action(s).
+    Single action: {"type": "swap", ...}
+    Batch: [{"type": "approve", ...}, {"type": "supply", ...}]
+    """
+    import os
+
+    from defi_cli.agent import process_action, process_batch
+
+    # Try to read as file first
+    if os.path.exists(json_input):
+        with open(json_input) as f:
+            data = json.load(f)
+    else:
+        data = json.loads(json_input)
+
+    if isinstance(data, list):
+        results = process_batch(data)
+    else:
+        results = [process_action(data)]
+
+    click.echo(json.dumps(results, indent=2))
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────
+
+
 def _print_pipeline(steps: list[dict], json_output: bool) -> None:
     """Print a multi-step transaction pipeline."""
     if json_output:
