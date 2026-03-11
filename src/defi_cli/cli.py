@@ -133,6 +133,39 @@ def wallet_balance(chain, address, token, json_output):
             console.print(f"  params: {call['params']}")
 
 
+# ─── Wrap Commands ────────────────────────────────────────────────────────
+
+
+@cli.group()
+def wrap():
+    """Wrap/unwrap native tokens (ETH/HYPE <-> WETH/WHYPE)."""
+    pass
+
+
+@wrap.command("deposit")
+@click.argument("chain")
+@click.argument("amount_wei", type=int)
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def wrap_deposit(chain, amount_wei, json_output):
+    """Wrap native token (ETH -> WETH, HYPE -> WHYPE)."""
+    from defi_cli.wrap import build_wrap_tx
+
+    tx = build_wrap_tx(chain, amount_wei)
+    _print_tx(tx, "Wrap", json_output)
+
+
+@wrap.command("withdraw")
+@click.argument("chain")
+@click.argument("amount_wei", type=int)
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def wrap_withdraw(chain, amount_wei, json_output):
+    """Unwrap wrapped token (WETH -> ETH, WHYPE -> HYPE)."""
+    from defi_cli.wrap import build_unwrap_tx
+
+    tx = build_unwrap_tx(chain, amount_wei)
+    _print_tx(tx, "Unwrap", json_output)
+
+
 # ─── Transfer Commands ────────────────────────────────────────────────────
 
 
