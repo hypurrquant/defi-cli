@@ -150,8 +150,10 @@ def dex():
 @click.argument("amount_in", type=int)
 @click.argument("recipient")
 @click.option("--fee", default=3000, help="Pool fee tier (default: 3000)")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-def dex_swap(protocol, chain, token_in, token_out, amount_in, recipient, fee, json_output):
+def dex_swap(protocol, chain, token_in, token_out, amount_in, recipient,
+             fee, dry_run, json_output):
     """Build a swap transaction."""
     from defi_cli.dex import build_swap_tx
 
@@ -161,13 +163,9 @@ def dex_swap(protocol, chain, token_in, token_out, amount_in, recipient, fee, js
         amount_in=amount_in, recipient=recipient, fee=fee,
     )
 
-    if json_output:
-        click.echo(json.dumps(tx, indent=2))
-    else:
-        console.print("[green]Swap TX built:[/green]")
-        console.print(f"  to:      {tx['to']}")
-        console.print(f"  chainId: {tx['chainId']}")
-        console.print(f"  data:    {tx['data'][:20]}...({len(tx['data'])} chars)")
+    _print_tx(tx, "Swap", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
 
 
 # ─── Lending Commands ─────────────────────────────────────────────────────────
@@ -185,14 +183,18 @@ def lending():
 @click.argument("asset")
 @click.argument("amount", type=int)
 @click.argument("on_behalf_of")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-def lending_supply(protocol, chain, asset, amount, on_behalf_of, json_output):
+def lending_supply(protocol, chain, asset, amount, on_behalf_of,
+                   dry_run, json_output):
     """Build a supply/deposit transaction."""
     from defi_cli.lending import build_supply_tx
 
     tx = build_supply_tx(protocol=protocol, chain=chain, asset=asset,
                          amount=amount, on_behalf_of=on_behalf_of)
     _print_tx(tx, "Supply", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
 
 
 @lending.command("borrow")
@@ -201,14 +203,18 @@ def lending_supply(protocol, chain, asset, amount, on_behalf_of, json_output):
 @click.argument("asset")
 @click.argument("amount", type=int)
 @click.argument("on_behalf_of")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-def lending_borrow(protocol, chain, asset, amount, on_behalf_of, json_output):
+def lending_borrow(protocol, chain, asset, amount, on_behalf_of,
+                   dry_run, json_output):
     """Build a borrow transaction."""
     from defi_cli.lending import build_borrow_tx
 
     tx = build_borrow_tx(protocol=protocol, chain=chain, asset=asset,
                          amount=amount, on_behalf_of=on_behalf_of)
     _print_tx(tx, "Borrow", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
 
 
 @lending.command("repay")
@@ -217,14 +223,18 @@ def lending_borrow(protocol, chain, asset, amount, on_behalf_of, json_output):
 @click.argument("asset")
 @click.argument("amount", type=int)
 @click.argument("on_behalf_of")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-def lending_repay(protocol, chain, asset, amount, on_behalf_of, json_output):
+def lending_repay(protocol, chain, asset, amount, on_behalf_of,
+                  dry_run, json_output):
     """Build a repay transaction."""
     from defi_cli.lending import build_repay_tx
 
     tx = build_repay_tx(protocol=protocol, chain=chain, asset=asset,
                         amount=amount, on_behalf_of=on_behalf_of)
     _print_tx(tx, "Repay", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
 
 
 @lending.command("withdraw")
@@ -233,14 +243,18 @@ def lending_repay(protocol, chain, asset, amount, on_behalf_of, json_output):
 @click.argument("asset")
 @click.argument("amount", type=int)
 @click.argument("to_address")
+@click.option("--dry-run", is_flag=True, help="Simulate via eth_call")
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-def lending_withdraw(protocol, chain, asset, amount, to_address, json_output):
+def lending_withdraw(protocol, chain, asset, amount, to_address,
+                     dry_run, json_output):
     """Build a withdraw transaction."""
     from defi_cli.lending import build_withdraw_tx
 
     tx = build_withdraw_tx(protocol=protocol, chain=chain, asset=asset,
                            amount=amount, to=to_address)
     _print_tx(tx, "Withdraw", json_output)
+    if dry_run:
+        _execute_dry_run(tx)
 
 
 @lending.command("rates")
@@ -404,6 +418,18 @@ def _print_tx(tx: dict, label: str, json_output: bool) -> None:
         console.print(f"  data:    {tx['data'][:20]}...({len(tx['data'])} chars)")
         if tx.get("value", 0) > 0:
             console.print(f"  value:   {tx['value']}")
+
+
+def _execute_dry_run(tx: dict) -> None:
+    """Execute dry-run and print result."""
+    from defi_cli.executor import dry_run
+
+    console.print("[dim]Executing dry-run via eth_call...[/dim]")
+    result = dry_run(tx)
+    if result["success"]:
+        console.print(f"[green]Dry-run SUCCESS[/green]: {result['result'][:40]}...")
+    else:
+        console.print(f"[red]Dry-run FAILED[/red]: {result['result']}")
 
 
 if __name__ == "__main__":
