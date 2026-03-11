@@ -134,6 +134,70 @@ def test_agent_native_transfer():
     assert result["tx"]["value"] == 10**18
 
 
+def test_agent_wrap():
+    """Agent wrap action builds deposit tx."""
+    from defi_cli.agent import process_action
+
+    result = process_action({
+        "type": "wrap",
+        "chain": "arbitrum",
+        "amount_wei": 10**18,
+    })
+
+    assert result["success"] is True
+    assert result["tx"]["value"] == 10**18
+
+
+def test_agent_unwrap():
+    """Agent unwrap action builds withdraw tx."""
+    from defi_cli.agent import process_action
+
+    result = process_action({
+        "type": "unwrap",
+        "chain": "hyperevm",
+        "amount_wei": 50 * 10**18,
+    })
+
+    assert result["success"] is True
+    assert result["tx"]["value"] == 0
+
+
+def test_agent_pipeline_supply():
+    """Agent pipeline_supply returns multi-step txs."""
+    from defi_cli.agent import process_action
+
+    result = process_action({
+        "type": "pipeline_supply",
+        "protocol": "aave_v3",
+        "chain": "arbitrum",
+        "token": "USDC",
+        "amount": 1_000_000,
+        "sender": SENDER,
+    })
+
+    assert result["success"] is True
+    assert "txs" in result
+    assert len(result["txs"]) == 2  # approve + supply
+
+
+def test_agent_pipeline_swap():
+    """Agent pipeline_swap returns multi-step txs."""
+    from defi_cli.agent import process_action
+
+    result = process_action({
+        "type": "pipeline_swap",
+        "protocol": "uniswap_v3",
+        "chain": "arbitrum",
+        "token_in": "USDC",
+        "token_out": "WETH",
+        "amount_in": 1_000_000,
+        "recipient": SENDER,
+    })
+
+    assert result["success"] is True
+    assert len(result["txs"]) == 2
+
+
 def test_agent_quote():
     """Agent quote action builds QuoterV2 call."""
     from defi_cli.agent import process_action

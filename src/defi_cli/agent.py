@@ -161,6 +161,38 @@ def _handle_bridge_cctp(action: dict) -> dict:
     return {"success": True, "tx": tx}
 
 
+def _handle_wrap(action: dict) -> dict:
+    from defi_cli.wrap import build_wrap_tx
+    tx = build_wrap_tx(chain=action["chain"], amount_wei=action["amount_wei"])
+    return {"success": True, "tx": tx}
+
+
+def _handle_unwrap(action: dict) -> dict:
+    from defi_cli.wrap import build_unwrap_tx
+    tx = build_unwrap_tx(chain=action["chain"], amount_wei=action["amount_wei"])
+    return {"success": True, "tx": tx}
+
+
+def _handle_pipeline_supply(action: dict) -> dict:
+    from defi_cli.pipeline import build_supply_pipeline
+    txs = build_supply_pipeline(
+        protocol=action["protocol"], chain=action["chain"],
+        token=action["token"], amount=action["amount"],
+        sender=action["sender"],
+    )
+    return {"success": True, "txs": txs}
+
+
+def _handle_pipeline_swap(action: dict) -> dict:
+    from defi_cli.pipeline import build_swap_pipeline
+    txs = build_swap_pipeline(
+        protocol=action["protocol"], chain=action["chain"],
+        token_in=action["token_in"], token_out=action["token_out"],
+        amount_in=action["amount_in"], recipient=action["recipient"],
+    )
+    return {"success": True, "txs": txs}
+
+
 def _handle_quote(action: dict) -> dict:
     from defi_cli.quote import build_quote_call
     call = build_quote_call(
@@ -184,4 +216,8 @@ _HANDLERS = {
     "flash_loan": _handle_flash_loan,
     "bridge_cctp": _handle_bridge_cctp,
     "quote": _handle_quote,
+    "wrap": _handle_wrap,
+    "unwrap": _handle_unwrap,
+    "pipeline_supply": _handle_pipeline_supply,
+    "pipeline_swap": _handle_pipeline_swap,
 }
