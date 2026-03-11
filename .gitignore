@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+
+# Agent artifacts
+results.tsv
+run.log
+dev/
+
+# Secrets
+.env
+*.key
+credentials.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
