@@ -1243,6 +1243,42 @@ def execute_receipt(tx_hash, chain, json_output):
         console.print("[yellow]Receipt not found (tx may be pending)[/yellow]")
 
 
+# ─── Health Check ─────────────────────────────────────────────────────────
+
+
+@cli.command("health")
+@click.option("--chain", help="Check specific chain only")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def health_cmd(chain, json_output):
+    """Check RPC endpoint health across all chains."""
+    from defi_cli.health import check_all_chains, check_rpc_health
+
+    if chain:
+        results = [check_rpc_health(chain)]
+    else:
+        results = check_all_chains()
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2))
+    else:
+        table = Table(title="Chain Health")
+        table.add_column("Chain", style="cyan")
+        table.add_column("Status")
+        table.add_column("Latency", style="yellow")
+        table.add_column("Block", style="green")
+        table.add_column("Block Age")
+
+        for r in results:
+            status = "[green]OK[/green]" if r.get("healthy") else "[red]DOWN[/red]"
+            latency = f"{r.get('latency_ms', 0):.0f}ms"
+            block = str(r.get("block_number", "-"))
+            age = r.get("block_age_seconds", -1)
+            age_str = f"{age}s" if age >= 0 else "-"
+            table.add_row(r["chain"], status, latency, block, age_str)
+
+        console.print(table)
+
+
 # ─── Simulate Commands ────────────────────────────────────────────────────
 
 
