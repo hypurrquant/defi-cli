@@ -42,6 +42,10 @@ TOKENS = {
         "USDC": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
         "USDT0": "0xB8CE59FC3717adA4c02EADF9682a9E934F625EBb",
         "feUSD": "0x02c6a2fa58cc01a18b8d9e00ea48d65e4df26c70",
+        "USDH": "0x111111a1a0667d36bD57c0A9f569b98057111111",
+        "UBTC": "0x9FDBdA0A5e284c32744D2f17Ee5c74B284993463",
+        "UETH": "0xBe6727B535545C67d5cAa73dEa54865B92CF7907",
+        "NEST": "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035",
     },
 }
 
@@ -85,6 +89,30 @@ PROTOCOLS = {
                 "swap_router": "0x4e73E421480a7E0C24fB3c11019254edE194f736",
                 "quoter_v2": "0xc58874216AFe47779ADED27B8AAd77E8Bd6eBEBb",
                 "position_manager": "0x9ea4459c8DefBF561495d95414b9CF1E2242a3E2",
+            },
+        },
+    },
+    "projectx": {
+        "type": "dex",
+        "interface": "uniswap_v3_router",
+        "chains": {
+            "hyperevm": {
+                "factory": "0xFF7B3E8C00e57ea31477c32A5B52a58Eea47b072",
+                "swap_router": "0x1EbDFC75FfE3ba3de61E7138a3E8706aC841Af9B",
+                "position_manager": "0xeaD19AE861c29bBb2101E834922B2FEee69B9091",
+            },
+        },
+    },
+    "nest": {
+        "type": "dex",
+        "interface": "algebra_v3",
+        "chains": {
+            "hyperevm": {
+                "pool_deployer": "0x3842CE04380b8655a3a47ed87ea0d311adca161f",
+                "position_manager": "0xeaf58788a405f3253814b4559391a22be8616250",
+                "voter": "0x566bdc5444fd5fe5d93ec379Bd66eC861ddbA901",
+                "nest_token": "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035",
+                "ve_nest": "0x2f2Ae07e3cc3391A2E27825652BA8DcdD5412074",
             },
         },
     },
