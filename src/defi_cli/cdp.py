@@ -175,6 +175,63 @@ def build_get_trove_debt_call(
     }
 
 
+def build_deposit_to_sp_tx(
+    chain: str,
+    collateral: str,
+    amount: int,
+) -> dict:
+    """Build StabilityPool provideToSP(uint256, bool) tx.
+
+    Deposits feUSD to a stability pool for a specific collateral branch.
+    """
+    branch = _get_felix_branch(chain, collateral)
+    chain_id = CHAINS[chain]["chain_id"]
+
+    if "stability_pool" not in branch:
+        raise ValueError(f"No stability pool for {collateral} on {chain}")
+
+    from web3 import Web3
+
+    # provideToSP(uint256 _amount, bool _doClaim)
+    selector = Web3.keccak(text="provideToSP(uint256,bool)")[:4].hex()
+    params = encode(["uint256", "bool"], [amount, True])
+
+    return {
+        "to": branch["stability_pool"],
+        "data": "0x" + selector + params.hex(),
+        "chainId": chain_id,
+        "value": 0,
+    }
+
+
+def build_withdraw_from_sp_tx(
+    chain: str,
+    collateral: str,
+    amount: int,
+) -> dict:
+    """Build StabilityPool withdrawFromSP(uint256, bool) tx.
+
+    Withdraws feUSD from a stability pool.
+    """
+    branch = _get_felix_branch(chain, collateral)
+    chain_id = CHAINS[chain]["chain_id"]
+
+    if "stability_pool" not in branch:
+        raise ValueError(f"No stability pool for {collateral} on {chain}")
+
+    from web3 import Web3
+
+    selector = Web3.keccak(text="withdrawFromSP(uint256,bool)")[:4].hex()
+    params = encode(["uint256", "bool"], [amount, True])
+
+    return {
+        "to": branch["stability_pool"],
+        "data": "0x" + selector + params.hex(),
+        "chainId": chain_id,
+        "value": 0,
+    }
+
+
 def build_get_trove_coll_call(
     chain: str,
     collateral: str,

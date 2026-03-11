@@ -89,6 +89,36 @@ def test_felix_get_trove_coll():
     assert len(call["data"]) > 10
 
 
+def _felix_whype_stability_pool() -> str:
+    return PROTOCOLS["felix"]["chains"]["hyperevm"]["branches"]["WHYPE"]["stability_pool"]
+
+
+def test_felix_sp_deposit():
+    """Build stability pool deposit tx."""
+    from defi_cli.cdp import build_deposit_to_sp_tx
+
+    tx = build_deposit_to_sp_tx(
+        chain="hyperevm", collateral="WHYPE", amount=100 * 10**18,
+    )
+
+    assert tx["to"].lower() == _felix_whype_stability_pool().lower()
+    assert len(tx["data"]) > 10
+    assert tx["chainId"] == 999
+    assert tx["value"] == 0
+
+
+def test_felix_sp_withdraw():
+    """Build stability pool withdraw tx."""
+    from defi_cli.cdp import build_withdraw_from_sp_tx
+
+    tx = build_withdraw_from_sp_tx(
+        chain="hyperevm", collateral="WHYPE", amount=50 * 10**18,
+    )
+
+    assert tx["to"].lower() == _felix_whype_stability_pool().lower()
+    assert len(tx["data"]) > 10
+
+
 def test_felix_get_trove_info():
     """Build Troves mapping call."""
     from defi_cli.cdp import build_get_trove_info_call

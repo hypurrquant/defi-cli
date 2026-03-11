@@ -585,6 +585,32 @@ def cdp_info(collateral, trove_id, chain, json_output):
         console.print(f"  Coll: {coll_call['to']} | {coll_call['data'][:20]}...")
 
 
+@cdp.command("sp-deposit")
+@click.argument("collateral")
+@click.argument("amount", type=int)
+@click.option("--chain", default="hyperevm")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def cdp_sp_deposit(collateral, amount, chain, json_output):
+    """Deposit feUSD to a stability pool."""
+    from defi_cli.cdp import build_deposit_to_sp_tx
+
+    tx = build_deposit_to_sp_tx(chain=chain, collateral=collateral, amount=amount)
+    _print_tx(tx, "SP Deposit", json_output)
+
+
+@cdp.command("sp-withdraw")
+@click.argument("collateral")
+@click.argument("amount", type=int)
+@click.option("--chain", default="hyperevm")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def cdp_sp_withdraw(collateral, amount, chain, json_output):
+    """Withdraw feUSD from a stability pool."""
+    from defi_cli.cdp import build_withdraw_from_sp_tx
+
+    tx = build_withdraw_from_sp_tx(chain=chain, collateral=collateral, amount=amount)
+    _print_tx(tx, "SP Withdraw", json_output)
+
+
 @cdp.command("close")
 @click.argument("collateral")
 @click.argument("trove_id", type=int)
