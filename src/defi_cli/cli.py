@@ -22,6 +22,49 @@ def cli():
 
 
 @cli.command()
+def status():
+    """Show supported chains, protocols, and capabilities."""
+    from defi_cli.registry import CHAINS, PROTOCOLS, TOKENS
+
+    console.print(f"[bold]defi-cli v{__version__}[/bold]\n")
+
+    # Chains
+    console.print(f"[cyan]Chains:[/cyan] {', '.join(CHAINS.keys())}")
+
+    # Protocols by type
+    by_type = {}
+    for name, info in PROTOCOLS.items():
+        by_type.setdefault(info["type"], []).append(name)
+    for ptype, names in by_type.items():
+        console.print(f"[cyan]{ptype.upper()}:[/cyan] {', '.join(names)}")
+
+    # Tokens
+    total_tokens = sum(len(t) for t in TOKENS.values())
+    console.print(f"[cyan]Tokens:[/cyan] {total_tokens} across {len(TOKENS)} chains")
+
+    # Capabilities
+    capabilities = [
+        "wallet (create/import/balance)",
+        "dex (swap/quote/compare/liquidity)",
+        "lending (supply/borrow/repay/withdraw/rates/positions)",
+        "cdp (open/adjust/close/info)",
+        "bridge (lifi/across/cctp/debridge)",
+        "yield (compare/optimize/rebalance)",
+        "gas (price/nonce/estimate)",
+        "approve (build/check)",
+        "transfer (erc20/native)",
+        "wrap (deposit/withdraw)",
+        "pipeline (supply/swap/repay)",
+        "multicall (batch queries)",
+        "flash loan (single/multi-asset)",
+        "agent (JSON batch interface)",
+    ]
+    console.print(f"\n[green]Capabilities ({len(capabilities)}):[/green]")
+    for cap in capabilities:
+        console.print(f"  - {cap}")
+
+
+@cli.command()
 def chains():
     """List all supported chains."""
     from defi_cli.registry import CHAINS
