@@ -1,8 +1,14 @@
 """Core CLI entry point."""
 
+import json
+
 import click
+from rich.console import Console
+from rich.table import Table
 
 from defi_cli import __version__
+
+console = Console()
 
 
 @click.group()
@@ -12,13 +18,392 @@ def cli():
     pass
 
 
+# ─── Info Commands ────────────────────────────────────────────────────────────
+
+
 @cli.command()
 def chains():
     """List all supported chains."""
-    from prepare import CHAINS
+    from defi_cli.registry import CHAINS
+
+    table = Table(title="Supported Chains")
+    table.add_column("Chain", style="cyan")
+    table.add_column("Chain ID", style="green")
+    table.add_column("Native Token", style="yellow")
+    table.add_column("RPC URL", style="dim")
 
     for name, info in CHAINS.items():
-        click.echo(f"{name} (chain_id={info['chain_id']}) — {info['rpc_url']}")
+        table.add_row(name, str(info["chain_id"]), info["native_token"], info["rpc_url"])
+
+    console.print(table)
+
+
+@cli.command()
+@click.argument("chain")
+def tokens(chain):
+    """List tokens available on a chain."""
+    from defi_cli.registry import TOKENS
+
+    if chain not in TOKENS:
+        console.print(f"[red]Unknown chain: {chain}[/red]")
+        raise SystemExit(1)
+
+    table = Table(title=f"Tokens on {chain}")
+    table.add_column("Symbol", style="cyan")
+    table.add_column("Address", style="dim")
+
+    for symbol, addr in TOKENS[chain].items():
+        table.add_row(symbol, addr)
+
+    console.print(table)
+
+
+@cli.command()
+def protocols():
+    """List all supported protocols."""
+    from defi_cli.registry import PROTOCOLS
+
+    table = Table(title="Supported Protocols")
+    table.add_column("Protocol", style="cyan")
+    table.add_column("Type", style="green")
+    table.add_column("Interface", style="yellow")
+    table.add_column("Chains", style="dim")
+
+    for name, info in PROTOCOLS.items():
+        chains_list = ", ".join(info.get("chains", {}).keys()) or "API-based"
+        table.add_row(name, info["type"], info["interface"], chains_list)
+
+    console.print(table)
+
+
+# ─── Wallet Commands ──────────────────────────────────────────────────────────
+
+
+@cli.group()
+def wallet():
+    """Wallet management commands."""
+    pass
+
+
+@wallet.command("create")
+def wallet_create():
+    """Create a new wallet."""
+    from defi_cli.wallet import create_wallet
+
+    w = create_wallet()
+    console.print(f"[green]Address:[/green]     {w['address']}")
+    console.print(f"[yellow]Private Key:[/yellow] {w['private_key']}")
+    console.print("[red]Save your private key securely![/red]")
+
+
+@wallet.command("import")
+@click.argument("private_key")
+def wallet_import(private_key):
+    """Import wallet from a private key."""
+    from defi_cli.wallet import import_wallet
+
+    w = import_wallet(private_key)
+    console.print(f"[green]Imported:[/green] {w['address']}")
+
+
+@wallet.command("balance")
+@click.argument("chain")
+@click.argument("address")
+@click.option("--token", default=None, help="ERC20 token symbol (omit for native)")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def wallet_balance(chain, address, token, json_output):
+    """Check balance on a chain."""
+    from defi_cli.wallet import build_native_balance_call, build_token_balance_call
+
+    if token:
+        call = build_token_balance_call(chain, token, address)
+        if json_output:
+            click.echo(json.dumps(call, indent=2))
+        else:
+            console.print(f"[dim]ERC20 balanceOf call for {token} on {chain}:[/dim]")
+            console.print(f"  to:   {call['to']}")
+            console.print(f"  data: {call['data'][:20]}...")
+    else:
+        call = build_native_balance_call(chain, address)
+        if json_output:
+            click.echo(json.dumps(call, indent=2))
+        else:
+            console.print(f"[dim]eth_getBalance call on {chain}:[/dim]")
+            console.print(f"  method: {call['method']}")
+            console.print(f"  params: {call['params']}")
+
+
+# ─── DEX Commands ─────────────────────────────────────────────────────────────
+
+
+@cli.group()
+def dex():
+    """DEX swap and liquidity commands."""
+    pass
+
+
+@dex.command("swap")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("token_in")
+@click.argument("token_out")
+@click.argument("amount_in", type=int)
+@click.argument("recipient")
+@click.option("--fee", default=3000, help="Pool fee tier (default: 3000)")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def dex_swap(protocol, chain, token_in, token_out, amount_in, recipient, fee, json_output):
+    """Build a swap transaction."""
+    from defi_cli.dex import build_swap_tx
+
+    tx = build_swap_tx(
+        protocol=protocol, chain=chain,
+        token_in=token_in, token_out=token_out,
+        amount_in=amount_in, recipient=recipient, fee=fee,
+    )
+
+    if json_output:
+        click.echo(json.dumps(tx, indent=2))
+    else:
+        console.print("[green]Swap TX built:[/green]")
+        console.print(f"  to:      {tx['to']}")
+        console.print(f"  chainId: {tx['chainId']}")
+        console.print(f"  data:    {tx['data'][:20]}...({len(tx['data'])} chars)")
+
+
+# ─── Lending Commands ─────────────────────────────────────────────────────────
+
+
+@cli.group()
+def lending():
+    """Lending protocol commands."""
+    pass
+
+
+@lending.command("supply")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("asset")
+@click.argument("amount", type=int)
+@click.argument("on_behalf_of")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def lending_supply(protocol, chain, asset, amount, on_behalf_of, json_output):
+    """Build a supply/deposit transaction."""
+    from defi_cli.lending import build_supply_tx
+
+    tx = build_supply_tx(protocol=protocol, chain=chain, asset=asset,
+                         amount=amount, on_behalf_of=on_behalf_of)
+    _print_tx(tx, "Supply", json_output)
+
+
+@lending.command("borrow")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("asset")
+@click.argument("amount", type=int)
+@click.argument("on_behalf_of")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def lending_borrow(protocol, chain, asset, amount, on_behalf_of, json_output):
+    """Build a borrow transaction."""
+    from defi_cli.lending import build_borrow_tx
+
+    tx = build_borrow_tx(protocol=protocol, chain=chain, asset=asset,
+                         amount=amount, on_behalf_of=on_behalf_of)
+    _print_tx(tx, "Borrow", json_output)
+
+
+@lending.command("repay")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("asset")
+@click.argument("amount", type=int)
+@click.argument("on_behalf_of")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def lending_repay(protocol, chain, asset, amount, on_behalf_of, json_output):
+    """Build a repay transaction."""
+    from defi_cli.lending import build_repay_tx
+
+    tx = build_repay_tx(protocol=protocol, chain=chain, asset=asset,
+                        amount=amount, on_behalf_of=on_behalf_of)
+    _print_tx(tx, "Repay", json_output)
+
+
+@lending.command("withdraw")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("asset")
+@click.argument("amount", type=int)
+@click.argument("to_address")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def lending_withdraw(protocol, chain, asset, amount, to_address, json_output):
+    """Build a withdraw transaction."""
+    from defi_cli.lending import build_withdraw_tx
+
+    tx = build_withdraw_tx(protocol=protocol, chain=chain, asset=asset,
+                           amount=amount, to=to_address)
+    _print_tx(tx, "Withdraw", json_output)
+
+
+@lending.command("rates")
+@click.argument("protocol")
+@click.argument("chain")
+@click.argument("asset")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def lending_rates(protocol, chain, asset, json_output):
+    """Build a getReserveData query."""
+    from defi_cli.lending import build_get_rates_call
+
+    call = build_get_rates_call(protocol=protocol, chain=chain, asset=asset)
+    if json_output:
+        click.echo(json.dumps(call, indent=2))
+    else:
+        console.print("[green]getReserveData call:[/green]")
+        console.print(f"  to:   {call['to']}")
+        console.print(f"  data: {call['data'][:20]}...")
+
+
+# ─── CDP Commands ─────────────────────────────────────────────────────────────
+
+
+@cli.group()
+def cdp():
+    """CDP (Felix) commands."""
+    pass
+
+
+@cdp.command("open")
+@click.argument("collateral")
+@click.argument("coll_amount", type=int)
+@click.argument("debt_amount", type=int)
+@click.argument("owner")
+@click.option("--chain", default="hyperevm", help="Chain (default: hyperevm)")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def cdp_open(collateral, coll_amount, debt_amount, owner, chain, json_output):
+    """Build an openTrove transaction."""
+    from defi_cli.cdp import build_open_trove_tx
+
+    tx = build_open_trove_tx(chain=chain, collateral=collateral,
+                             coll_amount=coll_amount, debt_amount=debt_amount, owner=owner)
+    _print_tx(tx, "Open Trove", json_output)
+
+
+@cdp.command("close")
+@click.argument("collateral")
+@click.argument("trove_id", type=int)
+@click.argument("owner")
+@click.option("--chain", default="hyperevm")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def cdp_close(collateral, trove_id, owner, chain, json_output):
+    """Build a closeTrove transaction."""
+    from defi_cli.cdp import build_close_trove_tx
+
+    tx = build_close_trove_tx(chain=chain, collateral=collateral,
+                              trove_id=trove_id, owner=owner)
+    _print_tx(tx, "Close Trove", json_output)
+
+
+# ─── Bridge Commands ──────────────────────────────────────────────────────────
+
+
+@cli.group()
+def bridge():
+    """Cross-chain bridge commands."""
+    pass
+
+
+@bridge.command("quote")
+@click.argument("provider", type=click.Choice(["lifi", "across", "cctp", "debridge"]))
+@click.argument("from_chain")
+@click.argument("to_chain")
+@click.argument("token")
+@click.argument("amount", type=int)
+@click.argument("sender")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def bridge_quote(provider, from_chain, to_chain, token, amount, sender, json_output):
+    """Get a bridge quote / build bridge tx."""
+    from defi_cli.bridge import (
+        build_across_quote_params,
+        build_cctp_burn_tx,
+        build_debridge_quote_params,
+        build_lifi_quote_params,
+    )
+
+    if provider == "lifi":
+        result = build_lifi_quote_params(from_chain, to_chain, token, token, amount, sender)
+    elif provider == "across":
+        result = build_across_quote_params(from_chain, to_chain, token, amount, sender)
+    elif provider == "cctp":
+        result = build_cctp_burn_tx(from_chain, to_chain, amount, sender)
+    elif provider == "debridge":
+        result = build_debridge_quote_params(
+            from_chain, to_chain, token, token, amount, sender, sender
+        )
+
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        console.print(f"[green]{provider} result:[/green]")
+        for k, v in result.items():
+            val = str(v)
+            if len(val) > 60:
+                val = val[:60] + "..."
+            console.print(f"  {k}: {val}")
+
+
+# ─── Yield Commands ───────────────────────────────────────────────────────────
+
+
+@cli.group("yield")
+def yield_cmd():
+    """Yield comparison and optimization commands."""
+    pass
+
+
+@yield_cmd.command("compare")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+def yield_compare(json_output):
+    """Compare lending rates across protocols (placeholder data)."""
+    from defi_cli.yield_optimizer import compare_rates
+
+    # Placeholder — in Phase 3 this will fetch real rates
+    mock = [
+        {"protocol": "aave_v3", "chain": "arbitrum", "asset": "USDC",
+         "supply_apy": 3.5, "borrow_apy": 5.2},
+        {"protocol": "aave_v3", "chain": "base", "asset": "USDC",
+         "supply_apy": 4.0, "borrow_apy": 5.5},
+        {"protocol": "hyperlend", "chain": "hyperevm", "asset": "USDC",
+         "supply_apy": 4.8, "borrow_apy": 6.1},
+    ]
+
+    results = compare_rates(mock)
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2))
+    else:
+        table = Table(title="Yield Comparison (Supply APY)")
+        table.add_column("Protocol", style="cyan")
+        table.add_column("Chain", style="green")
+        table.add_column("Supply APY", style="yellow")
+        table.add_column("Borrow APY", style="red")
+        for r in results:
+            table.add_row(r["protocol"], r["chain"],
+                          f"{r['supply_apy']:.1f}%", f"{r['borrow_apy']:.1f}%")
+        console.print(table)
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _print_tx(tx: dict, label: str, json_output: bool) -> None:
+    """Print transaction details."""
+    if json_output:
+        click.echo(json.dumps(tx, indent=2))
+    else:
+        console.print(f"[green]{label} TX built:[/green]")
+        console.print(f"  to:      {tx['to']}")
+        console.print(f"  chainId: {tx['chainId']}")
+        console.print(f"  data:    {tx['data'][:20]}...({len(tx['data'])} chars)")
+        if tx.get("value", 0) > 0:
+            console.print(f"  value:   {tx['value']}")
 
 
 if __name__ == "__main__":

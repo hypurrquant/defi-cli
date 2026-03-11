@@ -2,7 +2,7 @@
 
 from eth_abi import encode
 
-from prepare import CHAINS, PROTOCOLS
+from defi_cli.registry import CHAINS, PROTOCOLS
 
 
 def _get_felix_branch(chain: str, collateral: str) -> dict:

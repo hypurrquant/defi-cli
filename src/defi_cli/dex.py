@@ -2,7 +2,7 @@
 
 from eth_abi import encode
 
-from prepare import CHAINS, PROTOCOLS, SELECTORS
+from defi_cli.registry import CHAINS, PROTOCOLS, SELECTORS
 
 
 def _get_protocol_chain(protocol: str, chain: str) -> dict:

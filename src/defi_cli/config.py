@@ -2,7 +2,7 @@
 
 import toml
 
-from prepare import CHAINS
+from defi_cli.registry import CHAINS
 
 
 def get_chain_config(chain_name: str) -> dict:

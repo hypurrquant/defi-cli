@@ -2,7 +2,7 @@
 
 from eth_account import Account
 
-from prepare import CHAINS, SELECTORS, TOKENS
+from defi_cli.registry import CHAINS, SELECTORS, TOKENS
 
 
 def create_wallet() -> dict:

@@ -2,7 +2,7 @@
 
 from eth_abi import encode
 
-from prepare import CHAINS, PROTOCOLS, SELECTORS, TOKENS
+from defi_cli.registry import CHAINS, PROTOCOLS, SELECTORS, TOKENS
 
 
 def build_lifi_quote_params(
