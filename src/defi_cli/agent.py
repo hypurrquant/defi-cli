@@ -156,7 +156,7 @@ def _handle_bridge_cctp(action: dict) -> dict:
     from defi_cli.bridge import build_cctp_burn_tx
     tx = build_cctp_burn_tx(
         from_chain=action["from_chain"], to_chain=action["to_chain"],
-        amount=action["amount"], sender=action["sender"],
+        amount=action["amount"], recipient=action["sender"],
     )
     return {"success": True, "tx": tx}
 
@@ -221,6 +221,35 @@ def _handle_fetch_portfolio(action: dict) -> dict:
     return {"success": True, "data": result}
 
 
+def _handle_vault_deposit(action: dict) -> dict:
+    from defi_cli.vault import build_vault_deposit_tx
+    tx = build_vault_deposit_tx(
+        chain=action["chain"], vault=action["vault"],
+        assets=action["amount"], receiver=action["receiver"],
+    )
+    return {"success": True, "tx": tx}
+
+
+def _handle_vault_withdraw(action: dict) -> dict:
+    from defi_cli.vault import build_vault_withdraw_tx
+    tx = build_vault_withdraw_tx(
+        chain=action["chain"], vault=action["vault"],
+        assets=action["amount"], receiver=action["receiver"],
+        owner=action["owner"],
+    )
+    return {"success": True, "tx": tx}
+
+
+def _handle_vault_redeem(action: dict) -> dict:
+    from defi_cli.vault import build_vault_redeem_tx
+    tx = build_vault_redeem_tx(
+        chain=action["chain"], vault=action["vault"],
+        shares=action["shares"], receiver=action["receiver"],
+        owner=action["owner"],
+    )
+    return {"success": True, "tx": tx}
+
+
 def _handle_fetch_position(action: dict) -> dict:
     from defi_cli.fetcher import fetch_user_position
     result = fetch_user_position(
@@ -250,4 +279,7 @@ _HANDLERS = {
     "fetch_rates": _handle_fetch_rates,
     "fetch_portfolio": _handle_fetch_portfolio,
     "fetch_position": _handle_fetch_position,
+    "vault_deposit": _handle_vault_deposit,
+    "vault_withdraw": _handle_vault_withdraw,
+    "vault_redeem": _handle_vault_redeem,
 }
