@@ -1,6 +1,6 @@
 """Token decimal handling and human-readable amount formatting."""
 
-# Known decimals for supported tokens
+# Known decimals for supported tokens (default across chains)
 TOKEN_DECIMALS = {
     "WETH": 18,
     "USDC": 6,
@@ -9,14 +9,34 @@ TOKEN_DECIMALS = {
     "ARB": 18,
     "WHYPE": 18,
     "feUSD": 18,
+    "DAI": 18,
+    "WBTC": 8,
+    "LINK": 18,
+    "UNI": 18,
+    "GMX": 18,
+    "USDbC": 6,
+    "cbETH": 18,
+    "AERO": 18,
+    "WBNB": 18,
+    "ETH": 18,
+    "BTCB": 18,
+}
+
+# Chain-specific decimal overrides (BSC USDC/USDT are 18 decimals)
+CHAIN_DECIMAL_OVERRIDES: dict[str, dict[str, int]] = {
+    "bsc": {
+        "USDC": 18,
+        "USDT": 18,
+    },
 }
 
 
-def get_decimals(token: str) -> int:
+def get_decimals(token: str, chain: str | None = None) -> int:
     """Get the number of decimals for a token.
 
     Args:
         token: Token symbol (e.g. "USDC", "WETH").
+        chain: Optional chain name for chain-specific overrides.
 
     Returns:
         Number of decimals.
@@ -24,6 +44,10 @@ def get_decimals(token: str) -> int:
     Raises:
         ValueError: If token decimals are unknown.
     """
+    if chain and chain in CHAIN_DECIMAL_OVERRIDES:
+        overrides = CHAIN_DECIMAL_OVERRIDES[chain]
+        if token in overrides:
+            return overrides[token]
     if token in TOKEN_DECIMALS:
         return TOKEN_DECIMALS[token]
     raise ValueError(

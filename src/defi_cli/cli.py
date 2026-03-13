@@ -32,7 +32,7 @@ def status():
     console.print(f"[cyan]Chains:[/cyan] {', '.join(CHAINS.keys())}")
 
     # Protocols by type
-    by_type = {}
+    by_type: dict[str, list[str]] = {}
     for name, info in PROTOCOLS.items():
         by_type.setdefault(info["type"], []).append(name)
     for ptype, names in by_type.items():

@@ -1,8 +1,10 @@
-"""Swap price quoting via QuoterV2 contracts."""
+"""Swap price quoting via QuoterV2 contracts.
 
-from eth_abi import encode
+Thin wrappers that delegate to protocol adapters.
+"""
 
-from defi_cli.registry import CHAINS, PROTOCOLS, resolve_token
+from defi_cli.protocols import get_dex
+from defi_cli.registry import PROTOCOLS, resolve_token
 
 
 def build_quote_call(
@@ -16,48 +18,13 @@ def build_quote_call(
     """Build a QuoterV2.quoteExactInputSingle eth_call.
 
     Works with Uniswap V3, HyperSwap, and Algebra-based DEXes.
-
-    Returns:
-        Dict with "to", "data", "chainId" for eth_call.
     """
     token_in_addr = resolve_token(chain, token_in)
     token_out_addr = resolve_token(chain, token_out)
-    chain_id = CHAINS[chain]["chain_id"]
-    interface = PROTOCOLS[protocol]["interface"]
-    config = PROTOCOLS[protocol]["chains"][chain]
-
-    quoter_addr = config.get("quoter_v2")
-    if not quoter_addr:
-        raise ValueError(f"{protocol} on {chain} has no quoter_v2 address")
-
-    if interface == "algebra_v3":
-        # Algebra QuoterV2: quoteExactInputSingle(
-        #   address tokenIn, address tokenOut, uint256 amountIn,
-        #   uint160 sqrtPriceLimitX96
-        # ) — no fee param
-        # selector: cdca1753
-        selector = "cdca1753"
-        params = encode(
-            ["address", "address", "uint256", "uint160"],
-            [token_in_addr, token_out_addr, amount_in, 0],
-        )
-    else:
-        # Uniswap V3 QuoterV2: quoteExactInputSingle(
-        #   (address tokenIn, address tokenOut, uint256 amountIn,
-        #    uint24 fee, uint160 sqrtPriceLimitX96)
-        # )
-        # selector: c6a5026a
-        selector = "c6a5026a"
-        params = encode(
-            ["(address,address,uint256,uint24,uint160)"],
-            [(token_in_addr, token_out_addr, amount_in, fee, 0)],
-        )
-
-    return {
-        "to": quoter_addr,
-        "data": "0x" + selector + params.hex(),
-        "chainId": chain_id,
-    }
+    return get_dex(protocol, chain).build_quote_call(
+        token_in=token_in_addr, token_out=token_out_addr,
+        amount_in=amount_in, fee=fee,
+    )
 
 
 def build_multi_quote_calls(

@@ -48,6 +48,25 @@ def test_to_raw_roundtrip():
     assert back == original
 
 
+def test_chain_specific_decimals():
+    """BSC USDC/USDT use 18 decimals, not 6."""
+    from defi_cli.decimals import get_decimals
+
+    # BSC overrides
+    assert get_decimals("USDC", chain="bsc") == 18
+    assert get_decimals("USDT", chain="bsc") == 18
+
+    # Other chains use default 6
+    assert get_decimals("USDC", chain="arbitrum") == 6
+    assert get_decimals("USDT", chain="base") == 6
+
+    # No chain specified = default
+    assert get_decimals("USDC") == 6
+
+    # Non-overridden tokens on BSC use defaults
+    assert get_decimals("WETH", chain="bsc") == 18
+
+
 def test_build_balanceof_call():
     """Balance call includes token metadata."""
     from defi_cli.decimals import build_balanceof_call
