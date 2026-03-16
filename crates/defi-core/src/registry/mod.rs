@@ -180,8 +180,16 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/pancakeswap_v3_arb.toml"),
             ),
             (
+                "dex/traderjoe_arb",
+                include_str!("../../../../config/protocols/dex/traderjoe_arb.toml"),
+            ),
+            (
                 "lending/aave_v3_arb",
                 include_str!("../../../../config/protocols/lending/aave_v3_arb.toml"),
+            ),
+            (
+                "lending/compound_v3_arb",
+                include_str!("../../../../config/protocols/lending/compound_v3_arb.toml"),
             ),
             (
                 "dex/camelot_v2_arb",
@@ -223,6 +231,10 @@ impl Registry {
             (
                 "lending/aave_v3_base",
                 include_str!("../../../../config/protocols/lending/aave_v3_base.toml"),
+            ),
+            (
+                "lending/compound_v3_base",
+                include_str!("../../../../config/protocols/lending/compound_v3_base.toml"),
             ),
             // === BNB ===
             (

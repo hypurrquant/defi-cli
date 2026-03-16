@@ -9,7 +9,7 @@ use crate::derivatives::{GenericDerivatives, HlpVault};
 use crate::dex::{
     AlgebraV3, BalancerV3, CurveStableSwap, Solidly, SolidlyGauge, UniswapV2, UniswapV3, WooFi,
 };
-use crate::lending::{AaveOracle, AaveV3, CompoundV2, EulerV2, MorphoBlue};
+use crate::lending::{AaveOracle, AaveV3, CompoundV2, CompoundV3, EulerV2, MorphoBlue};
 use crate::liquid_staking::{GenericLst, Kinetiq, StHype};
 use crate::options::{GenericOptions, Rysk};
 use crate::vault::Erc4626Vault;
@@ -86,6 +86,11 @@ pub fn create_lending_with_rpc(
             rpc_url.map(|s| s.to_string()),
         )?)),
         "compound_v2" => Ok(Box::new(CompoundV2::from_contracts(
+            entry.name.clone(),
+            &entry.contracts,
+            rpc_url.map(|s| s.to_string()),
+        )?)),
+        "compound_v3" => Ok(Box::new(CompoundV3::from_contracts(
             entry.name.clone(),
             &entry.contracts,
             rpc_url.map(|s| s.to_string()),
