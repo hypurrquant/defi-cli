@@ -28,6 +28,14 @@ sol! {
             uint128 fee
         );
 
+        function idToMarketParams(bytes32 id) external view returns (
+            address loanToken,
+            address collateralToken,
+            address oracle,
+            address irm,
+            uint256 lltv
+        );
+
         function supply(
             MarketParams memory marketParams,
             uint256 assets,
@@ -59,6 +67,28 @@ sol! {
             address onBehalf,
             address receiver
         ) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn);
+    }
+
+    #[sol(rpc)]
+    interface IIrm {
+        struct MarketParams {
+            address loanToken;
+            address collateralToken;
+            address oracle;
+            address irm;
+            uint256 lltv;
+        }
+
+        struct Market {
+            uint128 totalSupplyAssets;
+            uint128 totalSupplyShares;
+            uint128 totalBorrowAssets;
+            uint128 totalBorrowShares;
+            uint128 lastUpdate;
+            uint128 fee;
+        }
+
+        function borrowRateView(MarketParams memory marketParams, Market memory market) external view returns (uint256);
     }
 
     #[sol(rpc)]
@@ -125,27 +155,6 @@ impl MorphoBlue {
             oracle: Address::ZERO,
             irm: Address::ZERO,
             lltv: U256::ZERO,
-        }
-    }
-
-    /// Find a vault address for the given asset from known vaults
-    fn vault_for_asset(
-        &self,
-        asset: Address,
-        contracts: &std::collections::HashMap<String, Address>,
-    ) -> Option<Address> {
-        // Map known token addresses to vault names
-        let whype = Address::new([0x55; 20]);
-        let usdc: Address = "0xb88339CB7199b77E23DB6E890353E22632Ba630f"
-            .parse()
-            .unwrap_or(Address::ZERO);
-
-        if asset == whype {
-            contracts.get("fehype").copied()
-        } else if asset == usdc {
-            contracts.get("feusdc").copied()
-        } else {
-            None
         }
     }
 }
@@ -293,11 +302,48 @@ impl Lending for MorphoBlue {
         let borrow = mkt.totalBorrowAssets as f64;
         let util = if supply > 0.0 { borrow / supply } else { 0.0 };
 
-        // Morpho Blue rate estimation: borrow rate ≈ util * base_rate_at_target
-        // Simplified: we report utilization and let consumers derive rates
-        // A more accurate approach would call the IRM contract
-        let borrow_apy = util * 15.0; // rough approximation
-        let supply_apy = borrow_apy * util * (1.0 - mkt.fee as f64 / 1e18);
+        // Get IRM address from market params to call borrowRateView
+        let params = morpho
+            .idToMarketParams(market_id)
+            .call()
+            .await
+            .map_err(|e| {
+                DefiError::RpcError(format!("[{}] idToMarketParams failed: {e}", self.name))
+            })?;
+
+        let irm = IIrm::new(params.irm, &provider);
+        let irm_params = IIrm::MarketParams {
+            loanToken: params.loanToken,
+            collateralToken: params.collateralToken,
+            oracle: params.oracle,
+            irm: params.irm,
+            lltv: params.lltv,
+        };
+        let irm_market = IIrm::Market {
+            totalSupplyAssets: mkt.totalSupplyAssets,
+            totalSupplyShares: mkt.totalSupplyShares,
+            totalBorrowAssets: mkt.totalBorrowAssets,
+            totalBorrowShares: mkt.totalBorrowShares,
+            lastUpdate: mkt.lastUpdate,
+            fee: mkt.fee,
+        };
+
+        let borrow_rate_per_sec = irm
+            .borrowRateView(irm_params, irm_market)
+            .call()
+            .await
+            .map_err(|e| {
+                DefiError::RpcError(format!("[{}] borrowRateView failed: {e}", self.name))
+            })?;
+
+        // Convert per-second rate (1e18 scale) to APY
+        let rate_per_sec = borrow_rate_per_sec.to::<u128>() as f64 / 1e18;
+        let seconds_per_year = 365.25 * 24.0 * 3600.0;
+        let borrow_apy = rate_per_sec * seconds_per_year * 100.0;
+
+        // Supply APY = borrow_apy * utilization * (1 - protocol_fee)
+        let fee_pct = mkt.fee as f64 / 1e18;
+        let supply_apy = borrow_apy * util * (1.0 - fee_pct);
 
         Ok(LendingRates {
             protocol: self.name.clone(),
