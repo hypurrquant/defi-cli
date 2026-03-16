@@ -5,15 +5,18 @@ category = "dex"
 interface = "solidly_v2"
 chain = "hyperevm"
 native = true
-description = "Ramses V2 AMM on HyperEVM ($2.6M TVL)"
+description = "Ramses V2 AMM (x(3,3) model) on HyperEVM ($2.6M TVL)"
 
 [protocol.contracts]
+# V2 AMM
 factory = "0xd0a07E160511c40ccD5340e94660E9C9c01b0D27"
 router = "0xdcC44285fBc236457A5cd91C2f77AD8421B0D8ED"
+# x(3,3) governance (shared with Ramses CL)
 voter = "0x9aab8C415aF5936b09C595B09B1ff15cbaDCD843"
 ve_token = "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
-gauge_factory = "0x1AD1DC4430bD55FbD19f151F6f3CDB4Bb473Fa16"
-cl_gauge_factory = "0xE17988013E15d29B655634Da0056ba27BA4D3E27"
-fee_distributor_factory = "0xE7E05591362a74D3746F828941ec833e102a6E90"
 minter = "0x252aCC15430a26748CED7376b317e74e250FcF00"
 vote_module = "0x6736102621f7c0dbB0E2989e3ad7A8793e71930b"
+gauge_factory = "0x1AD1DC4430bD55FbD19f151F6f3CDB4Bb473Fa16"
+fee_distributor_factory = "0xE7E05591362a74D3746F828941ec833e102a6E90"
+fee_recipient_factory = "0xa0BDd8142568d478D69C0D601D46bfdDa04A7c4a"
+access_hub = "0x6631a487d59893831b331653225E0bfeBf6Ea1EC"
