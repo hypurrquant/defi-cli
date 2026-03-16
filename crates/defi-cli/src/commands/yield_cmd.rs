@@ -26,9 +26,12 @@ pub enum YieldCommand {
         /// Asset symbol or address to optimize (e.g. USDC, WHYPE)
         #[arg(long)]
         asset: String,
-        /// Strategy type: best-supply, leverage-loop
+        /// Strategy type: best-supply, leverage-loop, auto
         #[arg(long)]
         strategy: Option<String>,
+        /// Amount to optimize (for diversification recommendations)
+        #[arg(long)]
+        amount: Option<f64>,
     },
 }
 
@@ -78,6 +81,83 @@ async fn collect_lending_rates(
     results
 }
 
+/// Collect yield opportunities from all sources (lending + vaults + morpho)
+async fn collect_all_yields(
+    registry: &Registry,
+    chain: &ChainConfig,
+    asset: &str,
+    asset_addr: Address,
+) -> Vec<serde_json::Value> {
+    let mut opportunities = Vec::new();
+
+    // 1. Lending rates (Aave V3 forks)
+    let lending_rates = collect_lending_rates(registry, chain, asset_addr).await;
+    for r in &lending_rates {
+        if r.supply_apy > 0.0 {
+            opportunities.push(serde_json::json!({
+                "protocol": r.protocol,
+                "type": "lending_supply",
+                "asset": asset,
+                "apy": r.supply_apy,
+                "utilization": r.utilization,
+            }));
+        }
+    }
+
+    // 2. Morpho Blue rates
+    let morpho_protocols = registry.get_protocols_by_category(ProtocolCategory::Lending);
+    for entry in &morpho_protocols {
+        if entry.interface == "morpho_blue" {
+            let rpc = chain.effective_rpc_url();
+            let entry_c = (*entry).clone();
+            if let Ok(lending) =
+                defi_protocols::factory::create_lending_with_rpc(&entry_c, Some(&rpc))
+                && let Ok(rates) = lending.get_rates(asset_addr).await
+                && rates.supply_apy > 0.0
+            {
+                opportunities.push(serde_json::json!({
+                    "protocol": rates.protocol,
+                    "type": "morpho_vault",
+                    "asset": asset,
+                    "apy": rates.supply_apy,
+                    "utilization": rates.utilization,
+                }));
+            }
+        }
+    }
+
+    // 3. Vault APYs (ERC-4626 — estimate from lending rates of underlying)
+    let vault_protocols = registry.get_protocols_by_category(ProtocolCategory::Vault);
+    for entry in &vault_protocols {
+        if entry.interface == "erc4626" {
+            let rpc = chain.effective_rpc_url();
+            let entry_c = (*entry).clone();
+            if let Ok(vault) = defi_protocols::factory::create_vault_with_rpc(&entry_c, Some(&rpc))
+                && let Ok(info) = vault.get_vault_info().await
+            {
+                opportunities.push(serde_json::json!({
+                    "protocol": info.protocol,
+                    "type": "vault",
+                    "asset": asset,
+                    "apy": info.apy.unwrap_or(0.0),
+                    "total_assets": format!("{}", info.total_assets),
+                }));
+            }
+        }
+    }
+
+    // Sort by APY descending
+    opportunities.sort_by(|a, b| {
+        let a_apy = a["apy"].as_f64().unwrap_or(0.0);
+        let b_apy = b["apy"].as_f64().unwrap_or(0.0);
+        b_apy
+            .partial_cmp(&a_apy)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    opportunities
+}
+
 pub async fn run(
     args: YieldArgs,
     registry: &Registry,
@@ -123,11 +203,73 @@ pub async fn run(
             }))?;
         }
 
-        YieldCommand::Optimize { asset, strategy } => {
+        YieldCommand::Optimize {
+            asset,
+            strategy,
+            amount,
+        } => {
             let asset_addr = resolve_asset(registry, &chain_key, &asset)?;
-            let strategy_name = strategy.as_deref().unwrap_or("best-supply");
+            let strategy_name = strategy.as_deref().unwrap_or("auto");
 
             match strategy_name {
+                "auto" => {
+                    let opportunities =
+                        collect_all_yields(registry, chain, &asset, asset_addr).await;
+
+                    if opportunities.is_empty() {
+                        return Err(DefiError::Internal(format!(
+                            "No yield opportunities found for '{}'",
+                            asset
+                        )));
+                    }
+
+                    // Build allocation recommendation
+                    let allocations = if let Some(total) = amount {
+                        // Diversify: 60% top, 30% second, 10% third
+                        let weights = [0.6, 0.3, 0.1];
+                        opportunities
+                            .iter()
+                            .take(weights.len())
+                            .enumerate()
+                            .map(|(i, opp)| {
+                                let pct = weights[i] * 100.0;
+                                let amt = total * weights[i];
+                                serde_json::json!({
+                                    "protocol": opp["protocol"],
+                                    "type": opp["type"],
+                                    "apy": opp["apy"],
+                                    "allocation_pct": pct,
+                                    "amount": format!("{:.2}", amt),
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        vec![]
+                    };
+
+                    let best = &opportunities[0];
+                    let weighted_apy = if !allocations.is_empty() {
+                        let weights = [0.6, 0.3, 0.1];
+                        opportunities
+                            .iter()
+                            .take(weights.len())
+                            .enumerate()
+                            .map(|(i, o)| o["apy"].as_f64().unwrap_or(0.0) * weights[i])
+                            .sum::<f64>()
+                    } else {
+                        best["apy"].as_f64().unwrap_or(0.0)
+                    };
+
+                    output.print(&serde_json::json!({
+                        "strategy": "auto",
+                        "asset": asset,
+                        "best_protocol": best["protocol"],
+                        "best_apy": best["apy"],
+                        "weighted_apy": weighted_apy,
+                        "opportunities": opportunities,
+                        "allocation": allocations,
+                    }))?;
+                }
                 "best-supply" => {
                     let mut results = collect_lending_rates(registry, chain, asset_addr).await;
 
