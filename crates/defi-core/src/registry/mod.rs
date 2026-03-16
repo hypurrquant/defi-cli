@@ -158,6 +158,61 @@ impl Registry {
                 "vault/felix_vaults",
                 include_str!("../../../../config/protocols/vault/felix_vaults.toml"),
             ),
+            // === Arbitrum ===
+            (
+                "dex/uniswap_v3_arb",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_arb.toml"),
+            ),
+            (
+                "dex/sushiswap_arb",
+                include_str!("../../../../config/protocols/dex/sushiswap_arb.toml"),
+            ),
+            (
+                "dex/camelot_arb",
+                include_str!("../../../../config/protocols/dex/camelot_arb.toml"),
+            ),
+            (
+                "lending/aave_v3_arb",
+                include_str!("../../../../config/protocols/lending/aave_v3_arb.toml"),
+            ),
+            (
+                "lending/radiant_arb",
+                include_str!("../../../../config/protocols/lending/radiant_arb.toml"),
+            ),
+            // === Base ===
+            (
+                "dex/uniswap_v3_base",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_base.toml"),
+            ),
+            (
+                "dex/aerodrome",
+                include_str!("../../../../config/protocols/dex/aerodrome.toml"),
+            ),
+            (
+                "lending/aave_v3_base",
+                include_str!("../../../../config/protocols/lending/aave_v3_base.toml"),
+            ),
+            (
+                "lending/morpho_base",
+                include_str!("../../../../config/protocols/lending/morpho_base.toml"),
+            ),
+            // === BNB ===
+            (
+                "dex/pancakeswap_v3",
+                include_str!("../../../../config/protocols/dex/pancakeswap_v3.toml"),
+            ),
+            (
+                "dex/pancakeswap_v2",
+                include_str!("../../../../config/protocols/dex/pancakeswap_v2.toml"),
+            ),
+            (
+                "dex/thena",
+                include_str!("../../../../config/protocols/dex/thena.toml"),
+            ),
+            (
+                "lending/aave_v3_bnb",
+                include_str!("../../../../config/protocols/lending/aave_v3_bnb.toml"),
+            ),
         ];
 
         for (name, toml_str) in protocol_tomls {
