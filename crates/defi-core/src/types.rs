@@ -250,25 +250,6 @@ pub struct CdpInfo {
     pub liquidation_price: Option<f64>,
 }
 
-// === Bridge Types ===
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BridgeSendParams {
-    pub protocol: String,
-    pub token: Address,
-    pub amount: U256,
-    pub destination_chain: String,
-    pub recipient: Address,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BridgeQuoteResult {
-    pub protocol: String,
-    pub fee: U256,
-    pub estimated_time_secs: u64,
-    pub amount_out: U256,
-}
-
 // === Liquid Staking Types ===
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

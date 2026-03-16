@@ -1,4 +1,3 @@
-pub mod bridge;
 pub mod cdp;
 pub mod dex;
 pub mod gauge;
@@ -60,8 +59,6 @@ pub enum Commands {
     Lending(lending::LendingArgs),
     /// CDP operations: open, adjust, close, info
     Cdp(cdp::CdpArgs),
-    /// Bridge operations: send, quote, status
-    Bridge(bridge::BridgeArgs),
     /// Liquid staking: stake, unstake, info
     Staking(staking::StakingArgs),
     /// Vault operations: deposit, withdraw, info
@@ -93,9 +90,6 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
             lending::run(args, &registry, chain, &executor, &output_mode).await
         }
         Commands::Cdp(args) => cdp::run(args, &registry, chain, &executor, &output_mode).await,
-        Commands::Bridge(args) => {
-            bridge::run(args, &registry, chain, &executor, &output_mode).await
-        }
         Commands::Staking(args) => {
             staking::run(args, &registry, chain, &executor, &output_mode).await
         }

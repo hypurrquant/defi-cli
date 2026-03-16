@@ -4,7 +4,6 @@ use defi_core::error::{DefiError, Result};
 use defi_core::registry::ProtocolEntry;
 use defi_core::traits::*;
 
-use crate::bridge::{GenericBridge, HyperlaneBridge, HyperliquidBridge};
 use crate::cdp::{Felix, FelixOracle};
 use crate::derivatives::{GenericDerivatives, HlpVault};
 use crate::dex::{
@@ -107,24 +106,6 @@ pub fn create_cdp_with_rpc(entry: &ProtocolEntry, rpc_url: Option<&str>) -> Resu
         )?)),
         other => Err(DefiError::Unsupported(format!(
             "CDP interface '{other}' not yet implemented"
-        ))),
-    }
-}
-
-/// Create a Bridge implementation from a protocol registry entry
-pub fn create_bridge(entry: &ProtocolEntry) -> Result<Box<dyn Bridge>> {
-    match entry.interface.as_str() {
-        "native_bridge" => Ok(Box::new(HyperliquidBridge::from_contracts(
-            entry.name.clone(),
-            &entry.contracts,
-        )?)),
-        "hyperlane" => Ok(Box::new(HyperlaneBridge::from_contracts(
-            entry.name.clone(),
-            &entry.contracts,
-        )?)),
-        other => Ok(Box::new(GenericBridge::from_entry(
-            entry.name.clone(),
-            other.to_string(),
         ))),
     }
 }

@@ -1,6 +1,5 @@
 pub mod factory;
 
-pub mod bridge;
 pub mod cdp;
 pub mod derivatives;
 pub mod dex;

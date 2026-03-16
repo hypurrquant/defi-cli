@@ -106,13 +106,13 @@ fn handle_tools_list() -> Value {
             },
             {
                 "name": "defi_list_protocols",
-                "description": "List DeFi protocols, optionally filtered by category (dex, lending, cdp, bridge, liquid_staking, yield_source, vault, derivatives, options)",
+                "description": "List DeFi protocols, optionally filtered by category (dex, lending, cdp, liquid_staking, yield_source, vault, derivatives, options)",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "category": {
                             "type": "string",
-                            "description": "Filter by category (e.g. dex, lending, cdp, bridge, liquid_staking, yield_source, yield_aggregator, vault, derivatives, options)"
+                            "description": "Filter by category (e.g. dex, lending, cdp, liquid_staking, yield_source, yield_aggregator, vault, derivatives, options)"
                         }
                     }
                 }

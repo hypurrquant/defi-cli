@@ -117,10 +117,6 @@ impl Registry {
                 include_str!("../../../../config/protocols/lending/hyperlend.toml"),
             ),
             (
-                "lending/morpho",
-                include_str!("../../../../config/protocols/lending/morpho.toml"),
-            ),
-            (
                 "lending/euler",
                 include_str!("../../../../config/protocols/lending/euler.toml"),
             ),
@@ -169,23 +165,6 @@ impl Registry {
             (
                 "cdp/parallel",
                 include_str!("../../../../config/protocols/cdp/parallel.toml"),
-            ),
-            // === Bridge (4) ===
-            (
-                "bridge/hyperliquid",
-                include_str!("../../../../config/protocols/bridge/hyperliquid.toml"),
-            ),
-            (
-                "bridge/hyperlane",
-                include_str!("../../../../config/protocols/bridge/hyperlane.toml"),
-            ),
-            (
-                "bridge/sodex",
-                include_str!("../../../../config/protocols/bridge/sodex.toml"),
-            ),
-            (
-                "bridge/symbiosis",
-                include_str!("../../../../config/protocols/bridge/symbiosis.toml"),
             ),
             // === Yield Source (10) ===
             (

@@ -1,4 +1,3 @@
-pub mod bridge;
 pub mod cdp;
 pub mod derivatives;
 pub mod dex;
@@ -11,7 +10,6 @@ pub mod vault;
 pub mod yield_aggregator;
 pub mod yield_source;
 
-pub use bridge::Bridge;
 pub use cdp::Cdp;
 pub use derivatives::Derivatives;
 pub use dex::Dex;
