@@ -9,4 +9,4 @@ description = "Morpho Blue on Base"
 
 [protocol.contracts]
 morpho_blue = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
-fehype = "0x0000000000000000000000000000000000000000"
+fehype = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca"

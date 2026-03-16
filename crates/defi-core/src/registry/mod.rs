@@ -175,14 +175,14 @@ impl Registry {
                 "lending/aave_v3_arb",
                 include_str!("../../../../config/protocols/lending/aave_v3_arb.toml"),
             ),
-            (
-                "lending/radiant_arb",
-                include_str!("../../../../config/protocols/lending/radiant_arb.toml"),
-            ),
             // === Base ===
             (
                 "dex/uniswap_v3_base",
                 include_str!("../../../../config/protocols/dex/uniswap_v3_base.toml"),
+            ),
+            (
+                "dex/sushiswap_base",
+                include_str!("../../../../config/protocols/dex/sushiswap_base.toml"),
             ),
             (
                 "dex/aerodrome",
