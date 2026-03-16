@@ -5,7 +5,7 @@ category = "dex"
 interface = "hybra"
 chain = "hyperevm"
 native = true
-description = "Hybra V4 native DEX on HyperEVM with $1.6M TVL"
+description = "Hybra V4 ve(3,3) DEX on HyperEVM (Blackhole fork) with $1.6M TVL"
 
 [protocol.contracts]
 factory = "0x41ba59415eC75AC4242dd157F2a7A282F1e75652"
@@ -14,3 +14,7 @@ vault = "0x9ffc63B7f284fA9A8071017b29a594B7e667f5d9"
 router = "0xCAfDa2b3E5c2B5E30f6d67FEFa5AfFD3f6a93b0a"
 quoter = "0x6dE3843D846543eEE20F73601ecc3Eb43E1B932b"
 position_manager = "0x578D8A2D07B60b12993559f1DDF90EB2af3eA496"
+voter = "0x5623F012d15EB828C12fe32e46d40AdC2A9e4FA3"
+ve_token = "0xD7Ed7792f71F3920DbA01c544639FD546d87f4fD"
+gauge_manager = "0x742CAA5bA7C92ca6CFeBfD0e73c21739b3b65d5e"
+minter = "0xA8265e40e4Cdf6DB345861F4FCb75F9CC63E149b"

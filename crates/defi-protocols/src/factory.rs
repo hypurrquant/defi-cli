@@ -219,7 +219,7 @@ pub fn create_options(entry: &ProtocolEntry) -> Result<Box<dyn Options>> {
 /// Returns a combined Gauge + VoteEscrow + Voter implementation.
 pub fn create_gauge(entry: &ProtocolEntry) -> Result<Box<dyn GaugeSystem>> {
     match entry.interface.as_str() {
-        "solidly_v2" | "solidly_cl" | "algebra_v3" => Ok(Box::new(SolidlyGauge::from_contracts(
+        "solidly_v2" | "solidly_cl" | "algebra_v3" | "hybra" => Ok(Box::new(SolidlyGauge::from_contracts(
             entry.name.clone(),
             &entry.contracts,
         )?)),

@@ -1,4 +1,3 @@
-# NOTE: Contract addresses are unverified - not yet confirmed from dev/mar11 branch
 [protocol]
 name = "Ring Few"
 slug = "ring-few"
@@ -6,9 +5,10 @@ category = "dex"
 interface = "solidly_v2"
 chain = "hyperevm"
 native = true
-description = "Solidly V2 style DEX on HyperEVM with $43M TVL"
+description = "Ring Protocol standard AMM on HyperEVM ($43M TVL). NOT ve(3,3)."
 
 [protocol.contracts]
-router = "0xd4Cd1eBbFeAcC3D4E5F6a7B8C9D0E1F2a3B4C5D6"
-factory = "0xe5De2fCcAfBdD4E5F6a7B8C9D0E1F2a3B4C5D6E7"
-voter = "0xf6Ef3aDdBaCeE5F6a7B8C9D0E1F2a3B4C5D6E7F8"
+# Ring Swap is a standard AMM, not ve(3,3). No gauge/voter contracts.
+factory = "0x4AfC2e4cA0844ad153B090dc32e207c1DD74a8E4"
+router = "0x701D1d675415efA2d2429fB122ccC6dD4FCcA959"
+few_factory = "0x6B65ed7315274eB9EF06A48132EB04D808700b86"
