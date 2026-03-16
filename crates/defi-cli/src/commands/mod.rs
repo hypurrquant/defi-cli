@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod cdp;
 pub mod dex;
+pub mod gauge;
 pub mod lending;
 pub mod schema;
 pub mod staking;
@@ -52,6 +53,8 @@ pub enum Commands {
     Schema(schema::SchemaArgs),
     /// DEX operations: swap, quote, compare
     Dex(dex::DexArgs),
+    /// Gauge operations: deposit, withdraw, claim, lock, vote (ve(3,3))
+    Gauge(gauge::GaugeArgs),
     /// Lending operations: supply, borrow, repay, withdraw, rates, position
     Lending(lending::LendingArgs),
     /// CDP operations: open, adjust, close, info
@@ -82,6 +85,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
         Commands::Status(args) => status::run(args, &registry, &output_mode).await,
         Commands::Schema(args) => schema::run(args, &output_mode).await,
         Commands::Dex(args) => dex::run(args, &registry, chain, &executor, &output_mode).await,
+        Commands::Gauge(args) => gauge::run(args, &registry, chain, &executor, &output_mode).await,
         Commands::Lending(args) => {
             lending::run(args, &registry, chain, &executor, &output_mode).await
         }

@@ -325,6 +325,33 @@ pub struct OptionParams {
     pub amount: U256,
 }
 
+// === ve(3,3) Types ===
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RewardInfo {
+    pub token: Address,
+    pub symbol: String,
+    pub amount: U256,
+    pub value_usd: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GaugeInfo {
+    pub gauge: Address,
+    pub pool: Address,
+    pub total_staked: U256,
+    pub reward_rate: U256,
+    pub rewards: Vec<RewardInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VeNftInfo {
+    pub token_id: U256,
+    pub amount: U256,
+    pub unlock_time: u64,
+    pub voting_power: U256,
+}
+
 // === Yield Types ===
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

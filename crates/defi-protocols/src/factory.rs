@@ -5,7 +5,9 @@ use defi_core::traits::*;
 use crate::bridge::{GenericBridge, HyperlaneBridge, HyperliquidBridge};
 use crate::cdp::Felix;
 use crate::derivatives::{GenericDerivatives, HlpVault};
-use crate::dex::{AlgebraV3, BalancerV3, CurveStableSwap, Solidly, UniswapV2, UniswapV3, WooFi};
+use crate::dex::{
+    AlgebraV3, BalancerV3, CurveStableSwap, Solidly, SolidlyGauge, UniswapV2, UniswapV3, WooFi,
+};
 use crate::lending::{AaveV3, EulerV2, MorphoBlue};
 use crate::liquid_staking::{GenericLst, Kinetiq, StHype};
 use crate::options::{GenericOptions, Rysk};
@@ -209,6 +211,20 @@ pub fn create_options(entry: &ProtocolEntry) -> Result<Box<dyn Options>> {
         other => Ok(Box::new(GenericOptions::from_entry(
             entry.name.clone(),
             other.to_string(),
+        ))),
+    }
+}
+
+/// Create a GaugeSystem implementation from a protocol registry entry.
+/// Returns a combined Gauge + VoteEscrow + Voter implementation.
+pub fn create_gauge(entry: &ProtocolEntry) -> Result<Box<dyn GaugeSystem>> {
+    match entry.interface.as_str() {
+        "solidly_v2" | "solidly_cl" | "algebra_v3" => Ok(Box::new(SolidlyGauge::from_contracts(
+            entry.name.clone(),
+            &entry.contracts,
+        )?)),
+        other => Err(DefiError::Unsupported(format!(
+            "Gauge interface '{other}' not supported"
         ))),
     }
 }

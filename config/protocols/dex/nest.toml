@@ -8,9 +8,8 @@ native = true
 description = "Algebra V3 ve(3,3) MetaDEX on HyperEVM ($4M TVL)"
 
 [protocol.contracts]
-# NEST uses pool_deployer instead of a typical swap router.
-# Setting router = pool_deployer as workaround; needs custom handling for swaps.
 router = "0x3842CE04380b8655a3a47ed87ea0d311adca161f"
 pool_deployer = "0x3842CE04380b8655a3a47ed87ea0d311adca161f"
 position_manager = "0xeaf58788a405f3253814b4559391a22be8616250"
 voter = "0x566bdc5444fd5fe5d93ec379Bd66eC861ddbA901"
+ve_token = "0x2f2Ae07e3cc3391A2E27825652BA8DcdD5412074"
