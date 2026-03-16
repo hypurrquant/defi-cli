@@ -67,7 +67,6 @@ impl Executor {
                 let gas_estimate = provider
                     .estimate_gas(est_request)
                     .await
-                    .map(|g| g as u64)
                     .unwrap_or(tx.gas_estimate.unwrap_or(0));
 
                 Ok(ActionResult {
