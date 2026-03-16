@@ -43,8 +43,8 @@ impl Kinetiq {
         let staking = contracts.get("staking").copied().ok_or_else(|| {
             DefiError::ContractError("Missing 'staking' contract address".to_string())
         })?;
-        // kHYPE token address (same as staking contract for Kinetiq)
-        let liquid_token = staking;
+        // kHYPE token is a separate contract from the staking manager
+        let liquid_token = contracts.get("khype_token").copied().unwrap_or(staking);
         Ok(Self {
             name,
             staking,
@@ -76,7 +76,7 @@ impl LiquidStaking for Kinetiq {
             to: self.staking,
             data: call.abi_encode().into(),
             value: params.amount, // Native HYPE sent as value
-            gas_estimate: Some(200_000),
+            gas_estimate: Some(300_000),
         })
     }
 
@@ -90,7 +90,7 @@ impl LiquidStaking for Kinetiq {
             to: self.staking,
             data: call.abi_encode().into(),
             value: U256::ZERO,
-            gas_estimate: Some(200_000),
+            gas_estimate: Some(300_000),
         })
     }
 

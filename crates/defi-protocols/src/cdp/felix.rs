@@ -10,14 +10,19 @@ use defi_core::types::*;
 sol! {
     #[sol(rpc)]
     interface IBorrowerOperations {
+        // Liquity V2 openTrove signature
         function openTrove(
-            address _collToken,
+            address _owner,
+            uint256 _ownerIndex,
             uint256 _collAmount,
-            uint256 _debtAmount,
+            uint256 _boldAmount,
             uint256 _upperHint,
             uint256 _lowerHint,
             uint256 _annualInterestRate,
-            uint256 _maxUpfrontFee
+            uint256 _maxUpfrontFee,
+            address _addManager,
+            address _removeManager,
+            address _receiver
         ) external returns (uint256);
 
         function adjustTrove(
@@ -82,13 +87,17 @@ impl Cdp for Felix {
 
     async fn build_open(&self, params: OpenCdpParams) -> Result<DeFiTx> {
         let call = IBorrowerOperations::openTroveCall {
-            _collToken: params.collateral,
+            _owner: params.recipient,
+            _ownerIndex: U256::ZERO,
             _collAmount: params.collateral_amount,
-            _debtAmount: params.debt_amount,
+            _boldAmount: params.debt_amount,
             _upperHint: U256::ZERO,
             _lowerHint: U256::ZERO,
             _annualInterestRate: U256::from(50000000000000000u64), // 5% default
             _maxUpfrontFee: U256::MAX,
+            _addManager: Address::ZERO,
+            _removeManager: Address::ZERO,
+            _receiver: params.recipient,
         };
 
         Ok(DeFiTx {
@@ -99,7 +108,7 @@ impl Cdp for Felix {
             to: self.borrower_operations,
             data: call.abi_encode().into(),
             value: U256::ZERO,
-            gas_estimate: Some(500_000),
+            gas_estimate: Some(5_000_000), // Needs high gas for sorted trove insertion without hints
         })
     }
 
