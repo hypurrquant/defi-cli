@@ -29,7 +29,12 @@ pub struct ActionResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TxStatus {
+    /// Calldata generated only (no RPC)
     DryRun,
+    /// Simulated via eth_call (success)
+    Simulated,
+    /// Simulation failed (would revert)
+    SimulationFailed,
     Pending,
     Confirmed,
     Failed,
