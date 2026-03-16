@@ -6,6 +6,12 @@ use alloy::signers::local::PrivateKeySigner;
 use defi_core::error::{DefiError, Result};
 use defi_core::types::{ActionResult, DeFiTx, TxStatus};
 
+/// Gas buffer multiplier: 20% headroom over estimated gas to prevent out-of-gas.
+const GAS_BUFFER_BPS: u64 = 12000; // 120% in basis points
+
+/// Default max priority fee (tip) in wei — 0.1 gwei.
+const DEFAULT_PRIORITY_FEE_WEI: u128 = 100_000_000;
+
 pub struct Executor {
     pub dry_run: bool,
     pub rpc_url: Option<String>,
@@ -35,8 +41,55 @@ impl Executor {
         req
     }
 
+    /// Apply 20% buffer to a gas estimate.
+    fn apply_gas_buffer(gas: u64) -> u64 {
+        (gas as u128 * GAS_BUFFER_BPS as u128 / 10000) as u64
+    }
+
+    /// Fetch EIP-1559 fee parameters from the network.
+    /// Returns (max_fee_per_gas, max_priority_fee_per_gas).
+    async fn fetch_eip1559_fees<P: Provider>(
+        provider: &P,
+    ) -> Result<(u128, u128)> {
+        // Get current base fee from latest block
+        let base_fee = provider
+            .get_gas_price()
+            .await
+            .map_err(|e| DefiError::RpcError(format!("Failed to fetch gas price: {e}")))?;
+
+        // Try to get priority fee from the node
+        let priority_fee = provider
+            .get_max_priority_fee_per_gas()
+            .await
+            .unwrap_or(DEFAULT_PRIORITY_FEE_WEI);
+
+        // max_fee = 2 * base_fee + priority_fee (accounts for base fee volatility)
+        let max_fee = base_fee.saturating_mul(2).saturating_add(priority_fee);
+
+        Ok((max_fee, priority_fee))
+    }
+
+    /// Estimate gas dynamically with buffer, falling back to hardcoded estimate.
+    async fn estimate_gas_with_buffer<P: Provider>(
+        provider: &P,
+        tx_request: &TransactionRequest,
+        fallback: Option<u64>,
+    ) -> u64 {
+        let mut est_req = tx_request.clone();
+        est_req.gas = None; // Clear gas_limit so estimateGas can run
+        let estimated = provider
+            .estimate_gas(est_req)
+            .await
+            .unwrap_or(fallback.unwrap_or(0));
+
+        if estimated > 0 {
+            Self::apply_gas_buffer(estimated)
+        } else {
+            fallback.unwrap_or(0)
+        }
+    }
+
     /// Simulate a transaction via eth_call + eth_estimateGas.
-    /// Returns (success, gas_estimate, revert_reason).
     async fn simulate(&self, tx: &DeFiTx) -> Result<ActionResult> {
         let rpc_url = self.rpc_url.as_ref().ok_or_else(|| {
             DefiError::RpcError("No RPC URL — cannot simulate. Set HYPEREVM_RPC_URL.".to_string())
@@ -48,7 +101,6 @@ impl Executor {
 
         let provider = ProviderBuilder::new().connect_http(url);
 
-        // Use a dummy sender for simulation (address(1) has no special meaning)
         let sender = std::env::var("DEFI_PRIVATE_KEY")
             .ok()
             .and_then(|k| k.parse::<PrivateKeySigner>().ok())
@@ -62,12 +114,13 @@ impl Executor {
 
         match call_result {
             Ok(_output) => {
-                // Success — now estimate gas
-                let est_request = tx_request.clone().gas_limit(0);
-                let gas_estimate = provider
-                    .estimate_gas(est_request)
-                    .await
-                    .unwrap_or(tx.gas_estimate.unwrap_or(0));
+                // 2. Estimate gas with buffer
+                let gas_estimate =
+                    Self::estimate_gas_with_buffer(&provider, &tx_request, tx.gas_estimate).await;
+
+                // 3. Fetch EIP-1559 fees
+                let (max_fee, priority_fee) =
+                    Self::fetch_eip1559_fees(&provider).await.unwrap_or((0, 0));
 
                 Ok(ActionResult {
                     tx_hash: None,
@@ -80,6 +133,8 @@ impl Executor {
                         "data": tx.data.to_string(),
                         "value": tx.value.to_string(),
                         "gas_estimate": gas_estimate,
+                        "max_fee_per_gas_gwei": format!("{:.4}", max_fee as f64 / 1e9),
+                        "max_priority_fee_gwei": format!("{:.4}", priority_fee as f64 / 1e9),
                         "mode": "simulated",
                         "result": "success",
                     }),
@@ -87,7 +142,6 @@ impl Executor {
             }
             Err(e) => {
                 let err_msg = e.to_string();
-                // Parse revert reason if available
                 let revert_reason = if err_msg.contains("revert") {
                     extract_revert_reason(&err_msg)
                 } else {
@@ -115,7 +169,6 @@ impl Executor {
 
     pub async fn execute(&self, tx: DeFiTx) -> Result<ActionResult> {
         if self.dry_run {
-            // If RPC is available, simulate; otherwise just return calldata
             if self.rpc_url.is_some() {
                 return self.simulate(&tx).await;
             }
@@ -156,13 +209,32 @@ impl Executor {
             .parse()
             .map_err(|e| DefiError::RpcError(format!("Invalid RPC URL: {e}")))?;
 
-        eprintln!("Broadcasting transaction to {}...", rpc_url);
-
         let provider = ProviderBuilder::new()
             .wallet(alloy::network::EthereumWallet::from(signer))
             .connect_http(url);
 
-        let tx_request = Self::build_tx_request(&tx);
+        let mut tx_request = Self::build_tx_request(&tx).from(sender);
+
+        // Dynamic gas estimation with buffer
+        let gas_limit =
+            Self::estimate_gas_with_buffer(&provider, &tx_request, tx.gas_estimate).await;
+        if gas_limit > 0 {
+            tx_request = tx_request.gas_limit(gas_limit);
+        }
+
+        // EIP-1559 gas pricing
+        if let Ok((max_fee, priority_fee)) = Self::fetch_eip1559_fees(&provider).await
+            && max_fee > 0
+        {
+            tx_request = tx_request
+                .max_fee_per_gas(max_fee)
+                .max_priority_fee_per_gas(priority_fee);
+        }
+
+        eprintln!("Broadcasting transaction to {}...", rpc_url);
+        if gas_limit > 0 {
+            eprintln!("  Gas limit: {} (with 20% buffer)", gas_limit);
+        }
 
         let pending = provider
             .send_transaction(tx_request)
@@ -188,12 +260,14 @@ impl Executor {
         Ok(ActionResult {
             tx_hash: Some(tx_hash),
             status,
-            gas_used: Some(receipt.gas_used as u64),
+            gas_used: Some(receipt.gas_used),
             description: tx.description,
             details: serde_json::json!({
                 "to": tx.to.to_string(),
                 "from": sender.to_string(),
                 "block_number": receipt.block_number,
+                "gas_limit": gas_limit,
+                "gas_used": receipt.gas_used,
                 "mode": "broadcast",
             }),
         })
@@ -202,7 +276,6 @@ impl Executor {
 
 /// Extract a human-readable revert reason from an RPC error message.
 fn extract_revert_reason(err: &str) -> String {
-    // Common patterns: "execution reverted: Some reason" or "revert: reason"
     if let Some(pos) = err.find("execution reverted:") {
         return err[pos..].to_string();
     }
@@ -212,7 +285,6 @@ fn extract_revert_reason(err: &str) -> String {
     if let Some(pos) = err.find("Error(") {
         return err[pos..].to_string();
     }
-    // Return shortened error
     if err.len() > 200 {
         format!("{}...", &err[..200])
     } else {
