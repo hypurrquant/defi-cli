@@ -92,10 +92,16 @@ pub fn create_lending_with_rpc(
 
 /// Create a Cdp implementation from a protocol registry entry
 pub fn create_cdp(entry: &ProtocolEntry) -> Result<Box<dyn Cdp>> {
+    create_cdp_with_rpc(entry, None)
+}
+
+/// Create a Cdp with RPC URL for hint resolution
+pub fn create_cdp_with_rpc(entry: &ProtocolEntry, rpc_url: Option<&str>) -> Result<Box<dyn Cdp>> {
     match entry.interface.as_str() {
         "liquity_v2" => Ok(Box::new(Felix::from_contracts(
             entry.name.clone(),
             &entry.contracts,
+            rpc_url.map(|s| s.to_string()),
         )?)),
         other => Err(DefiError::Unsupported(format!(
             "CDP interface '{other}' not yet implemented"

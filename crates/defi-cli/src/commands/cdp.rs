@@ -108,7 +108,7 @@ fn parse_amount_18(amount: &str) -> Result<U256> {
 pub async fn run(
     args: CdpArgs,
     registry: &Registry,
-    _chain: &ChainConfig,
+    chain: &ChainConfig,
     executor: &Executor,
     output: &OutputMode,
 ) -> Result<()> {
@@ -121,7 +121,10 @@ pub async fn run(
             recipient,
         } => {
             let entry = registry.get_protocol(&protocol)?;
-            let cdp = defi_protocols::factory::create_cdp(entry)?;
+            let cdp = defi_protocols::factory::create_cdp_with_rpc(
+                entry,
+                Some(&chain.effective_rpc_url()),
+            )?;
 
             let collateral_addr = collateral
                 .parse::<Address>()
