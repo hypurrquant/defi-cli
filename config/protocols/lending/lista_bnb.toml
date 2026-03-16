@@ -1,0 +1,11 @@
+[protocol]
+name = "Lista Lending"
+slug = "lista-lending"
+category = "lending"
+interface = "morpho_blue"
+chain = "bnb"
+native = true
+description = "Lista Lending (Moolah) — Morpho Blue fork on BNB ($774M TVL)"
+
+[protocol.contracts]
+morpho_blue = "0x8F73b65B4caAf64FBA2aF91cC5D4a2A1318E5D8C"

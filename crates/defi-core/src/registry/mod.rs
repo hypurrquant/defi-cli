@@ -289,6 +289,14 @@ impl Registry {
                 "lending/aave_v3_bnb",
                 include_str!("../../../../config/protocols/lending/aave_v3_bnb.toml"),
             ),
+            (
+                "lending/lista_bnb",
+                include_str!("../../../../config/protocols/lending/lista_bnb.toml"),
+            ),
+            (
+                "lending/venus_bnb",
+                include_str!("../../../../config/protocols/lending/venus_bnb.toml"),
+            ),
         ];
 
         for (name, toml_str) in protocol_tomls {
