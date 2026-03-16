@@ -5,7 +5,7 @@ category = "derivatives"
 interface = "kinetiq_markets"
 chain = "hyperevm"
 native = true
-description = "Kinetiq Markets — native derivatives markets, TVL $31M"
+description = "Kinetiq Markets — onchain perp futures DEX (equities, indices, FX, commodities)"
 
 [protocol.contracts]
-markets = "0x0000000000000000000000000000000000000001"
+kmhype = "0x360C140E5344A1A0593D44B4ea6Fc7C3DAf0C473"
