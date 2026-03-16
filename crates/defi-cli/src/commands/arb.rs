@@ -181,11 +181,7 @@ fn analyze_oracle_divergence(alert: &serde_json::Value, args: &ArbArgs) -> serde
     })
 }
 
-fn analyze_depeg(
-    alert: &serde_json::Value,
-    args: &ArbArgs,
-    has_dex: bool,
-) -> serde_json::Value {
+fn analyze_depeg(alert: &serde_json::Value, args: &ArbArgs, has_dex: bool) -> serde_json::Value {
     let asset = alert["asset"].as_str().unwrap_or("?");
     let price = alert["price"].as_f64().unwrap_or(0.0);
 
@@ -245,13 +241,12 @@ async fn execute_depeg_swap(
     let sell_symbol = if asset == "USDC" { "USDT" } else { "USDC" };
     let sell_token = registry.resolve_token(&chain_key, sell_symbol)?;
 
-    let amount_in =
-        U256::from((args.amount * 10f64.powi(sell_token.decimals as i32)) as u128);
+    let amount_in = U256::from((args.amount * 10f64.powi(sell_token.decimals as i32)) as u128);
     let price = alert["price"].as_f64().unwrap_or(1.0);
     let expected_out = args.amount / price;
     let min_out = U256::from(
-        (expected_out * (1.0 - args.slippage / 100.0)
-            * 10f64.powi(buy_token.decimals as i32)) as u128,
+        (expected_out * (1.0 - args.slippage / 100.0) * 10f64.powi(buy_token.decimals as i32))
+            as u128,
     );
     let deadline = U256::from(
         std::time::SystemTime::now()

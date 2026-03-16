@@ -135,10 +135,23 @@ pub async fn run(
 
         // Track what each call index maps to
         enum CallType {
-            OraclePrice { oracle: String, token: String },
-            DexPrice { token: String, out_decimals: u8 },
-            StablePeg { from: String, to: String, out_decimals: u8 },
-            ExchangeRate { protocol: String, vtoken: String },
+            OraclePrice {
+                oracle: String,
+                token: String,
+            },
+            DexPrice {
+                token: String,
+                out_decimals: u8,
+            },
+            StablePeg {
+                from: String,
+                to: String,
+                out_decimals: u8,
+            },
+            ExchangeRate {
+                protocol: String,
+                vtoken: String,
+            },
         }
         let mut call_types: Vec<CallType> = Vec::new();
 
@@ -185,9 +198,7 @@ pub async fn run(
         }
 
         // === P2: Stablecoin cross-price calls ===
-        if do_stable
-            && let (Some(uc), Some(ut), Some((_, router))) = (&usdc, &usdt, &dex)
-        {
+        if do_stable && let (Some(uc), Some(ut), Some((_, router))) = (&usdc, &usdt, &dex) {
             // USDC → USDT
             call_types.push(CallType::StablePeg {
                 from: "USDC".into(),
@@ -273,8 +284,7 @@ pub async fn run(
                     let price = parse_amounts_out_last(&results[i], *out_decimals);
                     if price > 0.0 {
                         dex_by_token.insert(token.clone(), price);
-                        dex_data
-                            .insert(token.clone(), serde_json::json!(round4(price)));
+                        dex_data.insert(token.clone(), serde_json::json!(round4(price)));
                     }
                 }
                 CallType::StablePeg {
@@ -340,8 +350,7 @@ pub async fn run(
             for (token, oracle_entries) in &oracle_by_token {
                 if let Some(&dex_price) = dex_by_token.get(token) {
                     for (oracle_name, oracle_price) in oracle_entries {
-                        let deviation =
-                            (dex_price - oracle_price).abs() / oracle_price * 100.0;
+                        let deviation = (dex_price - oracle_price).abs() / oracle_price * 100.0;
                         if deviation > args.oracle_threshold {
                             let severity = if deviation > 100.0 {
                                 "critical"
@@ -351,10 +360,7 @@ pub async fn run(
                                 "medium"
                             };
                             let action = if dex_price > *oracle_price {
-                                format!(
-                                    "borrow {} from {}, sell on DEX",
-                                    token, oracle_name
-                                )
+                                format!("borrow {} from {}, sell on DEX", token, oracle_name)
                             } else {
                                 format!(
                                     "buy {} on DEX, use as collateral on {}",
@@ -386,10 +392,7 @@ pub async fn run(
             );
         }
         if !dex_data.is_empty() {
-            data.insert(
-                "dex_prices".into(),
-                serde_json::Value::Object(dex_data),
-            );
+            data.insert("dex_prices".into(), serde_json::Value::Object(dex_data));
         }
         if !stable_data.is_empty() {
             data.insert(
