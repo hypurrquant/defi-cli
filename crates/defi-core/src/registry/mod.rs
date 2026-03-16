@@ -192,6 +192,10 @@ impl Registry {
                 include_str!("../../../../config/protocols/lending/compound_v3_arb.toml"),
             ),
             (
+                "lending/venus_arb",
+                include_str!("../../../../config/protocols/lending/venus_arb.toml"),
+            ),
+            (
                 "dex/camelot_v2_arb",
                 include_str!("../../../../config/protocols/dex/camelot_v2_arb.toml"),
             ),
@@ -235,6 +239,10 @@ impl Registry {
             (
                 "lending/compound_v3_base",
                 include_str!("../../../../config/protocols/lending/compound_v3_base.toml"),
+            ),
+            (
+                "lending/sonne_base",
+                include_str!("../../../../config/protocols/lending/sonne_base.toml"),
             ),
             // === BNB ===
             (
