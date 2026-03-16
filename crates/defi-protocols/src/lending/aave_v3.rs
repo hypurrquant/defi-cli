@@ -212,19 +212,58 @@ impl Lending for AaveV3 {
                 DefiError::RpcError(format!("[{}] getUserAccountData failed: {e}", self.name))
             })?;
 
-        let hf = u256_to_f64(result.healthFactor) / 1e18;
+        let hf_raw = u256_to_f64(result.healthFactor) / 1e18;
+        // Aave returns uint256.max for health factor when there's no debt
+        let hf = if hf_raw.is_infinite() || hf_raw > 1e18 {
+            None // No debt — health factor is effectively infinite
+        } else {
+            Some(hf_raw)
+        };
+
+        // Collateral and debt in base currency (USD with 8 decimals in Aave V3)
+        let collateral_usd = u256_to_f64(result.totalCollateralBase) / 1e8;
+        let debt_usd = u256_to_f64(result.totalDebtBase) / 1e8;
+        let ltv_bps = u256_to_f64(result.ltv);
+
+        // Build summary supply/borrow entries from aggregate data
+        let supplies = if collateral_usd > 0.0 {
+            vec![PositionAsset {
+                asset: Address::ZERO,
+                symbol: "Total Collateral".to_string(),
+                amount: result.totalCollateralBase,
+                value_usd: Some(collateral_usd),
+            }]
+        } else {
+            vec![]
+        };
+
+        let borrows = if debt_usd > 0.0 {
+            vec![PositionAsset {
+                asset: Address::ZERO,
+                symbol: "Total Debt".to_string(),
+                amount: result.totalDebtBase,
+                value_usd: Some(debt_usd),
+            }]
+        } else {
+            vec![]
+        };
 
         Ok(UserPosition {
             protocol: self.name.clone(),
             user,
-            supplies: vec![],
-            borrows: vec![],
-            health_factor: Some(hf),
-            net_apy: None,
+            supplies,
+            borrows,
+            health_factor: hf,
+            net_apy: Some(ltv_bps / 100.0), // LTV in percent
         })
     }
 }
 
 fn u256_to_f64(v: U256) -> f64 {
-    v.to::<u128>() as f64
+    // U256::MAX doesn't fit in u128; handle gracefully
+    if v > U256::from(u128::MAX) {
+        f64::INFINITY
+    } else {
+        v.to::<u128>() as f64
+    }
 }
