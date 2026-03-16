@@ -1,14 +1,16 @@
+use alloy::primitives::Address;
+
 use defi_core::error::{DefiError, Result};
 use defi_core::registry::ProtocolEntry;
 use defi_core::traits::*;
 
 use crate::bridge::{GenericBridge, HyperlaneBridge, HyperliquidBridge};
-use crate::cdp::Felix;
+use crate::cdp::{Felix, FelixOracle};
 use crate::derivatives::{GenericDerivatives, HlpVault};
 use crate::dex::{
     AlgebraV3, BalancerV3, CurveStableSwap, Solidly, SolidlyGauge, UniswapV2, UniswapV3, WooFi,
 };
-use crate::lending::{AaveV3, EulerV2, MorphoBlue};
+use crate::lending::{AaveOracle, AaveV3, EulerV2, MorphoBlue};
 use crate::liquid_staking::{GenericLst, Kinetiq, StHype};
 use crate::options::{GenericOptions, Rysk};
 use crate::vault::Erc4626Vault;
@@ -230,6 +232,41 @@ pub fn create_gauge(entry: &ProtocolEntry) -> Result<Box<dyn GaugeSystem>> {
         )),
         other => Err(DefiError::Unsupported(format!(
             "Gauge interface '{other}' not supported"
+        ))),
+    }
+}
+
+/// Create an Oracle implementation from a lending protocol registry entry.
+/// Aave V3 forks (HyperLend, HypurrFi) have an oracle contract.
+pub fn create_oracle_from_lending(entry: &ProtocolEntry, rpc_url: &str) -> Result<Box<dyn Oracle>> {
+    match entry.interface.as_str() {
+        "aave_v3" | "aave_v3_isolated" => Ok(Box::new(AaveOracle::from_contracts(
+            entry.name.clone(),
+            &entry.contracts,
+            rpc_url.to_string(),
+        )?)),
+        other => Err(DefiError::Unsupported(format!(
+            "Oracle not available for lending interface '{other}'"
+        ))),
+    }
+}
+
+/// Create an Oracle implementation from a CDP protocol registry entry.
+/// Felix has its own PriceFeed contract.
+pub fn create_oracle_from_cdp(
+    entry: &ProtocolEntry,
+    asset: Address,
+    rpc_url: &str,
+) -> Result<Box<dyn Oracle>> {
+    match entry.interface.as_str() {
+        "liquity_v2" => Ok(Box::new(FelixOracle::from_contracts(
+            entry.name.clone(),
+            &entry.contracts,
+            asset,
+            rpc_url.to_string(),
+        )?)),
+        other => Err(DefiError::Unsupported(format!(
+            "Oracle not available for CDP interface '{other}'"
         ))),
     }
 }

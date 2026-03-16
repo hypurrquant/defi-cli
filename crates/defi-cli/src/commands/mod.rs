@@ -3,6 +3,7 @@ pub mod cdp;
 pub mod dex;
 pub mod gauge;
 pub mod lending;
+pub mod price;
 pub mod schema;
 pub mod staking;
 pub mod status;
@@ -67,6 +68,8 @@ pub enum Commands {
     Vault(vault::VaultArgs),
     /// Yield operations: compare, optimize
     Yield(yield_cmd::YieldArgs),
+    /// Query asset prices from oracles and DEXes
+    Price(price::PriceArgs),
     /// Wallet management
     Wallet(wallet::WalletArgs),
     /// Token operations: approve, allowance, transfer
@@ -96,6 +99,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
         }
         Commands::Vault(args) => vault::run(args, &registry, chain, &executor, &output_mode).await,
         Commands::Yield(args) => yield_cmd::run(args, &registry, chain, &output_mode).await,
+        Commands::Price(args) => price::run(args, &registry, chain, &output_mode).await,
         Commands::Wallet(args) => wallet::run(args, &registry, &output_mode).await,
         Commands::Token(args) => token::run(args, &registry, chain, &executor, &output_mode).await,
         Commands::Agent => crate::agent::run_agent(&registry, &executor).await,

@@ -357,6 +357,27 @@ pub struct VeNftInfo {
     pub voting_power: U256,
 }
 
+// === Oracle / Price Types ===
+
+/// Price data from an oracle or DEX
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PriceData {
+    /// Source of the price (protocol name or "dex:protocol")
+    pub source: String,
+    /// Source type: "oracle", "dex_spot", "dex_twap"
+    pub source_type: String,
+    /// The asset being priced
+    pub asset: Address,
+    /// Price in USD (18 decimals)
+    pub price_usd: U256,
+    /// Price as f64 for display
+    pub price_f64: f64,
+    /// Block number when price was fetched
+    pub block_number: Option<u64>,
+    /// Timestamp
+    pub timestamp: Option<u64>,
+}
+
 // === Yield Types ===
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
