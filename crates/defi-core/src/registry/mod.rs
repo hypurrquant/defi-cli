@@ -184,10 +184,6 @@ impl Registry {
                 include_str!("../../../../config/protocols/lending/aave_v3_arb.toml"),
             ),
             (
-                "lending/morpho_arb",
-                include_str!("../../../../config/protocols/lending/morpho_arb.toml"),
-            ),
-            (
                 "dex/camelot_v2_arb",
                 include_str!("../../../../config/protocols/dex/camelot_v2_arb.toml"),
             ),
@@ -227,14 +223,6 @@ impl Registry {
             (
                 "lending/aave_v3_base",
                 include_str!("../../../../config/protocols/lending/aave_v3_base.toml"),
-            ),
-            (
-                "lending/morpho_base",
-                include_str!("../../../../config/protocols/lending/morpho_base.toml"),
-            ),
-            (
-                "lending/seamless_v1",
-                include_str!("../../../../config/protocols/lending/seamless_v1.toml"),
             ),
             // === BNB ===
             (
@@ -288,10 +276,6 @@ impl Registry {
             (
                 "lending/aave_v3_bnb",
                 include_str!("../../../../config/protocols/lending/aave_v3_bnb.toml"),
-            ),
-            (
-                "lending/lista_bnb",
-                include_str!("../../../../config/protocols/lending/lista_bnb.toml"),
             ),
             (
                 "lending/venus_bnb",
