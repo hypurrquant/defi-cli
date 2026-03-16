@@ -13,8 +13,17 @@ sol! {
     interface IKinetiq {
         function stake() external payable returns (uint256);
         function requestUnstake(uint256 amount) external returns (uint256);
-        function exchangeRate() external view returns (uint256);
         function totalStaked() external view returns (uint256);
+    }
+
+    #[sol(rpc)]
+    interface IERC20 {
+        function totalSupply() external view returns (uint256);
+    }
+
+    #[sol(rpc)]
+    interface IAaveOracle {
+        function getAssetPrice(address asset) external view returns (uint256);
     }
 }
 
@@ -62,6 +71,18 @@ impl Kinetiq {
     }
 }
 
+/// WHYPE address on HyperEVM (used for oracle price comparison)
+const WHYPE: Address = Address::new([
+    0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+    0x55, 0x55, 0x55, 0x55,
+]);
+
+/// HyperLend oracle address (Aave V3 compatible)
+const HYPERLEND_ORACLE: Address = Address::new([
+    0xc9, 0xfb, 0x4f, 0xbe, 0x84, 0x2d, 0x57, 0xea, 0xc1, 0xdf, 0x3e, 0x64, 0x1a, 0x28, 0x18, 0x27,
+    0x49, 0x3a, 0x63, 0x0e,
+]);
+
 #[async_trait]
 impl LiquidStaking for Kinetiq {
     fn name(&self) -> &str {
@@ -97,19 +118,35 @@ impl LiquidStaking for Kinetiq {
     async fn get_info(&self) -> Result<StakingInfo> {
         let url = self.rpc_url()?;
         let provider = ProviderBuilder::new().connect_http(url);
-        let contract = IKinetiq::new(self.staking, &provider);
+        let staking = IKinetiq::new(self.staking, &provider);
 
-        let exchange_rate = contract.exchangeRate().call().await.map_err(|e| {
-            DefiError::RpcError(format!("[{}] exchangeRate failed: {e}", self.name))
-        })?;
-
+        // Total HYPE staked across the entire protocol
         let total_staked =
-            contract.totalStaked().call().await.map_err(|e| {
+            staking.totalStaked().call().await.map_err(|e| {
                 DefiError::RpcError(format!("[{}] totalStaked failed: {e}", self.name))
             })?;
 
-        // Exchange rate is in 1e18 scale
-        let rate_f64 = exchange_rate.to::<u128>() as f64 / 1e18;
+        // Exchange rate: kHYPE oracle price / HYPE oracle price
+        // This gives the accurate HYPE-per-kHYPE ratio
+        let oracle = IAaveOracle::new(HYPERLEND_ORACLE, &provider);
+
+        let khype_price = oracle
+            .getAssetPrice(self.liquid_token)
+            .call()
+            .await
+            .unwrap_or(U256::ZERO);
+
+        let hype_price = oracle
+            .getAssetPrice(WHYPE)
+            .call()
+            .await
+            .unwrap_or(U256::ZERO);
+
+        let rate_f64 = if !hype_price.is_zero() && !khype_price.is_zero() {
+            khype_price.to::<u128>() as f64 / hype_price.to::<u128>() as f64
+        } else {
+            1.0
+        };
 
         Ok(StakingInfo {
             protocol: self.name.clone(),

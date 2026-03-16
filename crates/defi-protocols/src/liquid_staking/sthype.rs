@@ -1,5 +1,5 @@
 use alloy::primitives::{Address, U256};
-use alloy::providers::{Provider, ProviderBuilder};
+use alloy::providers::ProviderBuilder;
 use alloy::sol;
 use alloy::sol_types::SolCall;
 use async_trait::async_trait;
@@ -102,19 +102,10 @@ impl LiquidStaking for StHype {
                 DefiError::RpcError(format!("[{}] totalSupply failed: {e}", self.name))
             })?;
 
-        // ETH balance held by staking contract
-        let staking_balance = provider
-            .get_balance(self.staking)
-            .await
-            .unwrap_or(U256::ZERO);
-
-        // Approximate exchange rate from staking contract ETH balance
-        // Note: actual pooled ETH may be in validators, so this is a lower bound
-        let rate_f64 = if !total_supply.is_zero() && !staking_balance.is_zero() {
-            staking_balance.to::<u128>() as f64 / total_supply.to::<u128>() as f64
-        } else {
-            1.0 // Default 1:1 if we can't determine
-        };
+        // stHYPE is a rebasing token: 1 stHYPE ≈ 1 HYPE always.
+        // The actual staked HYPE is held by validators, not in the contract.
+        // totalSupply represents the total HYPE staked through the protocol.
+        let rate_f64 = 1.0;
 
         Ok(StakingInfo {
             protocol: self.name.clone(),
