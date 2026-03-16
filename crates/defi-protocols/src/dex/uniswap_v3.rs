@@ -145,7 +145,9 @@ impl Dex for UniswapV3 {
 
     async fn build_swap(&self, params: SwapParams) -> Result<DeFiTx> {
         let deadline = params.deadline.unwrap_or(u64::MAX);
-        let amount_out_min = params.slippage.apply_min(params.amount_in); // simplified — real impl needs quote first
+        // Without a prior quote, we set amountOutMinimum to 0 (no slippage protection).
+        // For production use, call quote() first and apply slippage to the quoted output.
+        let amount_out_min = U256::ZERO;
 
         let call = ISwapRouter::exactInputSingleCall {
             params: ISwapRouter::ExactInputSingleParams {

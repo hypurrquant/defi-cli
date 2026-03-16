@@ -71,7 +71,8 @@ impl Dex for UniswapV2 {
     }
 
     async fn build_swap(&self, params: SwapParams) -> Result<DeFiTx> {
-        let amount_out_min = params.slippage.apply_min(params.amount_in);
+        // Without prior quote, set min output to 0. Use quote() first for slippage protection.
+        let amount_out_min = U256::ZERO;
         let deadline = U256::from(params.deadline.unwrap_or(u64::MAX));
         let path = vec![params.token_in, params.token_out];
 

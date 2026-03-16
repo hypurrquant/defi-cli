@@ -60,7 +60,8 @@ impl Dex for CurveStableSwap {
         // The `router` address is treated as the pool address for direct swaps.
         // Callers should set the pool address as the "router" contract in the registry
         // when targeting a specific Curve pool.
-        let amount_out_min = params.slippage.apply_min(params.amount_in);
+        // Without prior quote, set min output to 0. Use quote() first for slippage protection.
+        let amount_out_min = U256::ZERO;
 
         let call = ICurvePool::exchangeCall {
             i: 0i128,

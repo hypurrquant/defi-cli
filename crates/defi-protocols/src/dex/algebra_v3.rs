@@ -55,7 +55,8 @@ impl Dex for AlgebraV3 {
 
     async fn build_swap(&self, params: SwapParams) -> Result<DeFiTx> {
         let deadline = params.deadline.unwrap_or(u64::MAX);
-        let amount_out_min = params.slippage.apply_min(params.amount_in);
+        // Without prior quote, set min output to 0. Use quote() first for slippage protection.
+        let amount_out_min = U256::ZERO;
 
         let call = IAlgebraRouter::exactInputSingleCall {
             params: IAlgebraRouter::ExactInputSingleParams {
