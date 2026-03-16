@@ -293,6 +293,14 @@ impl Registry {
                 "lending/venus_bnb",
                 include_str!("../../../../config/protocols/lending/venus_bnb.toml"),
             ),
+            (
+                "lending/venus_flux_bnb",
+                include_str!("../../../../config/protocols/lending/venus_flux_bnb.toml"),
+            ),
+            (
+                "lending/kinza_bnb",
+                include_str!("../../../../config/protocols/lending/kinza_bnb.toml"),
+            ),
         ];
 
         for (name, toml_str) in protocol_tomls {
