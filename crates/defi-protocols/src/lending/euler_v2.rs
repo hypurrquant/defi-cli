@@ -42,12 +42,13 @@ impl EulerV2 {
         rpc_url: Option<String>,
     ) -> Result<Self> {
         let euler = contracts
-            .get("euler")
-            .or_else(|| contracts.get("markets"))
+            .get("evk_vault")
+            .or(contracts.get("euler"))
+            .or(contracts.get("markets"))
             .copied()
             .ok_or_else(|| {
                 DefiError::ContractError(
-                    "Missing 'euler' or 'markets' contract address".to_string(),
+                    "Missing 'evk_vault' or 'euler' contract address".to_string(),
                 )
             })?;
         Ok(Self::new(name, euler, rpc_url))

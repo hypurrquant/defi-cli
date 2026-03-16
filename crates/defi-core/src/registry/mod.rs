@@ -95,22 +95,6 @@ impl Registry {
                 "dex/woofi",
                 include_str!("../../../../config/protocols/dex/woofi.toml"),
             ),
-            (
-                "dex/valantis",
-                include_str!("../../../../config/protocols/dex/valantis.toml"),
-            ),
-            (
-                "dex/wombat",
-                include_str!("../../../../config/protocols/dex/wombat.toml"),
-            ),
-            (
-                "dex/hybra",
-                include_str!("../../../../config/protocols/dex/hybra.toml"),
-            ),
-            (
-                "dex/hyperliquid_spot",
-                include_str!("../../../../config/protocols/dex/hyperliquid_spot.toml"),
-            ),
             // === Lending (5) ===
             (
                 "lending/hyperlend",
@@ -132,7 +116,7 @@ impl Registry {
                 "lending/felix_morpho",
                 include_str!("../../../../config/protocols/lending/felix_morpho.toml"),
             ),
-            // === Liquid Staking (4) ===
+            // === Liquid Staking (2) ===
             (
                 "liquid_staking/kinetiq",
                 include_str!("../../../../config/protocols/liquid_staking/kinetiq.toml"),
@@ -141,41 +125,15 @@ impl Registry {
                 "liquid_staking/sthype",
                 include_str!("../../../../config/protocols/liquid_staking/sthype.toml"),
             ),
-            (
-                "liquid_staking/hyperbeat",
-                include_str!("../../../../config/protocols/liquid_staking/hyperbeat.toml"),
-            ),
-            (
-                "liquid_staking/kintsu",
-                include_str!("../../../../config/protocols/liquid_staking/kintsu.toml"),
-            ),
             // === CDP (1) ===
             (
                 "cdp/felix",
                 include_str!("../../../../config/protocols/cdp/felix.toml"),
             ),
-            // === Yield Source (2) ===
-            (
-                "yield_source/pendle",
-                include_str!("../../../../config/protocols/yield_source/pendle.toml"),
-            ),
-            (
-                "yield_source/spectra",
-                include_str!("../../../../config/protocols/yield_source/spectra.toml"),
-            ),
-            // === Yield Aggregator (2) ===
-            (
-                "yield_aggregator/beefy",
-                include_str!("../../../../config/protocols/yield_aggregator/beefy.toml"),
-            ),
+            // === Yield Aggregator (1) ===
             (
                 "yield_aggregator/lazy_summer",
                 include_str!("../../../../config/protocols/yield_aggregator/lazy_summer.toml"),
-            ),
-            // === Derivatives (1) ===
-            (
-                "derivatives/kinetiq_markets",
-                include_str!("../../../../config/protocols/derivatives/kinetiq_markets.toml"),
             ),
             // === Vault (2) ===
             (

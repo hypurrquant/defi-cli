@@ -8,6 +8,8 @@ native = false
 description = "Euler V2 (Mewler) — modular lending via EVK + EVC, deployed through HypurrFi"
 
 [protocol.contracts]
+# Default EVK vault for rate queries (WHYPE vault)
+evk_vault = "0xac207ffa0bfce194db18d1820902d48a2d948968"
 evault_factory = "0xcF5552580fD364cdBBFcB5Ae345f75674c59273A"
 evault_implementation = "0x05de079A28386135E048369cdf0Bc4D326d5EBDF"
 evc = "0xceAA7cdCD7dDBee8601127a9Abb17A974d613db4"
