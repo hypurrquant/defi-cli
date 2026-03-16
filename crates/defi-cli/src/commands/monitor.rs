@@ -4,7 +4,7 @@ use clap::Args;
 
 use defi_core::error::{DefiError, Result};
 use defi_core::multicall::multicall_read;
-use defi_core::registry::{ChainConfig, Registry};
+use defi_core::registry::{ChainConfig, ProtocolCategory, Registry};
 
 use crate::output::OutputMode;
 
@@ -40,25 +40,9 @@ alloy::sol! {
     }
 }
 
-struct LendingPool {
-    name: &'static str,
-    pool: Address,
-}
-
-const LENDING_POOLS: &[LendingPool] = &[
-    LendingPool {
-        name: "HyperLend",
-        pool: alloy::primitives::address!("00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b"),
-    },
-    LendingPool {
-        name: "HypurrFi",
-        pool: alloy::primitives::address!("ceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b"),
-    },
-];
-
 pub async fn run(
     args: MonitorArgs,
-    _registry: &Registry,
+    registry: &Registry,
     chain: &ChainConfig,
     output: &OutputMode,
 ) -> Result<()> {
@@ -68,6 +52,22 @@ pub async fn run(
         .map_err(|e| DefiError::InvalidParam(format!("Invalid address: {e}")))?;
 
     let rpc = chain.effective_rpc_url();
+    let chain_key = chain.name.to_lowercase();
+
+    // Find all Aave V3 pools on this chain dynamically
+    let lending_pools: Vec<(String, Address)> = registry
+        .get_protocols_for_chain(&chain_key)
+        .iter()
+        .filter(|p| p.category == ProtocolCategory::Lending && p.interface == "aave_v3")
+        .filter_map(|p| p.contracts.get("pool").map(|addr| (p.name.clone(), *addr)))
+        .collect();
+
+    if lending_pools.is_empty() {
+        return Err(DefiError::Unsupported(format!(
+            "No Aave V3 lending pools found on {}",
+            chain.name
+        )));
+    }
 
     loop {
         let timestamp = std::time::SystemTime::now()
@@ -75,12 +75,11 @@ pub async fn run(
             .unwrap_or_default()
             .as_secs();
 
-        // Build multicall: getUserAccountData for each lending pool
-        let calls: Vec<(Address, Vec<u8>)> = LENDING_POOLS
+        let calls: Vec<(Address, Vec<u8>)> = lending_pools
             .iter()
-            .map(|p| {
+            .map(|(_, pool)| {
                 let calldata = IPool::getUserAccountDataCall { user }.abi_encode();
-                (p.pool, calldata)
+                (*pool, calldata)
             })
             .collect();
 
@@ -89,7 +88,7 @@ pub async fn run(
         let mut positions = Vec::new();
         let mut any_alert = false;
 
-        for (i, pool) in LENDING_POOLS.iter().enumerate() {
+        for (i, (name, _)) in lending_pools.iter().enumerate() {
             if let Some(data) = &results[i]
                 && data.len() >= 192
             {
@@ -109,7 +108,7 @@ pub async fn run(
 
                 if collateral > 0.0 || debt > 0.0 {
                     positions.push(serde_json::json!({
-                        "protocol": pool.name,
+                        "protocol": name,
                         "collateral_usd": format!("{:.2}", collateral),
                         "debt_usd": format!("{:.2}", debt),
                         "health_factor": hf,
@@ -121,6 +120,7 @@ pub async fn run(
 
         let check = serde_json::json!({
             "timestamp": timestamp,
+            "chain": chain.name,
             "address": format!("{}", user),
             "threshold": args.threshold,
             "alert": any_alert,
@@ -129,8 +129,8 @@ pub async fn run(
 
         if any_alert {
             eprintln!(
-                "⚠ ALERT: Health factor below {} for {}",
-                args.threshold, user
+                "ALERT: Health factor below {} for {} on {}",
+                args.threshold, user, chain.name
             );
         }
 

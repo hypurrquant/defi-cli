@@ -49,12 +49,15 @@ async fn collect_lending_rates(
     chain: &ChainConfig,
     asset_addr: Address,
 ) -> Vec<LendingRates> {
-    let lending_protocols = registry.get_protocols_by_category(ProtocolCategory::Lending);
+    let chain_key = chain.name.to_lowercase();
+    let lending_protocols = registry.get_protocols_for_chain(&chain_key);
     let mut results = Vec::new();
     let mut first = true;
 
     for entry in &lending_protocols {
-        // Only query protocols with aave_v3 interface (the ones that support RPC-based get_rates)
+        if entry.category != ProtocolCategory::Lending {
+            continue;
+        }
         if entry.interface == "aave_v3" || entry.interface == "aave_v3_isolated" {
             // Sleep between RPC calls to avoid rate limiting (skip before first call)
             if !first {
@@ -105,9 +108,9 @@ async fn collect_all_yields(
     }
 
     // 2. Morpho Blue rates
-    let morpho_protocols = registry.get_protocols_by_category(ProtocolCategory::Lending);
-    for entry in &morpho_protocols {
-        if entry.interface == "morpho_blue" {
+    let chain_protos = registry.get_protocols_for_chain(&chain.name.to_lowercase());
+    for entry in &chain_protos {
+        if entry.category == ProtocolCategory::Lending && entry.interface == "morpho_blue" {
             let rpc = chain.effective_rpc_url();
             let entry_c = (*entry).clone();
             if let Ok(lending) =
@@ -126,10 +129,9 @@ async fn collect_all_yields(
         }
     }
 
-    // 3. Vault APYs (ERC-4626 — estimate from lending rates of underlying)
-    let vault_protocols = registry.get_protocols_by_category(ProtocolCategory::Vault);
-    for entry in &vault_protocols {
-        if entry.interface == "erc4626" {
+    // 3. Vault APYs (ERC-4626)
+    for entry in &chain_protos {
+        if entry.category == ProtocolCategory::Vault && entry.interface == "erc4626" {
             let rpc = chain.effective_rpc_url();
             let entry_c = (*entry).clone();
             if let Ok(vault) = defi_protocols::factory::create_vault_with_rpc(&entry_c, Some(&rpc))
