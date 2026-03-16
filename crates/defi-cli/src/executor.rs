@@ -48,9 +48,7 @@ impl Executor {
 
     /// Fetch EIP-1559 fee parameters from the network.
     /// Returns (max_fee_per_gas, max_priority_fee_per_gas).
-    async fn fetch_eip1559_fees<P: Provider>(
-        provider: &P,
-    ) -> Result<(u128, u128)> {
+    async fn fetch_eip1559_fees<P: Provider>(provider: &P) -> Result<(u128, u128)> {
         // Get current base fee from latest block
         let base_fee = provider
             .get_gas_price()
