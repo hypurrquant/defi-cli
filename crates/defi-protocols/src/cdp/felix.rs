@@ -41,9 +41,23 @@ sol! {
 
     #[sol(rpc)]
     interface ITroveManager {
-        function getTroveDebt(uint256 _troveId) external view returns (uint256);
-        function getTroveColl(uint256 _troveId) external view returns (uint256);
         function getTroveStatus(uint256 _troveId) external view returns (uint256);
+        function getTroveIdsCount() external view returns (uint256);
+        /// Returns (entireDebt, entireColl, redistDebtGain, redistCollGain, accruedInterest,
+        ///          recordedDebt, annualInterestRate, accruedBatchManagementFee,
+        ///          lastInterestRateAdjTime, ...)
+        function getLatestTroveData(uint256 _troveId) external view returns (
+            uint256 entireDebt,
+            uint256 entireColl,
+            uint256 redistDebtGain,
+            uint256 redistCollGain,
+            uint256 accruedInterest,
+            uint256 recordedDebt,
+            uint256 annualInterestRate,
+            uint256 accruedBatchManagementFee,
+            uint256 weightedRecordedDebt,
+            uint256 lastInterestRateAdjTime
+        );
     }
 
     #[sol(rpc)]
@@ -258,30 +272,23 @@ impl Cdp for Felix {
         let provider = ProviderBuilder::new().connect_http(url);
         let trove = ITroveManager::new(trove_manager_addr, &provider);
 
-        let status = trove.getTroveStatus(cdp_id).call().await.map_err(|e| {
-            DefiError::RpcError(format!(
-                "[{}] Trove {} not found or reverted: {e}",
-                self.name, cdp_id
-            ))
+        // Use getLatestTroveData for comprehensive trove info
+        let data = trove.getLatestTroveData(cdp_id).call().await.map_err(|e| {
+            // If reverted, trove likely doesn't exist
+            DefiError::InvalidParam(format!("[{}] Trove {} not found: {e}", self.name, cdp_id))
         })?;
 
-        // Status: 0=nonExistent, 1=active, 2=closedByOwner, 3=closedByLiquidation, 4=zombie
-        if status == U256::ZERO {
+        let debt = data.entireDebt;
+        let coll = data.entireColl;
+
+        if debt.is_zero() && coll.is_zero() {
             return Err(DefiError::InvalidParam(format!(
                 "[{}] Trove {} does not exist",
                 self.name, cdp_id
             )));
         }
 
-        let coll = trove.getTroveColl(cdp_id).call().await.map_err(|e| {
-            DefiError::RpcError(format!("[{}] getTroveColl failed: {e}", self.name))
-        })?;
-
-        let debt = trove.getTroveDebt(cdp_id).call().await.map_err(|e| {
-            DefiError::RpcError(format!("[{}] getTroveDebt failed: {e}", self.name))
-        })?;
-
-        // Calculate collateral ratio: coll / debt (both in 1e18)
+        // Collateral ratio: coll / debt (both in 1e18)
         let coll_ratio = if !debt.is_zero() {
             coll.to::<u128>() as f64 / debt.to::<u128>() as f64
         } else {
