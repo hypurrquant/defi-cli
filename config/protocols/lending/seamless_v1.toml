@@ -1,0 +1,10 @@
+[protocol]
+name = "Seamless V1"
+slug = "seamless-v1"
+category = "lending"
+interface = "aave_v3"
+chain = "base"
+native = true
+description = "Seamless V1 — Aave V3 fork on Base ($2M TVL)"
+[protocol.contracts]
+pool_addresses_provider = "0x0E02EB705be325407707662C6f6d3466E939f3a0"

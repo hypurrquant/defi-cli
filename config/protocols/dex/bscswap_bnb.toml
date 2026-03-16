@@ -1,0 +1,11 @@
+[protocol]
+name = "BSCSwap"
+slug = "bscswap"
+category = "dex"
+interface = "uniswap_v2"
+chain = "bnb"
+native = false
+description = "BSCSwap on BNB ($5M TVL)"
+[protocol.contracts]
+router = "0xd954551853F55deb4Ae31407c423e67B1621424A"
+factory = "0xCe8fd65646F2a2a897755A1188C04ACe94D2B8D0"

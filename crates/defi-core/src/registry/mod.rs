@@ -187,6 +187,10 @@ impl Registry {
                 "lending/morpho_arb",
                 include_str!("../../../../config/protocols/lending/morpho_arb.toml"),
             ),
+            (
+                "dex/camelot_v2_arb",
+                include_str!("../../../../config/protocols/dex/camelot_v2_arb.toml"),
+            ),
             // === Base ===
             (
                 "dex/uniswap_v3_base",
@@ -209,12 +213,28 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/aerodrome.toml"),
             ),
             (
+                "dex/aerodrome_cl",
+                include_str!("../../../../config/protocols/dex/aerodrome_cl.toml"),
+            ),
+            (
+                "dex/quickswap_base",
+                include_str!("../../../../config/protocols/dex/quickswap_base.toml"),
+            ),
+            (
+                "dex/alienbase_v3",
+                include_str!("../../../../config/protocols/dex/alienbase_v3.toml"),
+            ),
+            (
                 "lending/aave_v3_base",
                 include_str!("../../../../config/protocols/lending/aave_v3_base.toml"),
             ),
             (
                 "lending/morpho_base",
                 include_str!("../../../../config/protocols/lending/morpho_base.toml"),
+            ),
+            (
+                "lending/seamless_v1",
+                include_str!("../../../../config/protocols/lending/seamless_v1.toml"),
             ),
             // === BNB ===
             (
@@ -232,6 +252,38 @@ impl Registry {
             (
                 "dex/thena",
                 include_str!("../../../../config/protocols/dex/thena.toml"),
+            ),
+            (
+                "dex/thena_v1_bnb",
+                include_str!("../../../../config/protocols/dex/thena_v1_bnb.toml"),
+            ),
+            (
+                "dex/thena_fusion_bnb",
+                include_str!("../../../../config/protocols/dex/thena_fusion_bnb.toml"),
+            ),
+            (
+                "dex/apeswap_bnb",
+                include_str!("../../../../config/protocols/dex/apeswap_bnb.toml"),
+            ),
+            (
+                "dex/fstswap_bnb",
+                include_str!("../../../../config/protocols/dex/fstswap_bnb.toml"),
+            ),
+            (
+                "dex/biswap_bnb",
+                include_str!("../../../../config/protocols/dex/biswap_bnb.toml"),
+            ),
+            (
+                "dex/bscswap_bnb",
+                include_str!("../../../../config/protocols/dex/bscswap_bnb.toml"),
+            ),
+            (
+                "dex/bakeryswap_bnb",
+                include_str!("../../../../config/protocols/dex/bakeryswap_bnb.toml"),
+            ),
+            (
+                "dex/babydogeswap_bnb",
+                include_str!("../../../../config/protocols/dex/babydogeswap_bnb.toml"),
             ),
             (
                 "lending/aave_v3_bnb",

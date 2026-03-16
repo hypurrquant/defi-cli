@@ -1,0 +1,11 @@
+[protocol]
+name = "BabyDogeSwap"
+slug = "babydogeswap"
+category = "dex"
+interface = "uniswap_v2"
+chain = "bnb"
+native = false
+description = "BabyDogeSwap on BNB ($2M TVL)"
+[protocol.contracts]
+router = "0xC9a0F685F39d05D835c369036251ee3aEaaF3c47"
+factory = "0x4693B62E5fc9c0a45F89D62e6300a03C85f43137"

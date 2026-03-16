@@ -1,0 +1,12 @@
+[protocol]
+name = "QuickSwap V4 Base"
+slug = "quickswap-base"
+category = "dex"
+interface = "algebra_v3"
+chain = "base"
+native = false
+description = "QuickSwap V4 (Algebra) on Base ($4M TVL)"
+[protocol.contracts]
+router = "0xe6c9bb24ddB4aE5c6632dbE0DE14e3E474c6Cb04"
+factory = "0xC5396866754799B9720125B104AE01d935Ab9C7b"
+quoter = "0x23E0583a3a000d567bB3848115065c1890D87fb5"
