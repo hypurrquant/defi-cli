@@ -5,7 +5,9 @@ category = "yield_aggregator"
 interface = "erc4626"
 chain = "hyperevm"
 native = false
-description = "Lazy Summer — yield aggregator vault, TVL $46M"
+description = "Lazy Summer — yield aggregation vaults by Summer.fi (USDC, USDT)"
 
 [protocol.contracts]
-vault = "0x0000000000000000000000000000000000000001"
+vault = "0x252e5aa42c1804b85b2ce6712cd418a0561232ba"
+usdc_fleet = "0x252e5aa42c1804b85b2ce6712cd418a0561232ba"
+usdt_fleet = "0x2cc190fb654141dfbeac4c0f718f4d511674d346"

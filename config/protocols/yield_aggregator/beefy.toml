@@ -5,7 +5,7 @@ category = "yield_aggregator"
 interface = "beefy_vault"
 chain = "hyperevm"
 native = false
-description = "Beefy — multichain yield optimizer, TVL $148M"
+description = "Beefy — multichain yield optimizer (limited HyperEVM presence, EOL)"
 
 [protocol.contracts]
-vault = "0x0000000000000000000000000000000000000001"
+vault = "0x4ad02BF095B8FFB6E0aC687BEEE5610ca3EBe6b1"
