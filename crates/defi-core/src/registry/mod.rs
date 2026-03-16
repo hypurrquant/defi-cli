@@ -172,8 +172,20 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/camelot_arb.toml"),
             ),
             (
+                "dex/uniswap_v2_arb",
+                include_str!("../../../../config/protocols/dex/uniswap_v2_arb.toml"),
+            ),
+            (
+                "dex/pancakeswap_v3_arb",
+                include_str!("../../../../config/protocols/dex/pancakeswap_v3_arb.toml"),
+            ),
+            (
                 "lending/aave_v3_arb",
                 include_str!("../../../../config/protocols/lending/aave_v3_arb.toml"),
+            ),
+            (
+                "lending/morpho_arb",
+                include_str!("../../../../config/protocols/lending/morpho_arb.toml"),
             ),
             // === Base ===
             (
@@ -183,6 +195,14 @@ impl Registry {
             (
                 "dex/sushiswap_base",
                 include_str!("../../../../config/protocols/dex/sushiswap_base.toml"),
+            ),
+            (
+                "dex/uniswap_v2_base",
+                include_str!("../../../../config/protocols/dex/uniswap_v2_base.toml"),
+            ),
+            (
+                "dex/pancakeswap_v3_base",
+                include_str!("../../../../config/protocols/dex/pancakeswap_v3_base.toml"),
             ),
             (
                 "dex/aerodrome",
@@ -204,6 +224,10 @@ impl Registry {
             (
                 "dex/pancakeswap_v2",
                 include_str!("../../../../config/protocols/dex/pancakeswap_v2.toml"),
+            ),
+            (
+                "dex/uniswap_v3_bnb",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_bnb.toml"),
             ),
             (
                 "dex/thena",

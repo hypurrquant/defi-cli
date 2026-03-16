@@ -1,0 +1,11 @@
+[protocol]
+name = "Morpho Blue Arbitrum"
+slug = "morpho-arb"
+category = "lending"
+interface = "morpho_blue"
+chain = "arbitrum"
+native = false
+description = "Morpho Blue on Arbitrum ($77M TVL)"
+
+[protocol.contracts]
+morpho_blue = "0x6c247b1F6182318877311737BaC0844bAa518F5e"
