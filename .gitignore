@@ -20,3 +20,9 @@ Thumbs.db
 
 # Serena
 .serena/
+__pycache__/
+*.pyc
+results.tsv
+run.log
+src/
+tests/
