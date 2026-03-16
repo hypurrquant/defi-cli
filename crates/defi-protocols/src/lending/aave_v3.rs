@@ -50,6 +50,7 @@ sol! {
     }
 }
 
+#[allow(dead_code)]
 pub struct AaveV3 {
     name: String,
     pool: Address,

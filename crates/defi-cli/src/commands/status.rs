@@ -1,7 +1,5 @@
-use alloy::primitives::{Address, Bytes, U256};
+use alloy::primitives::Address;
 use alloy::providers::Provider;
-use alloy::sol;
-use alloy::sol_types::SolCall;
 use clap::Args;
 use serde::Serialize;
 
@@ -10,26 +8,6 @@ use defi_core::provider::build_provider;
 use defi_core::registry::Registry;
 
 use crate::output::OutputMode;
-
-sol! {
-    #[sol(rpc)]
-    interface IMulticall3 {
-        struct Call3 {
-            address target;
-            bool allowFailure;
-            bytes callData;
-        }
-
-        struct Result {
-            bool success;
-            bytes returnData;
-        }
-
-        function aggregate3(Call3[] calldata calls) external payable returns (Result[] memory returnData);
-    }
-}
-
-const MULTICALL3: Address = alloy::primitives::address!("cA11bde05977b3631167028862bE2a173976CA11");
 
 #[derive(Args)]
 pub struct StatusArgs {

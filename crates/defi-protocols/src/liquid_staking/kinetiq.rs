@@ -117,7 +117,7 @@ impl LiquidStaking for Kinetiq {
             liquid_token: self.liquid_token,
             exchange_rate: rate_f64,
             apy: None,
-            total_staked: total_staked,
+            total_staked,
         })
     }
 }

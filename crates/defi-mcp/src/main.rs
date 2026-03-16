@@ -247,9 +247,7 @@ fn tool_list_protocols(registry: &Registry, params: &Value) -> Result<Value> {
     let protocols: Vec<Value> = registry
         .protocols
         .iter()
-        .filter(|p| {
-            category_filter.map_or(true, |c| p.category.to_string().eq_ignore_ascii_case(c))
-        })
+        .filter(|p| category_filter.is_none_or(|c| p.category.to_string().eq_ignore_ascii_case(c)))
         .map(|p| {
             serde_json::json!({
                 "name": p.name,

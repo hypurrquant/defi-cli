@@ -129,24 +129,22 @@ pub async fn run(args: WalletArgs, registry: &Registry, output: &OutputMode) -> 
             // Query ERC-20 token balances
             let mut token_balances = Vec::new();
 
-            if all_tokens {
-                if let Some(tokens) = registry.tokens.get("hyperevm") {
-                    for token_entry in tokens {
-                        let contract = IERC20::new(token_entry.address, &provider);
-                        match contract.balanceOf(addr).call().await {
-                            Ok(result) => {
-                                let raw = result;
-                                if !raw.is_zero() {
-                                    token_balances.push(TokenBalance {
-                                        symbol: token_entry.symbol.clone(),
-                                        balance: format_units(raw, token_entry.decimals),
-                                        raw: raw.to_string(),
-                                    });
-                                }
+            if all_tokens && let Some(tokens) = registry.tokens.get("hyperevm") {
+                for token_entry in tokens {
+                    let contract = IERC20::new(token_entry.address, &provider);
+                    match contract.balanceOf(addr).call().await {
+                        Ok(result) => {
+                            let raw = result;
+                            if !raw.is_zero() {
+                                token_balances.push(TokenBalance {
+                                    symbol: token_entry.symbol.clone(),
+                                    balance: format_units(raw, token_entry.decimals),
+                                    raw: raw.to_string(),
+                                });
                             }
-                            Err(_) => {
-                                // Skip tokens that fail (contract may not exist)
-                            }
+                        }
+                        Err(_) => {
+                            // Skip tokens that fail (contract may not exist)
                         }
                     }
                 }

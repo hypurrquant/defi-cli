@@ -58,6 +58,7 @@ sol! {
     }
 }
 
+#[allow(dead_code)]
 pub struct Pendle {
     name: String,
     router: Address,

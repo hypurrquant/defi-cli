@@ -42,6 +42,7 @@ sol! {
     }
 }
 
+#[allow(dead_code)]
 pub struct Felix {
     name: String,
     borrower_operations: Address,
