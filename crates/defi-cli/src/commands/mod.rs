@@ -1,4 +1,5 @@
 pub mod alert;
+pub mod arb;
 pub mod cdp;
 pub mod dex;
 pub mod gauge;
@@ -6,6 +7,7 @@ pub mod lending;
 pub mod monitor;
 pub mod portfolio;
 pub mod price;
+pub mod scan;
 pub mod schema;
 pub mod staking;
 pub mod status;
@@ -74,6 +76,10 @@ pub enum Commands {
     Monitor(monitor::MonitorArgs),
     /// Alert on DEX vs Oracle price deviation
     Alert(alert::AlertArgs),
+    /// Multi-pattern exploit detection scanner
+    Scan(scan::ScanArgs),
+    /// Arbitrage execution based on scan alerts
+    Arb(arb::ArbArgs),
     /// Query asset prices from oracles and DEXes
     Price(price::PriceArgs),
     /// Wallet management
@@ -107,6 +113,8 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
         Commands::Portfolio(args) => portfolio::run(args, &registry, chain, &output_mode).await,
         Commands::Monitor(args) => monitor::run(args, &registry, chain, &output_mode).await,
         Commands::Alert(args) => alert::run(args, &registry, chain, &output_mode).await,
+        Commands::Scan(args) => scan::run(args, &registry, chain, &output_mode).await,
+        Commands::Arb(args) => arb::run(args, &registry, chain, &executor, &output_mode).await,
         Commands::Price(args) => price::run(args, &registry, chain, &output_mode).await,
         Commands::Wallet(args) => wallet::run(args, &registry, &output_mode).await,
         Commands::Token(args) => token::run(args, &registry, chain, &executor, &output_mode).await,
