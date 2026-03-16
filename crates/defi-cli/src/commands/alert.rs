@@ -1,4 +1,4 @@
-use alloy::primitives::{Address, U256};
+use alloy::primitives::U256;
 use alloy::sol_types::SolCall;
 use clap::Args;
 
