@@ -1,0 +1,11 @@
+[protocol]
+name = "Hyperbeat Earn"
+slug = "hyperbeat-earn"
+category = "yield_aggregator"
+interface = "erc4626"
+chain = "hyperevm"
+native = false
+description = "Hyperbeat Earn — yield aggregator vault, TVL $54M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

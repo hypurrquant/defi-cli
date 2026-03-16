@@ -1,0 +1,12 @@
+[protocol]
+name = "Kintsu"
+slug = "kintsu"
+category = "liquid_staking"
+interface = "kintsu"
+chain = "hyperevm"
+native = true
+description = "Kintsu liquid staking ($5.1M TVL)"
+
+[protocol.contracts]
+staking = "0xDDC126c12F9F8DF5a6fC273f6D43C1E21b4d2945"
+shype_token = "0xBeF0142A0955a7d5dcCe5C2A13Fb84E332669D2d"

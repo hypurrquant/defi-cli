@@ -1,0 +1,11 @@
+[protocol]
+name = "Morpho V1"
+slug = "morpho"
+category = "lending"
+interface = "morpho_blue"
+chain = "hyperevm"
+native = false
+description = "Morpho Blue — largest lending on HyperEVM ($6.8B TVL)"
+
+[protocol.contracts]
+morpho_blue = "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"

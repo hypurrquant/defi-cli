@@ -1,0 +1,11 @@
+[protocol]
+name = "TermMax"
+slug = "termmax"
+category = "lending"
+interface = "termmax"
+chain = "hyperevm"
+native = false
+description = "TermMax — fixed-rate lending protocol with term-based markets, TVL $56M"
+
+[protocol.contracts]
+pool = "0x0000000000000000000000000000000000000001"

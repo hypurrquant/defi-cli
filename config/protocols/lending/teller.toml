@@ -1,0 +1,11 @@
+[protocol]
+name = "Teller"
+slug = "teller"
+category = "lending"
+interface = "teller"
+chain = "hyperevm"
+native = false
+description = "Teller — peer-to-peer lending protocol with customizable loan terms, TVL $1.5M"
+
+[protocol.contracts]
+pool = "0x0000000000000000000000000000000000000001"

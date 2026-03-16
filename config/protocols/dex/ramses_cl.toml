@@ -1,0 +1,13 @@
+[protocol]
+name = "Ramses CL"
+slug = "ramses-cl"
+category = "dex"
+interface = "solidly_cl"
+chain = "hyperevm"
+native = false
+description = "Ramses concentrated liquidity on HyperEVM ($2.8M TVL)"
+
+[protocol.contracts]
+factory = "0x07E60782535752be279929e2DFfDd136Db2e6b45"
+router = "0x76D91074B46fF76E04FE59a90526a40009943fd2"
+quoter = "0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd"

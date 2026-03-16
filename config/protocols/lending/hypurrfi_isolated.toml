@@ -1,0 +1,11 @@
+[protocol]
+name = "HypurrFi Isolated"
+slug = "hypurrfi-isolated"
+category = "lending"
+interface = "aave_v3"
+chain = "hyperevm"
+native = true
+description = "HypurrFi Isolated — isolated lending markets on HyperEVM, TVL $1.7M"
+
+[protocol.contracts]
+pool = "0x0000000000000000000000000000000000000001"

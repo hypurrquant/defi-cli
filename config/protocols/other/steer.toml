@@ -1,0 +1,11 @@
+[protocol]
+name = "Steer Protocol"
+slug = "steer"
+category = "other"
+interface = "steer"
+chain = "hyperevm"
+native = false
+description = "Steer Protocol — automated liquidity management, TVL $29M"
+
+[protocol.contracts]
+registry = "0x0000000000000000000000000000000000000001"

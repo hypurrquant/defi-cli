@@ -1,0 +1,11 @@
+[protocol]
+name = "Kinetiq Markets"
+slug = "kinetiq-markets"
+category = "derivatives"
+interface = "kinetiq_markets"
+chain = "hyperevm"
+native = true
+description = "Kinetiq Markets — native derivatives markets, TVL $31M"
+
+[protocol.contracts]
+markets = "0x0000000000000000000000000000000000000001"

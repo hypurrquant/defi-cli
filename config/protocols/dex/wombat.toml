@@ -1,0 +1,14 @@
+# NOTE: Contract addresses are unverified - not yet confirmed from dev/mar11 branch
+[protocol]
+name = "Wombat Exchange"
+slug = "wombat"
+category = "dex"
+interface = "wombat"
+chain = "hyperevm"
+native = false
+description = "Wombat stableswap exchange on HyperEVM with $3.9M TVL"
+
+[protocol.contracts]
+router = "0x7aFa6bEeCbDfA7B8C9D0E1F2a3B4C5D6E7F8a9B0"
+pool = "0x8bAb7cFfDcEaB8C9D0E1F2a3B4C5D6E7F8a9B0C1"
+factory = "0x9cBc8dAaEdFbC9D0E1F2a3B4C5D6E7F8a9B0C1D2"

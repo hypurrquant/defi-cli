@@ -1,0 +1,8 @@
+[chain.hyperevm]
+name = "HyperEVM"
+chain_id = 999
+rpc_url = "https://rpc.hyperliquid.xyz/evm"
+explorer_url = "https://explorer.hyperliquid.xyz"
+native_token = "HYPE"
+wrapped_native = "0x2Ea6b370E8FFAdca35aDee39CC1682834a3237Ee"
+multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"

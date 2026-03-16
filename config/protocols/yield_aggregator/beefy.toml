@@ -1,0 +1,11 @@
+[protocol]
+name = "Beefy"
+slug = "beefy"
+category = "yield_aggregator"
+interface = "beefy_vault"
+chain = "hyperevm"
+native = false
+description = "Beefy — multichain yield optimizer, TVL $148M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

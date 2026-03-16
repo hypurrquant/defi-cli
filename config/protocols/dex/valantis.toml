@@ -1,0 +1,16 @@
+[protocol]
+name = "Valantis STEX"
+slug = "valantis-stex"
+category = "dex"
+interface = "valantis"
+chain = "hyperevm"
+native = false
+description = "Valantis sovereign token exchange on HyperEVM with $19M TVL"
+
+[protocol.contracts]
+router = "0x5Abe35DDb420703bA6Dd7226ACDCb24be71192e5"
+protocol_factory = "0x7E028ac56cB2AF75292F3D967978189698C24732"
+sovereign_pool_factory = "0xe105af173402b07100aE5648385E1F182bCE21B6"
+stex_lens = "0x95e88072c3fe908101a13584d7A0ff87DaDd88f3"
+sthype_pool = "0x5365b6EF09253C7aBc0A9286eC578A9f4B413B7D"
+khype_pool = "0x88B214eC94276B825E641820D5C97a9042F9Dd60"

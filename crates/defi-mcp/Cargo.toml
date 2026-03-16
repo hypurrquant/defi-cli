@@ -1,0 +1,19 @@
+[package]
+name = "defi-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "defi-mcp"
+path = "src/main.rs"
+
+[dependencies]
+defi-core = { path = "../defi-core" }
+defi-protocols = { path = "../defi-protocols" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+alloy.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

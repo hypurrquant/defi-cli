@@ -1,0 +1,11 @@
+[protocol]
+name = "Lazy Summer"
+slug = "lazy-summer"
+category = "yield_aggregator"
+interface = "erc4626"
+chain = "hyperevm"
+native = false
+description = "Lazy Summer — yield aggregator vault, TVL $46M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

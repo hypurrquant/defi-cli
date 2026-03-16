@@ -1,0 +1,11 @@
+[protocol]
+name = "Kinetiq Earn"
+slug = "kinetiq-earn"
+category = "yield_aggregator"
+interface = "erc4626"
+chain = "hyperevm"
+native = false
+description = "Kinetiq Earn — yield aggregator vault, TVL $54M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

@@ -1,0 +1,16 @@
+[protocol]
+name = "Hybra V4"
+slug = "hybra-v4"
+category = "dex"
+interface = "hybra"
+chain = "hyperevm"
+native = true
+description = "Hybra V4 native DEX on HyperEVM with $1.6M TVL"
+
+[protocol.contracts]
+factory = "0x41ba59415eC75AC4242dd157F2a7A282F1e75652"
+pool_deployer = "0x0d1D2Af74a59A2A0F266fD75Fb081F637c4ec9C2"
+vault = "0x9ffc63B7f284fA9A8071017b29a594B7e667f5d9"
+router = "0xCAfDa2b3E5c2B5E30f6d67FEFa5AfFD3f6a93b0a"
+quoter = "0x6dE3843D846543eEE20F73601ecc3Eb43E1B932b"
+position_manager = "0x578D8A2D07B60b12993559f1DDF90EB2af3eA496"

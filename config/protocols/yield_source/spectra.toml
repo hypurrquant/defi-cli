@@ -1,0 +1,11 @@
+[protocol]
+name = "Spectra V2"
+slug = "spectra-v2"
+category = "yield_source"
+interface = "spectra"
+chain = "hyperevm"
+native = false
+description = "Spectra V2 — yield tokenization protocol, TVL $32M"
+
+[protocol.contracts]
+router = "0x0000000000000000000000000000000000000001"

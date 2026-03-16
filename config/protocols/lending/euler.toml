@@ -1,0 +1,14 @@
+# WARNING: Euler V2 is NOT deployed on HyperEVM as of 2026-03-13 (confirmed via protocol discovery)
+# Placeholder addresses retained; do not use until deployment is confirmed
+[protocol]
+name = "Euler V2"
+slug = "euler-v2"
+category = "lending"
+interface = "euler_v2"
+chain = "hyperevm"
+native = false
+description = "Euler V2 — modular lending protocol with customizable risk parameters, TVL $523M"
+
+[protocol.contracts]
+euler = "0x0000000000000000000000000000000000000001"
+markets = "0x0000000000000000000000000000000000000002"

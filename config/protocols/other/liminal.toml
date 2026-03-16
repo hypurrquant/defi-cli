@@ -1,0 +1,11 @@
+[protocol]
+name = "Liminal"
+slug = "liminal"
+category = "other"
+interface = "liminal"
+chain = "hyperevm"
+native = false
+description = "Liminal — DeFi infrastructure protocol, TVL $15M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

@@ -1,0 +1,11 @@
+[protocol]
+name = "Equilibria"
+slug = "equilibria"
+category = "yield_source"
+interface = "equilibria"
+chain = "hyperevm"
+native = false
+description = "Equilibria — Pendle yield boosting protocol, TVL $19M"
+
+[protocol.contracts]
+booster = "0x0000000000000000000000000000000000000001"

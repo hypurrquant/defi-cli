@@ -1,0 +1,11 @@
+[protocol]
+name = "Derive V2"
+slug = "derive-v2"
+category = "derivatives"
+interface = "derive_v2"
+chain = "hyperevm"
+native = false
+description = "Derive V2 — derivatives trading protocol, TVL $82M"
+
+[protocol.contracts]
+controller = "0x0000000000000000000000000000000000000001"

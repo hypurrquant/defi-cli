@@ -1,0 +1,13 @@
+# NOTE: Contract addresses are unverified - not yet confirmed from dev/mar11 branch
+[protocol]
+name = "Hyperliquid Spot"
+slug = "hyperliquid-spot"
+category = "dex"
+interface = "orderbook_api"
+chain = "hyperevm"
+native = true
+description = "Hyperliquid native spot orderbook on HyperEVM with $172M TVL"
+
+[protocol.contracts]
+router = "0xDaFa2bEeCbDfAbC3D4E5F6a7B8C9D0E1F2a3B4C5"
+spot_clearinghouse = "0xEbAb3cFfDcEaBcD4E5F6a7B8C9D0E1F2a3B4C5D6"

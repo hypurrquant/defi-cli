@@ -1,0 +1,11 @@
+[protocol]
+name = "Upshift"
+slug = "upshift"
+category = "vault"
+interface = "erc4626"
+chain = "hyperevm"
+native = false
+description = "Upshift — capital allocator vault, TVL $320M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

@@ -1,0 +1,11 @@
+[protocol]
+name = "Felix USDhl"
+slug = "felix-usdhl"
+category = "yield_source"
+interface = "erc4626"
+chain = "hyperevm"
+native = true
+description = "Felix USDhl — native yield source vault, TVL $22M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

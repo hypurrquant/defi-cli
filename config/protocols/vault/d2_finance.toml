@@ -1,0 +1,11 @@
+[protocol]
+name = "D2 Finance"
+slug = "d2-finance"
+category = "vault"
+interface = "erc4626"
+chain = "hyperevm"
+native = false
+description = "D2 Finance — capital allocator vault, TVL $15M"
+
+[protocol.contracts]
+vault = "0x0000000000000000000000000000000000000001"

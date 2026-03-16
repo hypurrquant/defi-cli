@@ -1,0 +1,11 @@
+[protocol]
+name = "Rumpel Labs"
+slug = "rumpel"
+category = "other"
+interface = "rumpel"
+chain = "hyperevm"
+native = false
+description = "Rumpel Labs — DeFi factory protocol, TVL $2M"
+
+[protocol.contracts]
+factory = "0x0000000000000000000000000000000000000001"

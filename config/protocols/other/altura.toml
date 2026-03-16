@@ -1,0 +1,11 @@
+[protocol]
+name = "Altura"
+slug = "altura"
+category = "other"
+interface = "altura"
+chain = "hyperevm"
+native = false
+description = "Altura — DeFi management protocol, TVL $7.2M"
+
+[protocol.contracts]
+manager = "0x0000000000000000000000000000000000000001"

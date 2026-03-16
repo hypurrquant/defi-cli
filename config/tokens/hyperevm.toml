@@ -1,0 +1,105 @@
+[[token]]
+symbol = "HYPE"
+name = "Hyperliquid"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WHYPE"
+name = "Wrapped HYPE"
+address = "0x5555555555555555555555555555555555555555"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0xb88339CB7199b77E23DB6E890353E22632Ba630f"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT0"
+name = "Tether USD (USDT0)"
+address = "0xB8CE59FC3717adA4c02EADF9682a9E934F625EBb"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether (UETH)"
+address = "0xBe6727B535545C67d5cAa73dEa54865B92CF7907"
+decimals = 18
+tags = ["blue_chip"]
+
+[[token]]
+symbol = "WBTC"
+name = "Wrapped Bitcoin (UBTC)"
+address = "0x9FDBdA0A5e284c32744D2f17Ee5c74B284993463"
+decimals = 8
+tags = ["blue_chip"]
+
+[[token]]
+symbol = "kHYPE"
+name = "Kinetiq Staked HYPE"
+address = "0xfD739d4e423301CE9385c1fb8850539D657C296D"
+decimals = 18
+tags = ["lst"]
+
+[[token]]
+symbol = "wstHYPE"
+name = "Wrapped Staked HYPE"
+address = "0x94e8396e0869c9F2200760aF0621aFd240E1CF38"
+decimals = 18
+tags = ["lst"]
+
+[[token]]
+symbol = "hbHYPE"
+name = "Hyperbeat Staked HYPE"
+address = "0x96C6cBB6251Ee1c257b2162ca0f39AA5Fa44B1FB"
+decimals = 18
+tags = ["lst"]
+
+[[token]]
+symbol = "feUSD"
+name = "Felix USD"
+address = "0x02c6a2fa58cc01a18b8d9e00ea48d65e4df26c70"
+decimals = 18
+tags = ["stablecoin", "cdp"]
+
+[[token]]
+symbol = "USDH"
+name = "USDH"
+address = "0x111111a1a0667d36bD57c0A9f569b98057111111"
+decimals = 18
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDe"
+name = "Ethena USDe"
+address = "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+decimals = 18
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "NEST"
+name = "NEST Token"
+address = "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035"
+decimals = 18
+tags = ["governance"]
+
+[[token]]
+symbol = "RAM"
+name = "Ramses Token"
+address = "0x555570a286F15EbDFE42B66eDE2f724Aa1AB5555"
+decimals = 18
+tags = ["governance"]
+
+[[token]]
+symbol = "PENDLE"
+name = "Pendle Token"
+address = "0xD6Eb81136884713E843936843E286FD2a85A205A"
+decimals = 18
+tags = ["governance"]
