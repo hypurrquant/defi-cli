@@ -129,6 +129,10 @@ impl Registry {
                 include_str!("../../../../config/protocols/lending/hypurrfi_isolated.toml"),
             ),
             (
+                "lending/felix_morpho",
+                include_str!("../../../../config/protocols/lending/felix_morpho.toml"),
+            ),
+            (
                 "lending/termmax",
                 include_str!("../../../../config/protocols/lending/termmax.toml"),
             ),
