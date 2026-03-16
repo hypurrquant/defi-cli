@@ -10,3 +10,11 @@ pub struct ChainConfig {
     pub wrapped_native: Option<String>,
     pub multicall3: Option<String>,
 }
+
+impl ChainConfig {
+    /// Get the effective RPC URL, checking environment variable override first.
+    /// Priority: HYPEREVM_RPC_URL env var > chains.toml rpc_url
+    pub fn effective_rpc_url(&self) -> String {
+        std::env::var("HYPEREVM_RPC_URL").unwrap_or_else(|_| self.rpc_url.clone())
+    }
+}

@@ -137,7 +137,7 @@ pub async fn run(
                     let entry = registry.get_protocol(&p)?;
                     let staking = defi_protocols::factory::create_liquid_staking_with_rpc(
                         entry,
-                        Some(&_chain.rpc_url),
+                        Some(&_chain.effective_rpc_url()),
                     )?;
                     let info = staking.get_info().await?;
                     output.print(&info)?;

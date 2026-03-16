@@ -264,16 +264,26 @@ pub async fn run(
         }
         LendingCommand::Rates { protocol, asset } => {
             let entry = registry.get_protocol(&protocol)?;
-            let lending =
-                defi_protocols::factory::create_lending_with_rpc(entry, Some(&chain.rpc_url))?;
+            let rpc_url = chain.effective_rpc_url();
             let asset_addr = resolve_asset(registry, &chain_key, &asset)?;
-            let rates = lending.get_rates(asset_addr).await?;
+            let entry_clone = entry.clone();
+            let rates = defi_core::provider::with_retry(3, 2000, || {
+                let lending =
+                    defi_protocols::factory::create_lending_with_rpc(&entry_clone, Some(&rpc_url));
+                async move {
+                    let lending = lending?;
+                    lending.get_rates(asset_addr).await
+                }
+            })
+            .await?;
             output.print(&rates)?;
         }
         LendingCommand::Position { protocol, address } => {
             let entry = registry.get_protocol(&protocol)?;
-            let lending =
-                defi_protocols::factory::create_lending_with_rpc(entry, Some(&chain.rpc_url))?;
+            let lending = defi_protocols::factory::create_lending_with_rpc(
+                entry,
+                Some(&chain.effective_rpc_url()),
+            )?;
             let user = address
                 .parse::<Address>()
                 .map_err(|e| DefiError::InvalidParam(format!("Invalid address: {e}")))?;

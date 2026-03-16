@@ -162,7 +162,10 @@ pub async fn run(
             amount,
         } => {
             let entry = registry.get_protocol(&protocol)?;
-            let dex = defi_protocols::factory::create_dex_with_rpc(entry, Some(&chain.rpc_url))?;
+            let dex = defi_protocols::factory::create_dex_with_rpc(
+                entry,
+                Some(&chain.effective_rpc_url()),
+            )?;
 
             let token_in_addr =
                 resolve_token_address(registry, &chain.name.to_lowercase(), &token_in)?;
@@ -205,7 +208,10 @@ pub async fn run(
             let mut quotes: Vec<QuoteResult> = Vec::new();
 
             for entry in &dex_protocols {
-                match defi_protocols::factory::create_dex_with_rpc(entry, Some(&chain.rpc_url)) {
+                match defi_protocols::factory::create_dex_with_rpc(
+                    entry,
+                    Some(&chain.effective_rpc_url()),
+                ) {
                     Ok(dex) => {
                         let params = QuoteParams {
                             protocol: entry.slug.clone(),

@@ -124,7 +124,7 @@ pub async fn run(args: StatusArgs, registry: &Registry, output: &OutputMode) -> 
             .map_err(|e| DefiError::RpcError(format!("Failed to get block number: {e}")))?;
         eprintln!(
             "Connected to {} (block #{}). Verifying {} contracts...",
-            chain.rpc_url,
+            chain.effective_rpc_url(),
             bn,
             all_addresses.len()
         );
@@ -213,7 +213,7 @@ pub async fn run(args: StatusArgs, registry: &Registry, output: &OutputMode) -> 
     let status = StatusOutput {
         chain: chain.name.clone(),
         chain_id: chain.chain_id,
-        rpc_url: chain.rpc_url.clone(),
+        rpc_url: chain.effective_rpc_url(),
         block_number,
         protocols,
         summary,

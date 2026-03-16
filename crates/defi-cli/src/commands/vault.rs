@@ -123,8 +123,10 @@ pub async fn run(
         VaultCommand::Info { protocol } => match protocol {
             Some(p) => {
                 let entry = registry.get_protocol(&p)?;
-                let vault =
-                    defi_protocols::factory::create_vault_with_rpc(entry, Some(&_chain.rpc_url))?;
+                let vault = defi_protocols::factory::create_vault_with_rpc(
+                    entry,
+                    Some(&_chain.effective_rpc_url()),
+                )?;
                 let info = vault.get_vault_info().await?;
                 output.print(&info)?;
             }

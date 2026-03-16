@@ -79,7 +79,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
     let registry = defi_core::registry::Registry::load_embedded()?;
     let chain = registry.get_chain(&cli.chain)?;
     let output_mode = crate::output::OutputMode::from_cli(&cli);
-    let executor = crate::executor::Executor::new(cli.broadcast, Some(chain.rpc_url.clone()));
+    let executor = crate::executor::Executor::new(cli.broadcast, Some(chain.effective_rpc_url()));
 
     match cli.command {
         Commands::Status(args) => status::run(args, &registry, &output_mode).await,

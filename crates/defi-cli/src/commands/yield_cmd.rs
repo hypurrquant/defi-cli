@@ -59,18 +59,17 @@ async fn collect_lending_rates(
             }
             first = false;
 
-            match defi_protocols::factory::create_lending_with_rpc(entry, Some(&chain.rpc_url)) {
-                Ok(lending) => match lending.get_rates(asset_addr).await {
-                    Ok(rates) => results.push(rates),
-                    Err(e) => {
-                        eprintln!("Warning: {} rates unavailable: {}", entry.name, e);
-                    }
-                },
+            let rpc = chain.effective_rpc_url();
+            let entry_c = (*entry).clone();
+            match defi_core::provider::with_retry(2, 2000, || {
+                let l = defi_protocols::factory::create_lending_with_rpc(&entry_c, Some(&rpc));
+                async move { l?.get_rates(asset_addr).await }
+            })
+            .await
+            {
+                Ok(rates) => results.push(rates),
                 Err(e) => {
-                    eprintln!(
-                        "Warning: could not create {} lending adapter: {}",
-                        entry.name, e
-                    );
+                    eprintln!("Warning: {} rates unavailable: {}", entry.name, e);
                 }
             }
         }
