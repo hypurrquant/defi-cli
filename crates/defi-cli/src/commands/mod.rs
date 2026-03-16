@@ -1,3 +1,4 @@
+pub mod alert;
 pub mod cdp;
 pub mod dex;
 pub mod gauge;
@@ -71,6 +72,8 @@ pub enum Commands {
     Portfolio(portfolio::PortfolioArgs),
     /// Monitor health factor with alerts
     Monitor(monitor::MonitorArgs),
+    /// Alert on DEX vs Oracle price deviation
+    Alert(alert::AlertArgs),
     /// Query asset prices from oracles and DEXes
     Price(price::PriceArgs),
     /// Wallet management
@@ -103,6 +106,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
         Commands::Yield(args) => yield_cmd::run(args, &registry, chain, &output_mode).await,
         Commands::Portfolio(args) => portfolio::run(args, &registry, chain, &output_mode).await,
         Commands::Monitor(args) => monitor::run(args, &registry, chain, &output_mode).await,
+        Commands::Alert(args) => alert::run(args, &registry, chain, &output_mode).await,
         Commands::Price(args) => price::run(args, &registry, chain, &output_mode).await,
         Commands::Wallet(args) => wallet::run(args, &registry, &output_mode).await,
         Commands::Token(args) => token::run(args, &registry, chain, &executor, &output_mode).await,
