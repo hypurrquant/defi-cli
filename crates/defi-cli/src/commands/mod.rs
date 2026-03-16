@@ -93,7 +93,9 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
             lending::run(args, &registry, chain, &executor, &output_mode).await
         }
         Commands::Cdp(args) => cdp::run(args, &registry, chain, &executor, &output_mode).await,
-        Commands::Bridge(args) => bridge::run(args, &registry, chain, &output_mode).await,
+        Commands::Bridge(args) => {
+            bridge::run(args, &registry, chain, &executor, &output_mode).await
+        }
         Commands::Staking(args) => {
             staking::run(args, &registry, chain, &executor, &output_mode).await
         }

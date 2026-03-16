@@ -1,5 +1,5 @@
 use alloy::primitives::{Address, Signed, U256, Uint};
-use alloy::providers::ProviderBuilder;
+use alloy::providers::{Provider, ProviderBuilder};
 use alloy::sol;
 use alloy::sol_types::SolCall;
 use async_trait::async_trait;
@@ -175,36 +175,90 @@ impl Dex for UniswapV3 {
     }
 
     async fn quote(&self, params: QuoteParams) -> Result<QuoteResult> {
-        let quoter_addr = self.quoter.ok_or_else(|| {
-            DefiError::Unsupported(format!(
-                "[{}] quote not available — no quoter contract configured",
-                self.name
-            ))
-        })?;
+        // If we have a quoter, use it directly
+        if let Some(quoter_addr) = self.quoter {
+            let url = self.rpc_url()?;
+            let provider = ProviderBuilder::new().connect_http(url);
+            let quoter = IQuoterV2::new(quoter_addr, &provider);
+
+            let result = quoter
+                .quoteExactInputSingle(IQuoterV2::QuoteExactInputSingleParams {
+                    tokenIn: params.token_in,
+                    tokenOut: params.token_out,
+                    amountIn: params.amount_in,
+                    fee: self.fee.try_into().unwrap(),
+                    sqrtPriceLimitX96: Uint::<160, 3>::ZERO,
+                })
+                .call()
+                .await
+                .map_err(|e| {
+                    DefiError::RpcError(format!(
+                        "[{}] quoteExactInputSingle failed: {e}",
+                        self.name
+                    ))
+                })?;
+
+            return Ok(QuoteResult {
+                protocol: self.name.clone(),
+                amount_out: result.amountOut,
+                price_impact_bps: None,
+                fee_bps: Some(self.fee as u16 / 10),
+                route: vec![format!("{} -> {}", params.token_in, params.token_out)],
+            });
+        }
+
+        // Fallback: simulate swap via eth_call on the router to get amountOut
         let url = self.rpc_url()?;
         let provider = ProviderBuilder::new().connect_http(url);
-        let quoter = IQuoterV2::new(quoter_addr, &provider);
 
-        let result = quoter
-            .quoteExactInputSingle(IQuoterV2::QuoteExactInputSingleParams {
+        let call = ISwapRouter::exactInputSingleCall {
+            params: ISwapRouter::ExactInputSingleParams {
                 tokenIn: params.token_in,
                 tokenOut: params.token_out,
-                amountIn: params.amount_in,
                 fee: self.fee.try_into().unwrap(),
+                recipient: Address::with_last_byte(1),
+                deadline: U256::from(u64::MAX),
+                amountIn: params.amount_in,
+                amountOutMinimum: U256::ZERO,
                 sqrtPriceLimitX96: Uint::<160, 3>::ZERO,
-            })
-            .call()
-            .await
-            .map_err(|e| {
-                DefiError::RpcError(format!("[{}] quoteExactInputSingle failed: {e}", self.name))
-            })?;
+            },
+        };
+
+        let tx = alloy::rpc::types::TransactionRequest::default()
+            .to(self.router)
+            .input(alloy::primitives::Bytes::copy_from_slice(&call.abi_encode()).into());
+
+        let output = provider.call(tx).await.map_err(|e| {
+            let err_msg = e.to_string();
+            if err_msg.contains("STF") || err_msg.contains("insufficient") {
+                DefiError::Unsupported(format!(
+                    "[{}] quote unavailable — no quoter contract configured. Swap simulation requires token balance. Add a quoter address to the protocol config.",
+                    self.name
+                ))
+            } else {
+                DefiError::RpcError(format!(
+                    "[{}] swap simulation for quote failed: {e}",
+                    self.name
+                ))
+            }
+        })?;
+
+        // exactInputSingle returns uint256 amountOut
+        let amount_out = if output.len() >= 32 {
+            U256::from_be_slice(&output[..32])
+        } else {
+            U256::ZERO
+        };
 
         Ok(QuoteResult {
             protocol: self.name.clone(),
-            amount_out: result.amountOut,
+            amount_out,
             price_impact_bps: None,
-            fee_bps: Some(self.fee as u16 / 10), // Convert from 1/1_000_000 to bps
-            route: vec![format!("{} -> {}", params.token_in, params.token_out)],
+            fee_bps: Some(self.fee as u16 / 10),
+            route: vec![format!(
+                "{} -> {} (simulated)",
+                params.token_in, params.token_out
+            )],
         })
     }
 

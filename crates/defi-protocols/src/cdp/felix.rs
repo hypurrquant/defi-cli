@@ -237,10 +237,74 @@ impl Cdp for Felix {
         })
     }
 
-    async fn get_cdp_info(&self, _cdp_id: U256) -> Result<CdpInfo> {
-        Err(DefiError::Unsupported(format!(
-            "[{}] get_cdp_info requires RPC connection",
-            self.name
-        )))
+    async fn get_cdp_info(&self, cdp_id: U256) -> Result<CdpInfo> {
+        let rpc_url = self.rpc_url.as_ref().ok_or_else(|| {
+            DefiError::RpcError(format!(
+                "[{}] get_cdp_info requires RPC — set HYPEREVM_RPC_URL",
+                self.name
+            ))
+        })?;
+        let url: url::Url = rpc_url
+            .parse()
+            .map_err(|e| DefiError::RpcError(format!("Invalid RPC URL: {e}")))?;
+
+        let trove_manager_addr = self.trove_manager.ok_or_else(|| {
+            DefiError::ContractError(format!(
+                "[{}] trove_manager contract not configured",
+                self.name
+            ))
+        })?;
+
+        let provider = ProviderBuilder::new().connect_http(url);
+        let trove = ITroveManager::new(trove_manager_addr, &provider);
+
+        let status = trove.getTroveStatus(cdp_id).call().await.map_err(|e| {
+            DefiError::RpcError(format!(
+                "[{}] Trove {} not found or reverted: {e}",
+                self.name, cdp_id
+            ))
+        })?;
+
+        // Status: 0=nonExistent, 1=active, 2=closedByOwner, 3=closedByLiquidation, 4=zombie
+        if status == U256::ZERO {
+            return Err(DefiError::InvalidParam(format!(
+                "[{}] Trove {} does not exist",
+                self.name, cdp_id
+            )));
+        }
+
+        let coll = trove.getTroveColl(cdp_id).call().await.map_err(|e| {
+            DefiError::RpcError(format!("[{}] getTroveColl failed: {e}", self.name))
+        })?;
+
+        let debt = trove.getTroveDebt(cdp_id).call().await.map_err(|e| {
+            DefiError::RpcError(format!("[{}] getTroveDebt failed: {e}", self.name))
+        })?;
+
+        // Calculate collateral ratio: coll / debt (both in 1e18)
+        let coll_ratio = if !debt.is_zero() {
+            coll.to::<u128>() as f64 / debt.to::<u128>() as f64
+        } else {
+            0.0
+        };
+
+        Ok(CdpInfo {
+            protocol: self.name.clone(),
+            cdp_id,
+            collateral: TokenAmount {
+                token: Address::ZERO, // WHYPE
+                symbol: "WHYPE".to_string(),
+                amount: coll,
+                decimals: 18,
+            },
+            debt: TokenAmount {
+                token: Address::ZERO, // feUSD
+                symbol: "feUSD".to_string(),
+                amount: debt,
+                decimals: 18,
+            },
+            collateral_ratio: coll_ratio,
+            liquidation_price: None,
+        })
     }
 }

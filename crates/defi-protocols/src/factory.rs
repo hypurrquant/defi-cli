@@ -170,6 +170,7 @@ pub fn create_liquid_staking_with_rpc(
         "sthype_staking" => Ok(Box::new(StHype::from_contracts(
             entry.name.clone(),
             &entry.contracts,
+            rpc_url.map(|s| s.to_string()),
         )?)),
         "hyperbeat_lst" | "kintsu" => Ok(Box::new(GenericLst::from_contracts(
             entry.name.clone(),

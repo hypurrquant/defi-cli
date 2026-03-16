@@ -202,7 +202,10 @@ pub async fn run(
         }
         CdpCommand::Info { protocol, position } => {
             let entry = registry.get_protocol(&protocol)?;
-            let cdp = defi_protocols::factory::create_cdp(entry)?;
+            let cdp = defi_protocols::factory::create_cdp_with_rpc(
+                entry,
+                Some(&chain.effective_rpc_url()),
+            )?;
             let cdp_id = parse_u256(&position)?;
             let info = cdp.get_cdp_info(cdp_id).await?;
             output.print(&info)?;
