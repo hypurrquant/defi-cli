@@ -8,5 +8,5 @@ native = false
 description = "Compound V3 (Comet) on Arbitrum ($87M TVL)"
 
 [protocol.contracts]
-comet_usdc = "0xA5EDBDD9646f8dFF606d7448e414884C7d905dCA"
+comet_usdc = "0x9c4ec768c28520B50860ea7a15bd7213a9fF58bf"
 comet_weth = "0x6f7D514bbD4aFf3BcD1140B7344b32f063dEe486"
