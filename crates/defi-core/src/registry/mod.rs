@@ -111,7 +111,7 @@ impl Registry {
                 "dex/hyperliquid_spot",
                 include_str!("../../../../config/protocols/dex/hyperliquid_spot.toml"),
             ),
-            // === Lending (8) ===
+            // === Lending (5) ===
             (
                 "lending/hyperlend",
                 include_str!("../../../../config/protocols/lending/hyperlend.toml"),
@@ -132,18 +132,6 @@ impl Registry {
                 "lending/felix_morpho",
                 include_str!("../../../../config/protocols/lending/felix_morpho.toml"),
             ),
-            (
-                "lending/termmax",
-                include_str!("../../../../config/protocols/lending/termmax.toml"),
-            ),
-            (
-                "lending/hyperdrive",
-                include_str!("../../../../config/protocols/lending/hyperdrive.toml"),
-            ),
-            (
-                "lending/teller",
-                include_str!("../../../../config/protocols/lending/teller.toml"),
-            ),
             // === Liquid Staking (4) ===
             (
                 "liquid_staking/kinetiq",
@@ -161,16 +149,12 @@ impl Registry {
                 "liquid_staking/kintsu",
                 include_str!("../../../../config/protocols/liquid_staking/kintsu.toml"),
             ),
-            // === CDP (2) ===
+            // === CDP (1) ===
             (
                 "cdp/felix",
                 include_str!("../../../../config/protocols/cdp/felix.toml"),
             ),
-            (
-                "cdp/parallel",
-                include_str!("../../../../config/protocols/cdp/parallel.toml"),
-            ),
-            // === Yield Source (10) ===
+            // === Yield Source (2) ===
             (
                 "yield_source/pendle",
                 include_str!("../../../../config/protocols/yield_source/pendle.toml"),
@@ -179,82 +163,21 @@ impl Registry {
                 "yield_source/spectra",
                 include_str!("../../../../config/protocols/yield_source/spectra.toml"),
             ),
-            (
-                "yield_source/penpie",
-                include_str!("../../../../config/protocols/yield_source/penpie.toml"),
-            ),
-            (
-                "yield_source/felix_usdhl",
-                include_str!("../../../../config/protocols/yield_source/felix_usdhl.toml"),
-            ),
-            (
-                "yield_source/equilibria",
-                include_str!("../../../../config/protocols/yield_source/equilibria.toml"),
-            ),
-            (
-                "yield_source/looped_hype",
-                include_str!("../../../../config/protocols/yield_source/looped_hype.toml"),
-            ),
-            (
-                "yield_source/growi",
-                include_str!("../../../../config/protocols/yield_source/growi.toml"),
-            ),
-            (
-                "yield_source/harmonix",
-                include_str!("../../../../config/protocols/yield_source/harmonix.toml"),
-            ),
-            (
-                "yield_source/hyperwave",
-                include_str!("../../../../config/protocols/yield_source/hyperwave.toml"),
-            ),
-            (
-                "yield_source/wrapped_hlp",
-                include_str!("../../../../config/protocols/yield_source/wrapped_hlp.toml"),
-            ),
-            // === Yield Aggregator (4) ===
+            // === Yield Aggregator (2) ===
             (
                 "yield_aggregator/beefy",
                 include_str!("../../../../config/protocols/yield_aggregator/beefy.toml"),
             ),
             (
-                "yield_aggregator/hyperbeat_earn",
-                include_str!("../../../../config/protocols/yield_aggregator/hyperbeat_earn.toml"),
-            ),
-            (
-                "yield_aggregator/kinetiq_earn",
-                include_str!("../../../../config/protocols/yield_aggregator/kinetiq_earn.toml"),
-            ),
-            (
                 "yield_aggregator/lazy_summer",
                 include_str!("../../../../config/protocols/yield_aggregator/lazy_summer.toml"),
             ),
-            // === Derivatives (3) ===
-            (
-                "derivatives/hyperliquid_hlp",
-                include_str!("../../../../config/protocols/derivatives/hyperliquid_hlp.toml"),
-            ),
-            (
-                "derivatives/derive",
-                include_str!("../../../../config/protocols/derivatives/derive.toml"),
-            ),
+            // === Derivatives (1) ===
             (
                 "derivatives/kinetiq_markets",
                 include_str!("../../../../config/protocols/derivatives/kinetiq_markets.toml"),
             ),
-            // === Options (2) ===
-            (
-                "options/rysk",
-                include_str!("../../../../config/protocols/options/rysk.toml"),
-            ),
-            (
-                "options/hypersurface",
-                include_str!("../../../../config/protocols/options/hypersurface.toml"),
-            ),
-            // === Vault / Capital Allocator (4) ===
-            (
-                "vault/veda",
-                include_str!("../../../../config/protocols/vault/veda.toml"),
-            ),
+            // === Vault (2) ===
             (
                 "vault/upshift",
                 include_str!("../../../../config/protocols/vault/upshift.toml"),
@@ -262,27 +185,6 @@ impl Registry {
             (
                 "vault/felix_vaults",
                 include_str!("../../../../config/protocols/vault/felix_vaults.toml"),
-            ),
-            (
-                "vault/d2_finance",
-                include_str!("../../../../config/protocols/vault/d2_finance.toml"),
-            ),
-            // === Other (4) ===
-            (
-                "other/steer",
-                include_str!("../../../../config/protocols/other/steer.toml"),
-            ),
-            (
-                "other/liminal",
-                include_str!("../../../../config/protocols/other/liminal.toml"),
-            ),
-            (
-                "other/altura",
-                include_str!("../../../../config/protocols/other/altura.toml"),
-            ),
-            (
-                "other/rumpel",
-                include_str!("../../../../config/protocols/other/rumpel.toml"),
             ),
         ];
 

@@ -59,7 +59,7 @@ defi lending supply --protocol hyperlend --asset USDC --amount 100.0 --broadcast
 | `wallet` | `balance` |
 | `agent` | JSON stdin batch mode for AI agents |
 
-## Supported Protocols
+## Supported Protocols (32)
 
 ### DEX (15) — all LIVE
 
@@ -81,18 +81,15 @@ defi lending supply --protocol hyperlend --asset USDC --amount 100.0 --broadcast
 | Hybra V4 | hybra | — | router: `0xCAfDa2b3E5c2B5E30f6d67FEFa5AfFD3f6a93b0a` |
 | Hyperliquid Spot | orderbook_api | [app.hyperliquid.xyz](https://app.hyperliquid.xyz) | — |
 
-### Lending (8)
+### Lending (5)
 
-| Protocol | Interface | Status | App | Key Contract |
-|----------|-----------|--------|-----|-------------|
-| HyperLend | aave_v3 | LIVE | [app.hyperlend.finance](https://app.hyperlend.finance) | pool: `0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b` |
-| HypurrFi Pooled | aave_v3 | LIVE | [app.hypurr.fi](https://app.hypurr.fi) | pool: `0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b` |
-| Felix Morpho | morpho_blue | LIVE | [usefelix.xyz/lend](https://www.usefelix.xyz/lend) | morpho: `0x68e37dE8d93d3496ae143F2E900490f6280C57cD` |
-| Euler V2 | euler_v2 | LIVE | [app.euler.finance](https://app.euler.finance) | evk_vault: `0xac207ffa0bfce194db18d1820902d48a2d948968` |
-| HypurrFi Isolated | aave_v3 | LIVE | [app.hypurr.fi/markets/isolated](https://app.hypurr.fi/markets/isolated) | — (Fraxlend fork, addresses TBD) |
-| TermMax | termmax | — | — | — |
-| Hyperdrive HL | hyperdrive | — | — | — |
-| Teller | teller | — | — | — |
+| Protocol | Interface | App | Key Contract |
+|----------|-----------|-----|-------------|
+| HyperLend | aave_v3 | [app.hyperlend.finance](https://app.hyperlend.finance) | pool: `0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b` |
+| HypurrFi Pooled | aave_v3 | [app.hypurr.fi](https://app.hypurr.fi) | pool: `0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b` |
+| HypurrFi Isolated | aave_v3 | [app.hypurr.fi/markets/isolated](https://app.hypurr.fi/markets/isolated) | pool: `0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b` (Fraxlend fork) |
+| Felix Morpho | morpho_blue | [usefelix.xyz/lend](https://www.usefelix.xyz/lend) | morpho: `0x68e37dE8d93d3496ae143F2E900490f6280C57cD` |
+| Euler V2 | euler_v2 | [app.euler.finance](https://app.euler.finance) | evc: `0xceAA7cdCD7dDBee8601127a9Abb17A974d613db4`, factory: `0xcF5552580fD364cdBBFcB5Ae345f75674c59273A` |
 
 ### Liquid Staking (4) — all LIVE
 
@@ -103,69 +100,38 @@ defi lending supply --protocol hyperlend --asset USDC --amount 100.0 --broadcast
 | Hyperbeat LST | hyperbeat_lst | — | staking: `0xCeaD893b162D38e714D82d06a7fe0b0dc3c38E0b`, beHYPE: `0xd8FC8F0b03eBA61F64D08B0bef69d80916E5DdA9` |
 | Kintsu | kintsu | — | staking: `0xDDC126c12F9F8DF5a6fC273f6D43C1E21b4d2945`, sHYPE: `0xBeF0142A0955a7d5dcCe5C2A13Fb84E332669D2d` |
 
-### CDP (2)
+### CDP (1)
 
-| Protocol | Interface | Status | App | Key Contract |
-|----------|-----------|--------|-----|-------------|
-| Felix | liquity_v2 | LIVE | [usefelix.xyz/borrow](https://www.usefelix.xyz/borrow) | borrower_ops: `0xadfba621a75beced7dd1727b2067047b7eeedc8b`, trove_mgr: `0x58446c58caa8a6f6cc8be343f812ebf0b997c001`, feUSD: `0x02c6a2fA58cC01A18B8D9E00eA48d65E4dF26c70` |
-| Parallel Protocol V3 | parallel | — | — | — |
+| Protocol | Interface | App | Key Contract |
+|----------|-----------|-----|-------------|
+| Felix | liquity_v2 | [usefelix.xyz/borrow](https://www.usefelix.xyz/borrow) | borrower_ops: `0xadfba621...`, trove_mgr: `0x58446c58...`, feUSD: `0x02c6a2fA58cC01A18B8D9E00eA48d65E4dF26c70` |
 
-### Vault (4)
+### Vault (2)
 
-| Protocol | Interface | Status | App | Key Contract |
-|----------|-----------|--------|-----|-------------|
-| Felix Vaults | erc4626 | LIVE | [usefelix.xyz/lend](https://www.usefelix.xyz/lend) | feHYPE: `0x2900ABd73631b2f60747e687095537B673c06A76`, feUSDC: `0x8A862fD6c12f9ad34C9c2ff45AB2b6712e8CEa27` |
-| Upshift | erc4626 | LIVE | [app.upshift.fi](https://app.upshift.fi) | — (addresses TBD) |
-| Veda | erc4626 | LIVE (infra) | — | Powers Kinetiq Earn / Mizu vaults |
-| D2 Finance | erc4626 | LIVE | [d2.finance](https://d2.finance) | — (addresses TBD) |
+| Protocol | Interface | App | Key Contract |
+|----------|-----------|-----|-------------|
+| Felix Vaults | erc4626 | [usefelix.xyz/lend](https://www.usefelix.xyz/lend) | feHYPE: `0x2900ABd7...`, feUSDC: `0x8A862fD6...`, feUSDT0: `0xFc512637...` |
+| Upshift | erc4626 | [app.upshift.fi](https://app.upshift.fi) | hbHYPE: `0x96C6cBB6...`, hbUBTC: `0xc061d389...`, HLPe: `0x8fFDcd8A...` |
 
-### Yield Source (10)
+### Yield Source (2)
 
-| Protocol | Interface | Status | App | Key Contract |
-|----------|-----------|--------|-----|-------------|
-| Pendle | pendle_v2 | LIVE | [app.pendle.finance](https://app.pendle.finance) | router: `0x888888888889758F76e7103c6CbF23ABbF58F946` |
-| Spectra V2 | spectra | LIVE | [app.spectra.finance](https://app.spectra.finance) | 5 pools (dnHYPE, USDT0, wVLP, hbHYPE, WHYPE) |
-| Penpie | penpie | — | — | — |
-| Felix USDhl | erc4626 | — | — | — |
-| Equilibria | equilibria | — | — | — |
-| Looped Hype | erc4626 | — | — | — |
-| GrowiHF | growi | — | — | — |
-| Harmonix Finance | harmonix | — | — | — |
-| HyperWave | erc4626 | — | — | — |
-| Wrapped HLP | erc4626 | — | — | — |
+| Protocol | Interface | App | Key Contract |
+|----------|-----------|-----|-------------|
+| Pendle | pendle_v2 | [app.pendle.finance](https://app.pendle.finance) | router: `0x888888888889758F76e7103c6CbF23ABbF58F946` |
+| Spectra V2 | spectra | [app.spectra.finance](https://app.spectra.finance) | 5 pools (dnHYPE, USDT0, wVLP, hbHYPE, WHYPE) |
 
-### Yield Aggregator (4)
+### Yield Aggregator (2)
 
-| Protocol | Interface | Status | App |
-|----------|-----------|--------|-----|
-| Beefy | beefy_vault | LIVE | [app.beefy.com](https://app.beefy.com) |
-| Lazy Summer | erc4626 | LIVE | [summer.fi](https://summer.fi) |
-| Hyperbeat Earn | erc4626 | — | — |
-| Kinetiq Earn | erc4626 | — | — |
+| Protocol | Interface | App | Key Contract |
+|----------|-----------|-----|-------------|
+| Beefy | beefy_vault | [app.beefy.com](https://app.beefy.com) | vault: `0x4ad02BF0...` (EOL) |
+| Lazy Summer | erc4626 | [summer.fi](https://summer.fi) | USDC: `0x252e5aa4...`, USDT: `0x2cc190fb...` |
 
-### Derivatives (3)
+### Derivatives (1)
 
-| Protocol | Interface | Status | App | Key Contract |
-|----------|-----------|--------|-----|-------------|
-| Kinetiq Markets | kinetiq_markets | LIVE | [kinetiq.xyz](https://kinetiq.xyz) | kmHYPE: `0x360C140E5344A1A0593D44B4ea6Fc7C3DAf0C473` |
-| Derive V2 | derive_v2 | LIVE (bridge vault) | [derive.xyz](https://derive.xyz) | Core on Derive Chain |
-| Hyperliquid HLP | hlp_vault | — | — | — |
-
-### Options (2)
-
-| Protocol | Interface | Status |
-|----------|-----------|--------|
-| Rysk V12 | rysk | — |
-| Hypersurface | hypersurface | — |
-
-### Other (4)
-
-| Protocol | Interface | Status |
-|----------|-----------|--------|
-| Steer Protocol | steer | — |
-| Liminal | liminal | — |
-| Altura | altura | — |
-| Rumpel Labs | rumpel | — |
+| Protocol | Interface | App | Key Contract |
+|----------|-----------|-----|-------------|
+| Kinetiq Markets | kinetiq_markets | [kinetiq.xyz](https://kinetiq.xyz) | kmHYPE: `0x360C140E5344A1A0593D44B4ea6Fc7C3DAf0C473` |
 
 ## Architecture
 
