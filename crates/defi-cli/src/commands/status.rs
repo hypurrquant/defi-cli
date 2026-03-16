@@ -99,14 +99,20 @@ async fn batch_verify_addresses(
     Ok(results)
 }
 
-pub async fn run(args: StatusArgs, registry: &Registry, output: &OutputMode) -> Result<()> {
-    let chain = registry.get_chain("hyperevm")?;
+pub async fn run(
+    args: StatusArgs,
+    registry: &Registry,
+    chain: &defi_core::registry::ChainConfig,
+    output: &OutputMode,
+) -> Result<()> {
+    // Filter protocols for this chain
+    let chain_protocols = registry.get_protocols_for_chain(&chain.name.to_lowercase());
 
     // Collect all non-placeholder addresses
-    let mut all_addresses: Vec<(usize, String, Address)> = Vec::new(); // (protocol_idx, contract_name, address)
+    let mut all_addresses: Vec<(usize, String, Address)> = Vec::new();
     let mut placeholder_count = 0usize;
 
-    for (pi, p) in registry.protocols.iter().enumerate() {
+    for (pi, p) in chain_protocols.iter().enumerate() {
         for (name, addr) in &p.contracts {
             if is_placeholder(addr) {
                 placeholder_count += 1;
@@ -155,7 +161,7 @@ pub async fn run(args: StatusArgs, registry: &Registry, output: &OutputMode) -> 
     }
 
     let mut protocols = Vec::new();
-    for (pi, p) in registry.protocols.iter().enumerate() {
+    for (pi, p) in chain_protocols.iter().enumerate() {
         let mut contracts = Vec::new();
 
         for (name, addr) in &p.contracts {

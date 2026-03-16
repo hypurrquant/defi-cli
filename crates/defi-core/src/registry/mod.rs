@@ -38,10 +38,24 @@ impl Registry {
 
     fn load_tokens() -> Result<HashMap<String, Vec<TokenEntry>>> {
         let mut all = HashMap::new();
-        let toml_str = include_str!("../../../../config/tokens/hyperevm.toml");
-        let wrapper: TokensWrapper = toml::from_str(toml_str)
-            .map_err(|e| DefiError::RegistryError(format!("Failed to parse tokens: {e}")))?;
-        all.insert("hyperevm".to_string(), wrapper.token);
+        let token_files: Vec<(&str, &str)> = vec![
+            (
+                "hyperevm",
+                include_str!("../../../../config/tokens/hyperevm.toml"),
+            ),
+            (
+                "arbitrum",
+                include_str!("../../../../config/tokens/arbitrum.toml"),
+            ),
+            ("base", include_str!("../../../../config/tokens/base.toml")),
+            ("bnb", include_str!("../../../../config/tokens/bnb.toml")),
+        ];
+        for (chain, toml_str) in token_files {
+            let wrapper: TokensWrapper = toml::from_str(toml_str).map_err(|e| {
+                DefiError::RegistryError(format!("Failed to parse {chain} tokens: {e}"))
+            })?;
+            all.insert(chain.to_string(), wrapper.token);
+        }
         Ok(all)
     }
 
@@ -172,6 +186,14 @@ impl Registry {
         self.protocols
             .iter()
             .filter(|p| p.category == category)
+            .collect()
+    }
+
+    /// Get all protocols for a specific chain
+    pub fn get_protocols_for_chain(&self, chain: &str) -> Vec<&ProtocolEntry> {
+        self.protocols
+            .iter()
+            .filter(|p| p.chain.eq_ignore_ascii_case(chain))
             .collect()
     }
 

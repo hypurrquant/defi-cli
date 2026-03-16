@@ -88,7 +88,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
     let executor = crate::executor::Executor::new(cli.broadcast, Some(chain.effective_rpc_url()));
 
     match cli.command {
-        Commands::Status(args) => status::run(args, &registry, &output_mode).await,
+        Commands::Status(args) => status::run(args, &registry, chain, &output_mode).await,
         Commands::Schema(args) => schema::run(args, &output_mode).await,
         Commands::Dex(args) => dex::run(args, &registry, chain, &executor, &output_mode).await,
         Commands::Gauge(args) => gauge::run(args, &registry, chain, &executor, &output_mode).await,
