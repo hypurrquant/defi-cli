@@ -49,6 +49,34 @@ impl Registry {
             ),
             ("base", include_str!("../../../../config/tokens/base.toml")),
             ("bnb", include_str!("../../../../config/tokens/bnb.toml")),
+            (
+                "ethereum",
+                include_str!("../../../../config/tokens/ethereum.toml"),
+            ),
+            (
+                "polygon",
+                include_str!("../../../../config/tokens/polygon.toml"),
+            ),
+            (
+                "avalanche",
+                include_str!("../../../../config/tokens/avalanche.toml"),
+            ),
+            (
+                "optimism",
+                include_str!("../../../../config/tokens/optimism.toml"),
+            ),
+            (
+                "scroll",
+                include_str!("../../../../config/tokens/scroll.toml"),
+            ),
+            (
+                "linea",
+                include_str!("../../../../config/tokens/linea.toml"),
+            ),
+            (
+                "mantle",
+                include_str!("../../../../config/tokens/mantle.toml"),
+            ),
         ];
         for (chain, toml_str) in token_files {
             let wrapper: TokensWrapper = toml::from_str(toml_str).map_err(|e| {
@@ -308,6 +336,69 @@ impl Registry {
             (
                 "lending/kinza_bnb",
                 include_str!("../../../../config/protocols/lending/kinza_bnb.toml"),
+            ),
+            // === Ethereum ===
+            (
+                "dex/uniswap_v2_eth",
+                include_str!("../../../../config/protocols/dex/uniswap_v2_eth.toml"),
+            ),
+            (
+                "lending/aave_v3_eth",
+                include_str!("../../../../config/protocols/lending/aave_v3_eth.toml"),
+            ),
+            // === Polygon ===
+            (
+                "dex/uniswap_v2_polygon",
+                include_str!("../../../../config/protocols/dex/uniswap_v2_polygon.toml"),
+            ),
+            (
+                "lending/aave_v3_polygon",
+                include_str!("../../../../config/protocols/lending/aave_v3_polygon.toml"),
+            ),
+            // === Avalanche ===
+            (
+                "dex/traderjoe_avax",
+                include_str!("../../../../config/protocols/dex/traderjoe_avax.toml"),
+            ),
+            (
+                "lending/aave_v3_avax",
+                include_str!("../../../../config/protocols/lending/aave_v3_avax.toml"),
+            ),
+            // === Optimism ===
+            (
+                "dex/uniswap_v2_op",
+                include_str!("../../../../config/protocols/dex/uniswap_v2_op.toml"),
+            ),
+            (
+                "lending/aave_v3_op",
+                include_str!("../../../../config/protocols/lending/aave_v3_op.toml"),
+            ),
+            // === Scroll ===
+            (
+                "dex/sushiswap_scroll",
+                include_str!("../../../../config/protocols/dex/sushiswap_scroll.toml"),
+            ),
+            (
+                "lending/aave_v3_scroll",
+                include_str!("../../../../config/protocols/lending/aave_v3_scroll.toml"),
+            ),
+            // === Linea ===
+            (
+                "dex/sushiswap_linea",
+                include_str!("../../../../config/protocols/dex/sushiswap_linea.toml"),
+            ),
+            (
+                "lending/aave_v3_linea",
+                include_str!("../../../../config/protocols/lending/aave_v3_linea.toml"),
+            ),
+            // === Mantle ===
+            (
+                "dex/merchantmoe_mantle",
+                include_str!("../../../../config/protocols/dex/merchantmoe_mantle.toml"),
+            ),
+            (
+                "lending/aave_v3_mantle",
+                include_str!("../../../../config/protocols/lending/aave_v3_mantle.toml"),
             ),
         ];
 
