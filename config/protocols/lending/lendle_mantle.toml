@@ -1,0 +1,14 @@
+[protocol]
+name = "Lendle"
+slug = "lendle-mantle"
+category = "lending"
+interface = "aave_v2"
+chain = "mantle"
+native = true
+description = "Lendle — Aave V2 fork on Mantle ($6.4M TVL)"
+
+[protocol.contracts]
+pool = "0xCFa5aE7c2CE8Fadc6426C1ff872cA45378Fb7cF3"
+oracle = "0x870c9692Ab04944C86ec6FEeF63F261226506EfC"
+pool_data_provider = "0x552b9e4bae485C4B7F540777d7D25614CdB84773"
+pool_addresses_provider = "0xAb94Bedd21ae3411eB2698945dfCab1D5C19C3d4"

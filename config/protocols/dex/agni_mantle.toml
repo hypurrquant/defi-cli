@@ -1,0 +1,13 @@
+[protocol]
+name = "Agni Finance"
+slug = "agni-mantle"
+category = "dex"
+interface = "uniswap_v3"
+chain = "mantle"
+native = true
+description = "Agni Finance — Uniswap V3 fork DEX on Mantle"
+
+[protocol.contracts]
+router = "0x319B69888b0d11cEC22caA5034e25FfFBDc88421"
+factory = "0x25780dc8Fc3cfBD75F33bFDAB65e969b603b2035"
+quoter = "0xc4aaDc921E1cdb66c5300Bc158a313292923C0cb"

@@ -397,8 +397,32 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/merchantmoe_mantle.toml"),
             ),
             (
+                "dex/agni_mantle",
+                include_str!("../../../../config/protocols/dex/agni_mantle.toml"),
+            ),
+            (
+                "dex/fusionx_v2_mantle",
+                include_str!("../../../../config/protocols/dex/fusionx_v2_mantle.toml"),
+            ),
+            (
+                "dex/fusionx_v3_mantle",
+                include_str!("../../../../config/protocols/dex/fusionx_v3_mantle.toml"),
+            ),
+            (
                 "lending/aave_v3_mantle",
                 include_str!("../../../../config/protocols/lending/aave_v3_mantle.toml"),
+            ),
+            (
+                "lending/lendle_mantle",
+                include_str!("../../../../config/protocols/lending/lendle_mantle.toml"),
+            ),
+            (
+                "lending/compound_v3_mantle",
+                include_str!("../../../../config/protocols/lending/compound_v3_mantle.toml"),
+            ),
+            (
+                "lending/init_capital_mantle",
+                include_str!("../../../../config/protocols/lending/init_capital_mantle.toml"),
             ),
         ];
 
