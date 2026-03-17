@@ -105,6 +105,12 @@
   },
   "hotPaths": [
     {
+      "path": "crates/defi-cli/src/commands/whales.rs",
+      "accessCount": 6,
+      "lastAccessed": 1773740022908,
+      "type": "file"
+    },
+    {
       "path": "crates/defi-core/src/registry/mod.rs",
       "accessCount": 4,
       "lastAccessed": 1773738642077,

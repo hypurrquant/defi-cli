@@ -175,31 +175,30 @@ pub async fn run(
             let mut positions = Vec::new();
             for (pi, (proto_name, _, iface)) in lending_pools.iter().enumerate() {
                 let idx = wi * pools_per_whale + pi;
-                if idx < results.len() {
-                    if let Some(data) = &results[idx]
-                        && data.len() >= 192
-                    {
-                        let dec: u8 = if iface == "aave_v2" { 18 } else { 8 };
-                        let divisor = 10f64.powi(dec as i32);
-                        let collateral =
-                            U256::from_be_slice(&data[0..32]).to::<u128>() as f64 / divisor;
-                        let debt = U256::from_be_slice(&data[32..64]).to::<u128>() as f64 / divisor;
-                        let hf_raw = U256::from_be_slice(&data[160..192]);
-                        let hf = if hf_raw > U256::from(u128::MAX) {
-                            None
-                        } else {
-                            let v = hf_raw.to::<u128>() as f64 / 1e18;
-                            if v > 1e10 { None } else { Some(round2(v)) }
-                        };
+                if idx < results.len()
+                    && let Some(data) = &results[idx]
+                    && data.len() >= 192
+                {
+                    let dec: u8 = if iface == "aave_v2" { 18 } else { 8 };
+                    let divisor = 10f64.powi(dec as i32);
+                    let collateral =
+                        U256::from_be_slice(&data[0..32]).to::<u128>() as f64 / divisor;
+                    let debt = U256::from_be_slice(&data[32..64]).to::<u128>() as f64 / divisor;
+                    let hf_raw = U256::from_be_slice(&data[160..192]);
+                    let hf = if hf_raw > U256::from(u128::MAX) {
+                        None
+                    } else {
+                        let v = hf_raw.to::<u128>() as f64 / 1e18;
+                        if v > 1e10 { None } else { Some(round2(v)) }
+                    };
 
-                        if collateral > 0.01 || debt > 0.01 {
-                            positions.push(serde_json::json!({
-                                "protocol": proto_name,
-                                "collateral_usd": round2(collateral),
-                                "debt_usd": round2(debt),
-                                "health_factor": hf,
-                            }));
-                        }
+                    if collateral > 0.01 || debt > 0.01 {
+                        positions.push(serde_json::json!({
+                            "protocol": proto_name,
+                            "collateral_usd": round2(collateral),
+                            "debt_usd": round2(debt),
+                            "health_factor": hf,
+                        }));
                     }
                 }
             }
