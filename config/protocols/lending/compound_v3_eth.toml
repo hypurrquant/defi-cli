@@ -1,0 +1,14 @@
+[protocol]
+name = "Compound V3 Ethereum"
+slug = "compound-v3-eth"
+category = "lending"
+interface = "compound_v3"
+chain = "ethereum"
+native = true
+description = "Compound V3 (Comet) on Ethereum ($1.26B TVL)"
+
+[protocol.contracts]
+comet_usdc = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+comet_weth = "0xA17581A9E3356d9A858b789D68B4d866e593aE94"
+comet_usdt = "0x3Afdc9BCA9213A35503b077a6072F3D0d5AB0840"
+configurator = "0x316f9708bB98af7dA9c68C1C3b5e79039cD336E3"

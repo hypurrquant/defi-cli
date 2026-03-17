@@ -1,0 +1,14 @@
+[protocol]
+name = "SparkLend Ethereum"
+slug = "spark-eth"
+category = "lending"
+interface = "aave_v3"
+chain = "ethereum"
+native = false
+description = "SparkLend (by MakerDAO) — Aave V3 fork on Ethereum ($2.18B TVL)"
+
+[protocol.contracts]
+pool = "0xC13e21B648A5Ee794902342038FF3aDAB66BE987"
+pool_addresses_provider = "0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE"
+oracle = "0x8105f69D9C41644c6A0803fDA7D03Aa70996cFD9"
+pool_data_provider = "0xFc21d6d146E6086B8359705C8b28512a983db0cb"

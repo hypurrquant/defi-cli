@@ -1,0 +1,12 @@
+[protocol]
+name = "LayerBank Scroll"
+slug = "layerbank-scroll"
+category = "lending"
+interface = "compound_v2"
+chain = "scroll"
+native = false
+description = "LayerBank — Compound-style lending protocol on Scroll"
+
+[protocol.contracts]
+comptroller = "0xec53c830f4444a8A56455c6836b5D2AA794289Aa"
+lETH = "0x274C3795dadfEbf562932992bF241ae087e0a98C"

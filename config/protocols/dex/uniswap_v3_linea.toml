@@ -1,0 +1,13 @@
+[protocol]
+name = "Uniswap V3 Linea"
+slug = "uniswap-v3-linea"
+category = "dex"
+interface = "uniswap_v3"
+chain = "linea"
+native = false
+description = "Uniswap V3 on Linea (deployed by GFX Labs)"
+
+[protocol.contracts]
+router = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+factory = "0x31FAfd4889FA1269F7a13A66eE0fB458f27D72A9"
+quoter = "0x42bE4D6527829FeFA1493e1fb9F3676d2425C3C1"

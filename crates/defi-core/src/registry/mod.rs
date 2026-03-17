@@ -90,7 +90,7 @@ impl Registry {
     fn load_protocols() -> Result<Vec<ProtocolEntry>> {
         let mut protocols = Vec::new();
 
-        // Load all protocol TOML files (60 protocols, 12 categories)
+        // Load all protocol TOML files (89 protocols, 12 categories)
         let protocol_tomls: Vec<(&str, &str)> = vec![
             // === DEX (15) ===
             (
@@ -343,8 +343,32 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/uniswap_v2_eth.toml"),
             ),
             (
+                "dex/uniswap_v3_eth",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_eth.toml"),
+            ),
+            (
+                "dex/sushiswap_eth",
+                include_str!("../../../../config/protocols/dex/sushiswap_eth.toml"),
+            ),
+            (
                 "lending/aave_v3_eth",
                 include_str!("../../../../config/protocols/lending/aave_v3_eth.toml"),
+            ),
+            (
+                "lending/compound_v3_eth",
+                include_str!("../../../../config/protocols/lending/compound_v3_eth.toml"),
+            ),
+            (
+                "lending/compound_v2_eth",
+                include_str!("../../../../config/protocols/lending/compound_v2_eth.toml"),
+            ),
+            (
+                "lending/spark_eth",
+                include_str!("../../../../config/protocols/lending/spark_eth.toml"),
+            ),
+            (
+                "lending/morpho_blue_eth",
+                include_str!("../../../../config/protocols/lending/morpho_blue_eth.toml"),
             ),
             // === Polygon ===
             (
@@ -352,8 +376,32 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/uniswap_v2_polygon.toml"),
             ),
             (
+                "dex/uniswap_v3_polygon",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_polygon.toml"),
+            ),
+            (
+                "dex/quickswap_v2_polygon",
+                include_str!("../../../../config/protocols/dex/quickswap_v2_polygon.toml"),
+            ),
+            (
+                "dex/quickswap_v3_polygon",
+                include_str!("../../../../config/protocols/dex/quickswap_v3_polygon.toml"),
+            ),
+            (
+                "dex/sushiswap_polygon",
+                include_str!("../../../../config/protocols/dex/sushiswap_polygon.toml"),
+            ),
+            (
                 "lending/aave_v3_polygon",
                 include_str!("../../../../config/protocols/lending/aave_v3_polygon.toml"),
+            ),
+            (
+                "lending/aave_v2_polygon",
+                include_str!("../../../../config/protocols/lending/aave_v2_polygon.toml"),
+            ),
+            (
+                "lending/compound_v3_polygon",
+                include_str!("../../../../config/protocols/lending/compound_v3_polygon.toml"),
             ),
             // === Avalanche ===
             (
@@ -361,8 +409,24 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/traderjoe_avax.toml"),
             ),
             (
+                "dex/pangolin_avax",
+                include_str!("../../../../config/protocols/dex/pangolin_avax.toml"),
+            ),
+            (
+                "dex/sushiswap_avax",
+                include_str!("../../../../config/protocols/dex/sushiswap_avax.toml"),
+            ),
+            (
+                "dex/uniswap_v3_avax",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_avax.toml"),
+            ),
+            (
                 "lending/aave_v3_avax",
                 include_str!("../../../../config/protocols/lending/aave_v3_avax.toml"),
+            ),
+            (
+                "lending/benqi_avax",
+                include_str!("../../../../config/protocols/lending/benqi_avax.toml"),
             ),
             // === Optimism ===
             (
@@ -370,8 +434,24 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/uniswap_v2_op.toml"),
             ),
             (
+                "dex/uniswap_v3_op",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_op.toml"),
+            ),
+            (
+                "dex/velodrome_v2_op",
+                include_str!("../../../../config/protocols/dex/velodrome_v2_op.toml"),
+            ),
+            (
                 "lending/aave_v3_op",
                 include_str!("../../../../config/protocols/lending/aave_v3_op.toml"),
+            ),
+            (
+                "lending/sonne_op",
+                include_str!("../../../../config/protocols/lending/sonne_op.toml"),
+            ),
+            (
+                "lending/compound_v3_op",
+                include_str!("../../../../config/protocols/lending/compound_v3_op.toml"),
             ),
             // === Scroll ===
             (
@@ -379,8 +459,20 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/sushiswap_scroll.toml"),
             ),
             (
+                "dex/uniswap_v3_scroll",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_scroll.toml"),
+            ),
+            (
                 "lending/aave_v3_scroll",
                 include_str!("../../../../config/protocols/lending/aave_v3_scroll.toml"),
+            ),
+            (
+                "lending/compound_v3_scroll",
+                include_str!("../../../../config/protocols/lending/compound_v3_scroll.toml"),
+            ),
+            (
+                "lending/layerbank_scroll",
+                include_str!("../../../../config/protocols/lending/layerbank_scroll.toml"),
             ),
             // === Linea ===
             (
@@ -388,8 +480,32 @@ impl Registry {
                 include_str!("../../../../config/protocols/dex/sushiswap_linea.toml"),
             ),
             (
+                "dex/uniswap_v3_linea",
+                include_str!("../../../../config/protocols/dex/uniswap_v3_linea.toml"),
+            ),
+            (
+                "dex/lynex_linea",
+                include_str!("../../../../config/protocols/dex/lynex_linea.toml"),
+            ),
+            (
+                "dex/nile_linea",
+                include_str!("../../../../config/protocols/dex/nile_linea.toml"),
+            ),
+            (
                 "lending/aave_v3_linea",
                 include_str!("../../../../config/protocols/lending/aave_v3_linea.toml"),
+            ),
+            (
+                "lending/mendi_linea",
+                include_str!("../../../../config/protocols/lending/mendi_linea.toml"),
+            ),
+            (
+                "lending/compound_v3_linea",
+                include_str!("../../../../config/protocols/lending/compound_v3_linea.toml"),
+            ),
+            (
+                "lending/layerbank_linea",
+                include_str!("../../../../config/protocols/lending/layerbank_linea.toml"),
             ),
             // === Mantle ===
             (

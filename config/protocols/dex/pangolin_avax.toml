@@ -1,0 +1,12 @@
+[protocol]
+name = "Pangolin"
+slug = "pangolin-avax"
+category = "dex"
+interface = "uniswap_v2"
+chain = "avalanche"
+native = true
+description = "Pangolin — Uniswap V2 fork DEX on Avalanche ($2.5M TVL)"
+
+[protocol.contracts]
+router = "0xE54Ca86531e17Ef3616d22Ca28b0D458b6C89106"
+factory = "0xefa94DE7a4656D787667C749f7E1223D71E9FD88"

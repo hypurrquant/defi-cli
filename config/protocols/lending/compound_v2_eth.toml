@@ -1,0 +1,16 @@
+[protocol]
+name = "Compound V2"
+slug = "compound-v2-eth"
+category = "lending"
+interface = "compound_v2"
+chain = "ethereum"
+native = true
+description = "Compound V2 — original lending protocol on Ethereum"
+
+[protocol.contracts]
+comptroller = "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B"
+oracle = "0x65c816077C29b557BEE980ae3cC2dCE80204A0C5"
+cusdc = "0x39AA39c021dfbaE8faC545936693aC917d5E7563"
+ceth = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5"
+cdai = "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643"
+cwbtc = "0xccF4429DB6322D5C611ee964527D42E5d685DD6a"

@@ -1,0 +1,16 @@
+[protocol]
+name = "Sonne Finance Optimism"
+slug = "sonne-op"
+category = "lending"
+interface = "compound_v2"
+chain = "optimism"
+native = true
+description = "Sonne Finance — Compound V2 fork on Optimism"
+
+[protocol.contracts]
+comptroller = "0x60CF091cD3f50420d50fD7f707414d0DF4751C58"
+oracle = "0xEFc0495DA3E48c5A55F73706b249FD49d711A502"
+soWETH = "0xf7B5965f5C117Eb1B5450187c9DcFccc3C317e8E"
+soUSDC = "0xEC8FEa79026FfEd168cCf5C627c7f486D77b765F"
+soUSDT = "0x5Ff29E4470799b982408130EFAaBdeeAE7f66a10"
+soOP = "0x8cD6b19A07d754bF36AdEEE79EDF4F2134a8F571"

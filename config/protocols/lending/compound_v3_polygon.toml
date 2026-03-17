@@ -1,0 +1,12 @@
+[protocol]
+name = "Compound V3 Polygon"
+slug = "compound-v3-polygon"
+category = "lending"
+interface = "compound_v3"
+chain = "polygon"
+native = false
+description = "Compound V3 (Comet) on Polygon — USDC + USDT markets"
+
+[protocol.contracts]
+comet_usdc = "0xF25212E676D1F7F89Cd72fFEe66158f541246445"
+comet_usdt = "0xaeB318360f27748Acb200CE616E389A6C9409a07"
