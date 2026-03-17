@@ -6,6 +6,7 @@ pub mod gauge;
 pub mod lending;
 pub mod monitor;
 pub mod portfolio;
+pub mod positions;
 pub mod price;
 pub mod scan;
 pub mod schema;
@@ -80,6 +81,8 @@ pub enum Commands {
     Scan(scan::ScanArgs),
     /// Arbitrage execution based on scan alerts
     Arb(arb::ArbArgs),
+    /// Cross-chain position scanner: find all your positions everywhere
+    Positions(positions::PositionsArgs),
     /// Query asset prices from oracles and DEXes
     Price(price::PriceArgs),
     /// Wallet management
@@ -115,6 +118,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
         Commands::Alert(args) => alert::run(args, &registry, chain, &output_mode).await,
         Commands::Scan(args) => scan::run(args, &registry, chain, &output_mode).await,
         Commands::Arb(args) => arb::run(args, &registry, chain, &executor, &output_mode).await,
+        Commands::Positions(args) => positions::run(args, &registry, &output_mode).await,
         Commands::Price(args) => price::run(args, &registry, chain, &output_mode).await,
         Commands::Wallet(args) => wallet::run(args, &registry, &output_mode).await,
         Commands::Token(args) => token::run(args, &registry, chain, &executor, &output_mode).await,
