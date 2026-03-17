@@ -34,6 +34,10 @@ pub struct ScanArgs {
     /// Single check then exit
     #[arg(long)]
     pub once: bool,
+
+    /// Scan all chains in parallel
+    #[arg(long)]
+    pub all_chains: bool,
 }
 
 alloy::sol! {
@@ -59,6 +63,10 @@ pub async fn run(
     chain: &ChainConfig,
     output: &OutputMode,
 ) -> Result<()> {
+    if args.all_chains {
+        return run_all_chains(args, registry, output).await;
+    }
+
     let rpc = chain.effective_rpc_url();
     let chain_key = chain.name.to_lowercase();
     let patterns: Vec<&str> = args.patterns.split(',').map(str::trim).collect();
@@ -526,6 +534,347 @@ fn parse_amounts_out_last(data: &Option<Bytes>, out_decimals: u8) -> f64 {
         }
         _ => 0.0,
     }
+}
+
+/// Scan all chains in parallel and return unified results
+async fn run_all_chains(args: ScanArgs, registry: &Registry, output: &OutputMode) -> Result<()> {
+    let start = std::time::Instant::now();
+    let chain_keys: Vec<String> = registry.chains.keys().cloned().collect();
+
+    // Collect per-chain config before spawning
+    struct ChainScanConfig {
+        chain_name: String,
+        rpc: String,
+        patterns: String,
+        oracle_threshold: f64,
+        stable_threshold: f64,
+        rate_threshold: f64,
+        tokens: Vec<defi_core::registry::TokenEntry>,
+        oracles: Vec<(String, Address, u8)>,
+        dex: Option<(String, Address)>,
+        compound_forks: Vec<(String, Vec<(String, Address)>)>,
+        usdc: Option<defi_core::registry::TokenEntry>,
+        usdt: Option<defi_core::registry::TokenEntry>,
+        wrapped_native: Address,
+        quote_stable: Option<defi_core::registry::TokenEntry>,
+    }
+
+    let mut configs: Vec<ChainScanConfig> = Vec::new();
+
+    for chain_key in &chain_keys {
+        let chain = match registry.get_chain(chain_key) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let ck = chain.name.to_lowercase();
+        let all_tokens = registry.tokens.get(&ck).cloned().unwrap_or_default();
+        let quote_stable = registry
+            .resolve_token(&ck, "USDT")
+            .or_else(|_| registry.resolve_token(&ck, "USDC"))
+            .or_else(|_| registry.resolve_token(&ck, "USDT0"))
+            .ok()
+            .cloned();
+
+        let scan_tokens: Vec<_> = all_tokens
+            .iter()
+            .filter(|t| t.address != Address::ZERO)
+            .filter(|t| !STABLECOINS.contains(&t.symbol.as_str()))
+            .cloned()
+            .collect();
+
+        let oracles: Vec<(String, Address, u8)> = registry
+            .get_protocols_for_chain(&ck)
+            .iter()
+            .filter(|p| {
+                p.category == ProtocolCategory::Lending
+                    && (p.interface == "aave_v3" || p.interface == "aave_v2")
+            })
+            .filter_map(|p| {
+                let decimals: u8 = if p.interface == "aave_v2" { 18 } else { 8 };
+                p.contracts
+                    .get("oracle")
+                    .map(|a| (p.name.clone(), *a, decimals))
+            })
+            .collect();
+
+        let dex: Option<(String, Address)> = registry
+            .get_protocols_for_chain(&ck)
+            .iter()
+            .filter(|p| p.category == ProtocolCategory::Dex && p.interface == "uniswap_v2")
+            .filter_map(|p| p.contracts.get("router").map(|a| (p.name.clone(), *a)))
+            .next();
+
+        let compound_forks: Vec<(String, Vec<(String, Address)>)> = registry
+            .get_protocols_for_chain(&ck)
+            .iter()
+            .filter(|p| p.category == ProtocolCategory::Lending && p.interface == "compound_v2")
+            .map(|p| {
+                let vtokens: Vec<_> = p
+                    .contracts
+                    .iter()
+                    .filter(|(k, _)| k.starts_with('v'))
+                    .map(|(k, a)| (k.clone(), *a))
+                    .collect();
+                (p.name.clone(), vtokens)
+            })
+            .collect();
+
+        let usdc = registry.resolve_token(&ck, "USDC").ok().cloned();
+        let usdt = registry.resolve_token(&ck, "USDT").ok().cloned();
+
+        configs.push(ChainScanConfig {
+            chain_name: chain.name.clone(),
+            rpc: chain.effective_rpc_url(),
+            patterns: args.patterns.clone(),
+            oracle_threshold: args.oracle_threshold,
+            stable_threshold: args.stable_threshold,
+            rate_threshold: args.rate_threshold,
+            tokens: scan_tokens,
+            oracles,
+            dex,
+            compound_forks,
+            usdc,
+            usdt,
+            wrapped_native: chain.wrapped_native_address(),
+            quote_stable,
+        });
+    }
+
+    // Spawn parallel scans
+    let mut join_set = tokio::task::JoinSet::new();
+
+    for cfg in configs {
+        join_set.spawn(async move {
+            scan_single_chain_once(
+                cfg.chain_name,
+                cfg.rpc,
+                cfg.tokens,
+                cfg.oracles,
+                cfg.dex,
+                cfg.compound_forks,
+                cfg.usdc,
+                cfg.usdt,
+                cfg.wrapped_native,
+                cfg.quote_stable,
+                cfg.patterns,
+                cfg.oracle_threshold,
+                cfg.stable_threshold,
+                cfg.rate_threshold,
+            )
+            .await
+        });
+    }
+
+    let mut chain_results = Vec::new();
+    let mut total_alerts = 0usize;
+
+    while let Some(result) = join_set.join_next().await {
+        if let Ok(Some(r)) = result {
+            total_alerts += r["alert_count"].as_u64().unwrap_or(0) as usize;
+            chain_results.push(r);
+        }
+    }
+
+    // Sort by alert_count descending
+    chain_results.sort_by(|a, b| {
+        b["alert_count"]
+            .as_u64()
+            .unwrap_or(0)
+            .cmp(&a["alert_count"].as_u64().unwrap_or(0))
+    });
+
+    let scan_ms = start.elapsed().as_millis();
+
+    let result = serde_json::json!({
+        "mode": "all_chains",
+        "chains_scanned": chain_keys.len(),
+        "scan_duration_ms": scan_ms,
+        "total_alerts": total_alerts,
+        "chains": chain_results,
+    });
+
+    output.print(&result)?;
+    Ok(())
+}
+
+/// Scan a single chain once (for parallel all-chains mode)
+#[allow(clippy::too_many_arguments)]
+async fn scan_single_chain_once(
+    chain_name: String,
+    rpc: String,
+    scan_tokens: Vec<defi_core::registry::TokenEntry>,
+    oracles: Vec<(String, Address, u8)>,
+    dex: Option<(String, Address)>,
+    _compound_forks: Vec<(String, Vec<(String, Address)>)>,
+    usdc: Option<defi_core::registry::TokenEntry>,
+    usdt: Option<defi_core::registry::TokenEntry>,
+    wrapped_native: Address,
+    quote_stable: Option<defi_core::registry::TokenEntry>,
+    patterns: String,
+    oracle_threshold: f64,
+    stable_threshold: f64,
+    _rate_threshold: f64,
+) -> Option<serde_json::Value> {
+    let pats: Vec<&str> = patterns.split(',').map(str::trim).collect();
+    let do_oracle = pats.contains(&"oracle");
+    let do_stable = pats.contains(&"stable");
+
+    let qs = quote_stable.as_ref()?;
+
+    let mut calls: Vec<(Address, Vec<u8>)> = Vec::new();
+
+    enum CT {
+        Oracle(String, String, u8),
+        Dex(String, u8),
+        Stable(String, String, u8),
+    }
+    let mut cts: Vec<CT> = Vec::new();
+
+    if do_oracle {
+        for (oname, oaddr, odec) in &oracles {
+            for token in &scan_tokens {
+                cts.push(CT::Oracle(oname.clone(), token.symbol.clone(), *odec));
+                calls.push((
+                    *oaddr,
+                    IAaveOracle::getAssetPriceCall {
+                        asset: token.address,
+                    }
+                    .abi_encode(),
+                ));
+            }
+        }
+        if let Some((_, router)) = &dex {
+            for token in &scan_tokens {
+                let amt = U256::from(10u64).pow(U256::from(token.decimals));
+                let path = if token.address == wrapped_native {
+                    vec![token.address, qs.address]
+                } else {
+                    vec![token.address, wrapped_native, qs.address]
+                };
+                cts.push(CT::Dex(token.symbol.clone(), qs.decimals));
+                calls.push((
+                    *router,
+                    IUniV2Router::getAmountsOutCall {
+                        amountIn: amt,
+                        path,
+                    }
+                    .abi_encode(),
+                ));
+            }
+        }
+    }
+
+    if do_stable && let (Some(uc), Some(ut), Some((_, router))) = (&usdc, &usdt, &dex) {
+        cts.push(CT::Stable("USDC".into(), "USDT".into(), ut.decimals));
+        calls.push((
+            *router,
+            IUniV2Router::getAmountsOutCall {
+                amountIn: U256::from(10u64).pow(U256::from(uc.decimals)),
+                path: vec![uc.address, ut.address],
+            }
+            .abi_encode(),
+        ));
+        cts.push(CT::Stable("USDT".into(), "USDC".into(), uc.decimals));
+        calls.push((
+            *router,
+            IUniV2Router::getAmountsOutCall {
+                amountIn: U256::from(10u64).pow(U256::from(ut.decimals)),
+                path: vec![ut.address, uc.address],
+            }
+            .abi_encode(),
+        ));
+    }
+
+    if calls.is_empty() {
+        return None;
+    }
+
+    let start = std::time::Instant::now();
+    let results = multicall_read(&rpc, calls).await.ok()?;
+    let scan_ms = start.elapsed().as_millis();
+
+    let mut alerts: Vec<serde_json::Value> = Vec::new();
+    let mut oracle_by_token: HashMap<String, Vec<(String, f64)>> = HashMap::new();
+    let mut dex_by_token: HashMap<String, f64> = HashMap::new();
+    let mut stable_prices: Vec<(String, String, f64)> = Vec::new();
+
+    for (i, ct) in cts.iter().enumerate() {
+        match ct {
+            CT::Oracle(oracle, token, dec) => {
+                let price = parse_u256_f64(&results[i], *dec);
+                if price > 0.0 {
+                    oracle_by_token
+                        .entry(token.clone())
+                        .or_default()
+                        .push((oracle.clone(), price));
+                }
+            }
+            CT::Dex(token, dec) => {
+                let price = parse_amounts_out_last(&results[i], *dec);
+                if price > 0.0 {
+                    dex_by_token.insert(token.clone(), price);
+                }
+            }
+            CT::Stable(from, _to, dec) => {
+                let price = parse_amounts_out_last(&results[i], *dec);
+                if price > 0.0 {
+                    let pair = format!("{}/{}", from, _to);
+                    stable_prices.push((from.clone(), pair, price));
+                }
+            }
+        }
+    }
+
+    // Stablecoin depeg
+    if stable_prices.len() >= 2 {
+        let all_below = stable_prices.iter().all(|(_, _, p)| *p < stable_threshold);
+        if !all_below {
+            for (asset, pair, price) in &stable_prices {
+                if *price < stable_threshold {
+                    let sev = if *price < 0.95 { "critical" } else { "high" };
+                    alerts.push(serde_json::json!({"pattern":"stablecoin_depeg","severity":sev,"asset":asset,"pair":pair,"price":round4(*price)}));
+                }
+            }
+        }
+    }
+
+    // Oracle divergence
+    for (token, oentries) in &oracle_by_token {
+        if let Some(&dp) = dex_by_token.get(token) {
+            for (oname, op) in oentries {
+                if dp < *op && dp < op * 0.1 {
+                    continue;
+                }
+                let dev = (dp - op).abs() / op * 100.0;
+                if dev > oracle_threshold {
+                    let sev = if dev > 100.0 {
+                        "critical"
+                    } else if dev > 20.0 {
+                        "high"
+                    } else {
+                        "medium"
+                    };
+                    let action = if dp > *op {
+                        format!("borrow {} from {}, sell on DEX", token, oname)
+                    } else {
+                        format!("buy {} on DEX, collateral on {}", token, oname)
+                    };
+                    alerts.push(serde_json::json!({
+                        "pattern":"oracle_divergence","severity":sev,"asset":token,
+                        "oracle":oname,"oracle_price":round4(*op),"dex_price":round4(dp),
+                        "deviation_pct":round2(dev),"action":action
+                    }));
+                }
+            }
+        }
+    }
+
+    Some(serde_json::json!({
+        "chain": chain_name,
+        "scan_duration_ms": scan_ms,
+        "alert_count": alerts.len(),
+        "alerts": alerts,
+    }))
 }
 
 fn round2(x: f64) -> f64 {

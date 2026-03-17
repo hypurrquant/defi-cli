@@ -105,9 +105,27 @@
   },
   "hotPaths": [
     {
+      "path": "crates/defi-cli/src/commands/scan.rs",
+      "accessCount": 12,
+      "lastAccessed": 1773745769243,
+      "type": "file"
+    },
+    {
       "path": "crates/defi-cli/src/commands/whales.rs",
       "accessCount": 6,
       "lastAccessed": 1773740022908,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/demo.sh",
+      "accessCount": 5,
+      "lastAccessed": 1773740619463,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/src/commands/positions.rs",
+      "accessCount": 5,
+      "lastAccessed": 1773745726311,
       "type": "file"
     },
     {
@@ -240,6 +258,30 @@
       "path": "crates/mantle-cli/src/commands/yield_cmd.rs",
       "accessCount": 1,
       "lastAccessed": 1773739672863,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/README.md",
+      "accessCount": 1,
+      "lastAccessed": 1773740322209,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/REMOTION_PROMPT.md",
+      "accessCount": 1,
+      "lastAccessed": 1773740806279,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/X_THREAD.md",
+      "accessCount": 1,
+      "lastAccessed": 1773740877159,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/CONTENT_PLAN.md",
+      "accessCount": 1,
+      "lastAccessed": 1773740969795,
       "type": "file"
     }
   ],
