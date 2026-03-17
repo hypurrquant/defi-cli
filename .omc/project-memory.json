@@ -1,0 +1,241 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1773738547892,
+  "projectRoot": "/Users/hik/Documents/GitHub/defi-cli",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Rust",
+        "version": "1.85",
+        "confidence": "high",
+        "markers": [
+          "Cargo.toml"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "cargo",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "cargo build",
+    "testCommand": "cargo test",
+    "lintCommand": "cargo clippy",
+    "devCommand": "cargo run",
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "src",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "__pycache__": {
+      "path": "__pycache__",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1773738547871,
+      "keyFiles": [
+        "prepare.cpython-314.pyc"
+      ]
+    },
+    "config": {
+      "path": "config",
+      "purpose": "Configuration files",
+      "fileCount": 1,
+      "lastAccessed": 1773738547872,
+      "keyFiles": [
+        "chains.toml"
+      ]
+    },
+    "crates": {
+      "path": "crates",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1773738547872,
+      "keyFiles": []
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1773738547872,
+      "keyFiles": [
+        "DEFI_CATEGORIES.md"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 0,
+      "lastAccessed": 1773738547872,
+      "keyFiles": []
+    },
+    "target": {
+      "path": "target",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1773738547873,
+      "keyFiles": [
+        "CACHEDIR.TAG"
+      ]
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 0,
+      "lastAccessed": 1773738547873,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "crates/defi-core/src/registry/mod.rs",
+      "accessCount": 4,
+      "lastAccessed": 1773738642077,
+      "type": "file"
+    },
+    {
+      "path": "Cargo.toml",
+      "accessCount": 3,
+      "lastAccessed": 1773739684404,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/positions.rs",
+      "accessCount": 2,
+      "lastAccessed": 1773739698658,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/whales.rs",
+      "accessCount": 2,
+      "lastAccessed": 1773739699652,
+      "type": "file"
+    },
+    {
+      "path": "config/chains.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773738612514,
+      "type": "file"
+    },
+    {
+      "path": "config/tokens/mantle.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773738617241,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/src/commands/mod.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773738626904,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/src/main.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773738627126,
+      "type": "file"
+    },
+    {
+      "path": "config/protocols/dex/agni_mantle.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773738629679,
+      "type": "file"
+    },
+    {
+      "path": "config/protocols/lending/aave_v3_mantle.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773738630109,
+      "type": "file"
+    },
+    {
+      "path": "config/protocols/dex/fusionx_v3_mantle.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773738634163,
+      "type": "file"
+    },
+    {
+      "path": "config/protocols/lending/compound_v3_mantle.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773738634595,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1773738645266,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/Cargo.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773739460764,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/main.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739463244,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/mod.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739486491,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/status.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739497065,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/scan.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739552645,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/swap.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739586088,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/bridge.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739604336,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/lending.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739664927,
+      "type": "file"
+    },
+    {
+      "path": "crates/mantle-cli/src/commands/yield_cmd.rs",
+      "accessCount": 1,
+      "lastAccessed": 1773739672863,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

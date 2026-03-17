@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cargo build --bin mantle 2>&1\",\"timeout\":120000,\"description\":\"Build mantle-cli\"}",
+  "error": "Exit code 101\n   Compiling mantle-cli v0.1.0 (/Users/hik/Documents/GitHub/defi-cli/crates/mantle-cli)\nerror[E0560]: struct `positions::IPool::getUserAccountDataCall` has no field named `_0`\n  --> crates/mantle-cli/src/commands/positions.rs:69:60\n   |\n69 |         calls.push((*pool, IPool::getUserAccountDataCall { _0: user }.abi_encode()));\n   |                                                            ^^ `positions::IPool::getUserAccountDataCall` does not have this field\n   |\n   = note: availab...",
+  "timestamp": "2026-03-17T09:28:12.854Z",
+  "retry_count": 1
+}

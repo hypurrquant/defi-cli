@@ -2679,6 +2679,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "mantle-cli"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "clap",
+ "defi-core",
+ "defi-protocols",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

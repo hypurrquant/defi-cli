@@ -5,6 +5,7 @@ members = [
     "crates/defi-protocols",
     "crates/defi-cli",
     "crates/defi-mcp",
+    "crates/mantle-cli",
 ]
 
 [workspace.package]
