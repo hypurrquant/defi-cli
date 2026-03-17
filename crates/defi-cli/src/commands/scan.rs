@@ -260,6 +260,7 @@ pub async fn run(
         let mut oracle_data = serde_json::Map::new();
         let mut dex_data = serde_json::Map::new();
         let mut stable_data = serde_json::Map::new();
+        let mut stable_prices: Vec<(String, String, f64)> = Vec::new(); // (asset, pair, price)
         let mut rate_data = serde_json::Map::new();
 
         for (i, ct) in call_types.iter().enumerate() {
@@ -293,21 +294,12 @@ pub async fn run(
                     out_decimals,
                 } => {
                     let price = parse_amounts_out_last(&results[i], *out_decimals);
+                    if price <= 0.0 {
+                        continue; // DEX has no pool for this pair
+                    }
                     let pair = format!("{}/{}", from, to);
                     stable_data.insert(pair.clone(), serde_json::json!(round4(price)));
-
-                    if price > 0.0 && price < args.stable_threshold {
-                        let severity = if price < 0.95 { "critical" } else { "high" };
-                        alerts.push(serde_json::json!({
-                            "pattern": "stablecoin_depeg",
-                            "severity": severity,
-                            "asset": from,
-                            "pair": pair,
-                            "price": round4(price),
-                            "threshold": args.stable_threshold,
-                            "action": format!("buy {} at ${:.4}, wait for repeg", from, price),
-                        }));
-                    }
+                    stable_prices.push((from.clone(), pair, price));
                 }
                 CallType::ExchangeRate { protocol, vtoken } => {
                     let rate = parse_u256_f64(&results[i], 18);
@@ -345,11 +337,62 @@ pub async fn run(
             }
         }
 
+        // P2: Stablecoin depeg alerts (post-processing)
+        // In a real depeg, only one direction drops while the reverse stays ~1.0 or rises.
+        // If BOTH directions are below threshold, it's likely DEX fees/spread, not real depeg.
+        if stable_prices.len() >= 2 {
+            let all_below = stable_prices
+                .iter()
+                .all(|(_, _, p)| *p < args.stable_threshold);
+            if !all_below {
+                // Asymmetric: at least one is normal → real depeg on the low side
+                for (asset, pair, price) in &stable_prices {
+                    if *price < args.stable_threshold {
+                        let severity = if *price < 0.95 { "critical" } else { "high" };
+                        alerts.push(serde_json::json!({
+                            "pattern": "stablecoin_depeg",
+                            "severity": severity,
+                            "asset": asset,
+                            "pair": pair,
+                            "price": round4(*price),
+                            "threshold": args.stable_threshold,
+                            "action": format!("buy {} at ${:.4}, wait for repeg", asset, price),
+                        }));
+                    }
+                }
+            }
+            // If all_below: symmetric discount → likely DEX spread, skip alerts
+        } else {
+            // Single pair: alert if below threshold
+            for (asset, pair, price) in &stable_prices {
+                if *price < args.stable_threshold {
+                    let severity = if *price < 0.95 { "critical" } else { "high" };
+                    alerts.push(serde_json::json!({
+                        "pattern": "stablecoin_depeg",
+                        "severity": severity,
+                        "asset": asset,
+                        "pair": pair,
+                        "price": round4(*price),
+                        "threshold": args.stable_threshold,
+                        "action": format!("buy {} at ${:.4}, wait for repeg", asset, price),
+                    }));
+                }
+            }
+        }
+
         // P1: Compare oracle vs DEX and generate alerts
         if do_oracle {
             for (token, oracle_entries) in &oracle_by_token {
                 if let Some(&dex_price) = dex_by_token.get(token) {
                     for (oracle_name, oracle_price) in oracle_entries {
+                        // Skip unreliable DEX quotes when DEX < Oracle:
+                        // if DEX price < 10% of oracle, the DEX likely has no
+                        // liquidity and price impact dominates the quote.
+                        // (When DEX > Oracle, always keep — that's the real arb case)
+                        if dex_price < *oracle_price && dex_price < oracle_price * 0.1 {
+                            continue;
+                        }
+
                         let deviation = (dex_price - oracle_price).abs() / oracle_price * 100.0;
                         if deviation > args.oracle_threshold {
                             let severity = if deviation > 100.0 {
