@@ -15,6 +15,7 @@ pub mod status;
 pub mod token;
 pub mod vault;
 pub mod wallet;
+pub mod whales;
 pub mod yield_cmd;
 
 use clap::{Parser, Subcommand};
@@ -89,6 +90,8 @@ pub enum Commands {
     Wallet(wallet::WalletArgs),
     /// Token operations: approve, allowance, transfer
     Token(token::TokenArgs),
+    /// Find top token holders (whales) and their positions
+    Whales(whales::WhalesArgs),
     /// Agent mode: read JSON commands from stdin (for AI agents)
     Agent,
 }
@@ -122,6 +125,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
         Commands::Price(args) => price::run(args, &registry, chain, &output_mode).await,
         Commands::Wallet(args) => wallet::run(args, &registry, &output_mode).await,
         Commands::Token(args) => token::run(args, &registry, chain, &executor, &output_mode).await,
+        Commands::Whales(args) => whales::run(args, &registry, chain, &output_mode).await,
         Commands::Agent => crate::agent::run_agent(&registry, &executor).await,
     }
 }
