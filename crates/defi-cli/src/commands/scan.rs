@@ -85,12 +85,20 @@ pub async fn run(
         .filter(|t| !STABLECOINS.contains(&t.symbol.as_str()))
         .collect();
 
-    // Aave V3 oracles
-    let oracles: Vec<(String, Address)> = registry
+    // Lending oracles: Aave V3 (8 decimals) + Aave V2 forks (18 decimals)
+    let oracles: Vec<(String, Address, u8)> = registry
         .get_protocols_for_chain(&chain_key)
         .iter()
-        .filter(|p| p.category == ProtocolCategory::Lending && p.interface == "aave_v3")
-        .filter_map(|p| p.contracts.get("oracle").map(|a| (p.name.clone(), *a)))
+        .filter(|p| {
+            p.category == ProtocolCategory::Lending
+                && (p.interface == "aave_v3" || p.interface == "aave_v2")
+        })
+        .filter_map(|p| {
+            let decimals: u8 = if p.interface == "aave_v2" { 18 } else { 8 };
+            p.contracts
+                .get("oracle")
+                .map(|a| (p.name.clone(), *a, decimals))
+        })
         .collect();
 
     // First uniswap_v2 compatible DEX router (e.g. PancakeSwap V2)
@@ -138,6 +146,7 @@ pub async fn run(
             OraclePrice {
                 oracle: String,
                 token: String,
+                oracle_decimals: u8,
             },
             DexPrice {
                 token: String,
@@ -157,11 +166,12 @@ pub async fn run(
 
         // === P1: Oracle + DEX price calls ===
         if do_oracle {
-            for (oracle_name, oracle_addr) in &oracles {
+            for (oracle_name, oracle_addr, oracle_dec) in &oracles {
                 for token in &scan_tokens {
                     call_types.push(CallType::OraclePrice {
                         oracle: oracle_name.clone(),
                         token: token.symbol.clone(),
+                        oracle_decimals: *oracle_dec,
                     });
                     calls.push((
                         *oracle_addr,
@@ -265,8 +275,12 @@ pub async fn run(
 
         for (i, ct) in call_types.iter().enumerate() {
             match ct {
-                CallType::OraclePrice { oracle, token } => {
-                    let price = parse_u256_f64(&results[i], 8);
+                CallType::OraclePrice {
+                    oracle,
+                    token,
+                    oracle_decimals,
+                } => {
+                    let price = parse_u256_f64(&results[i], *oracle_decimals);
                     if price > 0.0 {
                         oracle_by_token
                             .entry(token.clone())
