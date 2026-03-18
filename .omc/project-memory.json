@@ -117,6 +117,18 @@
       "type": "file"
     },
     {
+      "path": "crates/defi-cli/src/table.rs",
+      "accessCount": 8,
+      "lastAccessed": 1773826378964,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/src/commands/yield_cmd.rs",
+      "accessCount": 8,
+      "lastAccessed": 1773826425420,
+      "type": "file"
+    },
+    {
       "path": "crates/defi-cli/src/commands/whales.rs",
       "accessCount": 6,
       "lastAccessed": 1773740022908,
@@ -132,12 +144,6 @@
       "path": "crates/defi-cli/src/commands/positions.rs",
       "accessCount": 5,
       "lastAccessed": 1773745726311,
-      "type": "file"
-    },
-    {
-      "path": "crates/defi-cli/src/table.rs",
-      "accessCount": 5,
-      "lastAccessed": 1773826170351,
       "type": "file"
     },
     {

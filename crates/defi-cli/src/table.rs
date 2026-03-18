@@ -11,6 +11,9 @@ pub fn render(value: &Value) -> Option<String> {
     if value.get("holders").is_some() {
         return Some(render_whales(value));
     }
+    if value.get("arb_opportunities").is_some() && value.get("rates").is_some() {
+        return Some(render_yield_scan(value));
+    }
     if value.get("rates").is_some() && value.get("asset").is_some() {
         return Some(render_yield(value));
     }
@@ -318,6 +321,73 @@ fn render_status(v: &Value) -> String {
         ));
     }
     format!("{}\n\n{}", out, t)
+}
+
+fn render_yield_scan(v: &Value) -> String {
+    let asset = v["asset"].as_str().unwrap_or("?");
+    let ms = v["scan_duration_ms"].as_u64().unwrap_or(0);
+    let best = v["best_supply"].as_str().unwrap_or("?");
+
+    let mut t = Table::new();
+    t.load_preset(UTF8_FULL_CONDENSED);
+    t.set_header(vec!["Chain", "Protocol", "Supply APY", "Borrow APY"]);
+
+    for r in v["rates"].as_array().unwrap_or(&vec![]) {
+        let supply = r["supply_apy"].as_f64().unwrap_or(0.0);
+        let color = if supply > 3.0 {
+            Color::Green
+        } else if supply > 1.0 {
+            Color::Cyan
+        } else {
+            Color::White
+        };
+        t.add_row(vec![
+            Cell::new(r["chain"].as_str().unwrap_or("?")),
+            Cell::new(r["protocol"].as_str().unwrap_or("?")),
+            Cell::new(format!("{:.2}%", supply)).fg(color),
+            Cell::new(format!(
+                "{:.2}%",
+                r["borrow_variable_apy"].as_f64().unwrap_or(0.0)
+            )),
+        ]);
+    }
+
+    let mut out = format!(
+        "  {} Yield Scan ({}ms) — Best: {}\n\n{}",
+        asset, ms, best, t
+    );
+
+    let empty_arbs = vec![];
+    let arbs = v["arb_opportunities"].as_array().unwrap_or(&empty_arbs);
+    if !arbs.is_empty() {
+        let mut at = Table::new();
+        at.load_preset(UTF8_FULL_CONDENSED);
+        at.set_header(vec!["Spread", "Supply @", "Borrow @", "Type"]);
+        for a in arbs {
+            let spread = a["spread_pct"].as_f64().unwrap_or(0.0);
+            let color = if spread > 1.0 {
+                Color::Green
+            } else {
+                Color::Cyan
+            };
+            at.add_row(vec![
+                Cell::new(format!("+{:.2}%", spread)).fg(color),
+                Cell::new(format!(
+                    "{} ({})",
+                    a["supply_protocol"].as_str().unwrap_or("?"),
+                    a["supply_chain"].as_str().unwrap_or("?")
+                )),
+                Cell::new(format!(
+                    "{} ({})",
+                    a["borrow_protocol"].as_str().unwrap_or("?"),
+                    a["borrow_chain"].as_str().unwrap_or("?")
+                )),
+                Cell::new(a["strategy"].as_str().unwrap_or("?")),
+            ]);
+        }
+        out.push_str(&format!("\n  Arb Opportunities\n\n{}", at));
+    }
+    out
 }
 
 fn render_portfolio(v: &Value) -> String {

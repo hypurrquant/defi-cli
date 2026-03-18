@@ -21,6 +21,12 @@ pub enum YieldCommand {
         #[arg(long)]
         asset: String,
     },
+    /// Scan ALL chains for best yield opportunities (parallel)
+    Scan {
+        /// Asset symbol (e.g. USDC, WETH)
+        #[arg(long)]
+        asset: String,
+    },
     /// Suggest optimal yield strategy for an asset
     Optimize {
         /// Asset symbol or address to optimize (e.g. USDC, WHYPE)
@@ -169,6 +175,9 @@ pub async fn run(
     let chain_key = chain.name.to_lowercase();
 
     match args.command {
+        YieldCommand::Scan { asset } => {
+            return run_yield_scan(registry, &asset, output).await;
+        }
         YieldCommand::Compare { asset } => {
             let asset_addr = resolve_asset(registry, &chain_key, &asset)?;
             let mut results = collect_lending_rates(registry, chain, asset_addr).await;
@@ -402,5 +411,149 @@ pub async fn run(
         }
     }
 
+    Ok(())
+}
+
+/// Scan all chains in parallel for the best yield on a given asset
+async fn run_yield_scan(registry: &Registry, asset: &str, output: &OutputMode) -> Result<()> {
+    let start = std::time::Instant::now();
+    let chain_keys: Vec<String> = registry.chains.keys().cloned().collect();
+
+    // Collect params for each chain
+    struct ChainYieldParams {
+        chain_name: String,
+        rpc: String,
+        asset_addr: Option<Address>,
+        protocols: Vec<defi_core::registry::ProtocolEntry>,
+    }
+
+    let mut params = Vec::new();
+    for ck in &chain_keys {
+        let chain = match registry.get_chain(ck) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let asset_addr = registry.resolve_token(ck, asset).ok().map(|t| t.address);
+        let protos: Vec<_> = registry
+            .get_protocols_for_chain(ck)
+            .iter()
+            .filter(|p| p.category == ProtocolCategory::Lending && p.interface == "aave_v3")
+            .cloned()
+            .cloned()
+            .collect();
+        if asset_addr.is_some() && !protos.is_empty() {
+            params.push(ChainYieldParams {
+                chain_name: chain.name.clone(),
+                rpc: chain.effective_rpc_url(),
+                asset_addr,
+                protocols: protos,
+            });
+        }
+    }
+
+    // Spawn parallel tasks
+    let mut join_set = tokio::task::JoinSet::new();
+    for p in params {
+        join_set.spawn(async move {
+            let addr = match p.asset_addr {
+                Some(a) => a,
+                None => return Vec::new(),
+            };
+            let mut rates = Vec::new();
+            for proto in &p.protocols {
+                if let Ok(lending) =
+                    defi_protocols::factory::create_lending_with_rpc(proto, Some(&p.rpc))
+                    && let Ok(r) = lending.get_rates(addr).await
+                    && r.supply_apy > 0.0
+                {
+                    rates.push(serde_json::json!({
+                        "chain": p.chain_name,
+                        "protocol": r.protocol,
+                        "supply_apy": r.supply_apy,
+                        "borrow_variable_apy": r.borrow_variable_apy,
+                    }));
+                }
+            }
+            rates
+        });
+    }
+
+    // Collect results
+    let mut all_rates: Vec<serde_json::Value> = Vec::new();
+    while let Some(result) = join_set.join_next().await {
+        if let Ok(rates) = result {
+            all_rates.extend(rates);
+        }
+    }
+
+    // Sort by supply APY descending
+    all_rates.sort_by(|a, b| {
+        b["supply_apy"]
+            .as_f64()
+            .unwrap_or(0.0)
+            .partial_cmp(&a["supply_apy"].as_f64().unwrap_or(0.0))
+            .unwrap()
+    });
+
+    let scan_ms = start.elapsed().as_millis();
+    let best = all_rates.first().and_then(|r| {
+        Some(format!(
+            "{} on {}",
+            r["protocol"].as_str()?,
+            r["chain"].as_str()?
+        ))
+    });
+
+    // Find arb opportunities (supply on A, borrow on B, same asset)
+    let mut arbs = Vec::new();
+    for s in &all_rates {
+        for b in &all_rates {
+            let sp = s["supply_apy"].as_f64().unwrap_or(0.0);
+            let bp = b["borrow_variable_apy"].as_f64().unwrap_or(0.0);
+            if sp > bp && bp > 0.0 {
+                let spread = sp - bp;
+                let s_chain = s["chain"].as_str().unwrap_or("?");
+                let b_chain = b["chain"].as_str().unwrap_or("?");
+                let s_proto = s["protocol"].as_str().unwrap_or("?");
+                let b_proto = b["protocol"].as_str().unwrap_or("?");
+                if s_chain != b_chain || s_proto != b_proto {
+                    let strategy = if s_chain == b_chain {
+                        "same-chain"
+                    } else {
+                        "cross-chain"
+                    };
+                    arbs.push(serde_json::json!({
+                        "spread_pct": (spread * 100.0).round() / 100.0,
+                        "supply_chain": s_chain,
+                        "supply_protocol": s_proto,
+                        "supply_apy": sp,
+                        "borrow_chain": b_chain,
+                        "borrow_protocol": b_proto,
+                        "borrow_apy": bp,
+                        "strategy": strategy,
+                    }));
+                }
+            }
+        }
+    }
+    arbs.sort_by(|a, b| {
+        b["spread_pct"]
+            .as_f64()
+            .unwrap_or(0.0)
+            .partial_cmp(&a["spread_pct"].as_f64().unwrap_or(0.0))
+            .unwrap()
+    });
+    arbs.truncate(10); // Top 10 arb opportunities
+
+    let result = serde_json::json!({
+        "asset": asset,
+        "scan_duration_ms": scan_ms,
+        "chains_scanned": chain_keys.len(),
+        "rates": all_rates,
+        "best_supply": best,
+        "arb_opportunities": arbs,
+    });
+
+    output.print(&result)?;
     Ok(())
 }
