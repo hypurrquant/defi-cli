@@ -1,177 +1,263 @@
 # DeFi CLI
 
-Rust CLI for interacting with DeFi protocols on HyperEVM. Agent-first design with JSON output, schema introspection, and MCP server.
+```
+  ██████╗ ███████╗███████╗██╗     ██████╗██╗     ██╗
+  ██╔══██╗██╔════╝██╔════╝██║    ██╔════╝██║     ██║
+  ██║  ██║█████╗  █████╗  ██║    ██║     ██║     ██║
+  ██║  ██║██╔══╝  ██╔══╝  ██║    ██║     ██║     ██║
+  ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
+  ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
+
+  11 chains · 108 protocols · 22 commands
+```
+
+Multi-chain DeFi toolkit. Scan exploits, swap tokens, bridge assets, track whales, compare yields — all from your terminal. Built for humans and AI agents.
 
 ## Install
 
 ```bash
+git clone https://github.com/hypurrquant/defi-cli.git
+cd defi-cli
 cargo build --release
-./target/release/defi --help
+
+# Binaries
+./target/release/defi        # Multi-chain DeFi CLI
+./target/release/mantle      # Mantle-only CLI
+./target/release/defi-mcp    # MCP server for AI agents
 ```
 
-## Quick Start
+## What Can It Do?
 
-```bash
-# Check supported protocols
-defi status --json
+### Scan All Chains for Exploits (1 second)
 
-# Get lending rates (live on-chain data)
-defi lending rates --protocol hyperlend --asset USDC --json
+```
+$ defi scan --all-chains --once
 
-# Compare yields across protocols
-defi yield compare --asset USDC --json
+  All-chain scan: 11 chains, 8 alerts, 1150ms
 
-# Query asset prices from oracles
-defi price --asset WHYPE --json
-
-# Check health factor / lending position
-defi lending position --protocol hyperlend --address 0x... --json
-
-# Felix CDP trove info
-defi cdp info --protocol felix --position <trove_id> --json
-
-# Staking info (exchange rate, TVL)
-defi staking info --protocol kinetiq --json
-
-# Build a swap transaction (dry-run by default)
-defi dex swap --protocol hyperswap-v2 --token-in WHYPE --token-out USDC --amount 1.0 --json
-
-# Actually broadcast (requires DEFI_PRIVATE_KEY)
-export DEFI_PRIVATE_KEY=0x...
-defi lending supply --protocol hyperlend --asset USDC --amount 100.0 --broadcast --json
+┌───────────┬────────┬────────┬──────────────────┐
+│ Chain     ┆ Alerts ┆ Time   ┆ Details          │
+├───────────┼────────┼────────┼──────────────────┤
+│ BNB       ┆ 2      ┆ 174ms  ┆ BTCB, BTCB       │
+│ Mantle    ┆ 2      ┆ 122ms  ┆ USDe, USDe       │
+│ Arbitrum  ┆ 1      ┆ 670ms  ┆ WETH             │
+│ HyperEVM  ┆ 0      ┆ 161ms  ┆ clean            │
+│ Ethereum  ┆ 0      ┆ 1149ms ┆ clean            │
+└───────────┴────────┴────────┴──────────────────┘
 ```
 
-## Commands
+### Find Best Yield Across All Chains (1.4 seconds)
+
+```
+$ defi yield scan --asset USDC
+
+  USDC Yield Scan (1383ms) — Best: HypurrFi Pooled on HyperEVM
+
+┌───────────┬────────────────────┬────────────┬────────────┐
+│ Chain     ┆ Protocol           ┆ Supply APY ┆ Borrow APY │
+├───────────┼────────────────────┼────────────┼────────────┤
+│ HyperEVM  ┆ HypurrFi Pooled    ┆ 4.66%      ┆ 7.21%      │
+│ Ethereum  ┆ SparkLend          ┆ 4.14%      ┆ 4.66%      │
+│ Base      ┆ Aave V3 Base       ┆ 2.50%      ┆ 3.72%      │
+│ Mantle    ┆ Aave V3 Mantle     ┆ 0.90%      ┆ 2.10%      │
+└───────────┴────────────────────┴────────────┴────────────┘
+
+  Arb Opportunities
+┌────────┬───────────────────────────────┬────────────────────────┬─────────────┐
+│ Spread ┆ Supply @                      ┆ Borrow @               ┆ Type        │
+├────────┼───────────────────────────────┼────────────────────────┼─────────────┤
+│ +2.56% ┆ HypurrFi Pooled (HyperEVM)    ┆ Aave V3 Mantle         ┆ cross-chain │
+│ +2.39% ┆ HypurrFi Pooled (HyperEVM)    ┆ Aave V3 BNB            ┆ cross-chain │
+└────────┴───────────────────────────────┴────────────────────────┴─────────────┘
+```
+
+### Swap at Best Price (ODOS Aggregator)
+
+```
+$ defi swap --chain mantle --from USDC --to WMNT --amount 1000
+
+  Swap on Mantle via ODOS
+
+  1000 USDC -> 1188.82 WMNT
+  Price impact: 0.0548%
+```
+
+### Bridge Across Chains (LI.FI)
+
+```
+$ defi bridge --from-chain mantle --to-chain ethereum --token USDC --amount 1000
+
+  Bridge Mantle -> Ethereum via Relay
+
+  1000 USDC -> 987.37 USDC
+  Cost: $12.60 | Time: 7s
+```
+
+### Track Whales
+
+```
+$ defi whales --chain mantle --token WETH --top 5
+
+  Mantle WETH Top Holders
+
+┌───┬─────────────────────┬──────────────┐
+│ # ┆ Address             ┆ WETH Balance │
+├───┼─────────────────────┼──────────────┤
+│ 1 ┆ 0xd374a62a...bc840b ┆ 50000.01     │
+│ 2 ┆ 0x59800fc6...3cac1d ┆ 32000.02     │
+│ 3 ┆ 0xeac30ed8...426d2c ┆ 10573.23     │
+└───┴─────────────────────┴──────────────┘
+```
+
+### Scan Any Wallet Across All Chains (1.5 seconds)
+
+```
+$ defi positions --address 0xd374a62aa68d01cdb420e17b9840706e86bc840b
+
+  Positions for 0xd374a6...840B (1515ms, 11 chains)
+  Total: $152,750,024
+
+  Mantle ($152,750,024)
+┌────────┬────────────────┬───────────────┐
+│ Type   ┆ Asset/Protocol ┆ Value         │
+├────────┼────────────────┼───────────────┤
+│ wallet ┆ WETH           ┆ $117,500,024  │
+│ wallet ┆ mETH           ┆ $35,250,000   │
+└────────┴────────────────┴───────────────┘
+```
+
+## All Commands
 
 | Command | Description |
 |---------|-------------|
-| `status` | Chain info and protocol list |
-| `schema` | JSON Schema for any action (agent-friendly) |
-| `dex` | `swap`, `quote`, `compare` |
-| `lending` | `supply`, `borrow`, `repay`, `withdraw`, `rates`, `position` |
-| `cdp` | `open`, `adjust`, `close`, `info` |
-| `staking` | `stake`, `unstake`, `info` |
-| `vault` | `deposit`, `withdraw`, `info` |
-| `gauge` | `deposit`, `withdraw`, `claim`, `lock`, `vote` (ve(3,3)) |
-| `yield` | `compare`, `optimize` |
-| `price` | Oracle and DEX price queries |
-| `token` | `balance`, `approve`, `allowance`, `transfer` |
-| `wallet` | `balance` |
+| **Monitoring** | |
+| `scan` | Exploit detection: oracle divergence, depeg, exchange rate anomalies |
+| `scan --all-chains` | Scan all 11 chains in parallel (~1s) |
+| `alert` | Single-asset oracle vs DEX price deviation monitor |
+| `monitor` | Health factor monitoring with alerts |
+| **Trading** | |
+| `swap` | Best-price swap via ODOS aggregator (9 chains) |
+| `bridge` | Cross-chain transfer via LI.FI (10 chains) |
+| `dex` | Direct DEX swap, quote, compare |
+| `token` | Approve, allowance, transfer |
+| **Lending** | |
+| `lending` | Supply, borrow, repay, withdraw, rates, position |
+| `yield compare` | Compare rates across protocols on one chain |
+| `yield scan` | Compare rates across ALL chains with arb detection |
+| **Research** | |
+| `whales` | Top token holders + lending positions |
+| `positions` | Cross-chain wallet scanner (11 chains, 1.5s) |
+| `portfolio` | Single-chain portfolio overview |
+| `price` | Oracle price queries |
+| `status` | Chain and protocol info |
+| **DeFi Ops** | |
+| `cdp` | CDP open, adjust, close, info |
+| `staking` | Liquid staking: stake, unstake, info |
+| `vault` | ERC-4626 vault deposit, withdraw, info |
+| `gauge` | ve(3,3) gauge deposit, withdraw, claim, lock, vote |
+| **Agent** | |
 | `agent` | JSON stdin batch mode for AI agents |
+| `schema` | JSON schema for any command |
 
-## Supported Protocols (32)
+## Supported Chains
 
-### DEX (15) — all LIVE
+| Chain | Protocols | Key Lending | Key DEX |
+|-------|-----------|-------------|---------|
+| HyperEVM | 22 | HyperLend, HypurrFi, Euler V2 | HyperSwap, Curve, Balancer |
+| BNB | 16 | Aave V3, Venus, Kinza | PancakeSwap, Thena |
+| Base | 11 | Aave V3, Compound V3, Sonne | Aerodrome, Uniswap |
+| Arbitrum | 10 | Aave V3, Compound V3 | Camelot, Uniswap, SushiSwap |
+| Mantle | 8 | Aave V3, Lendle, Compound V3 | Merchant Moe, Agni, FusionX |
+| Ethereum | 8 | Aave V3, Compound V2/V3, Spark, Morpho | Uniswap V2/V3, SushiSwap |
+| Polygon | 8 | Aave V3, Compound V3 | QuickSwap, Uniswap, SushiSwap |
+| Linea | 8 | Aave V3, Mendi, LayerBank | Lynex, Nile, SushiSwap |
+| Avalanche | 6 | Aave V3, Benqi | TraderJoe, Pangolin |
+| Optimism | 6 | Aave V3, Sonne, Compound V3 | Velodrome, Uniswap |
+| Scroll | 5 | Aave V3, Compound V3, LayerBank | SushiSwap, Uniswap |
 
-| Protocol | Interface | App | Contracts |
-|----------|-----------|-----|-----------|
-| HyperSwap V3 | uniswap_v3 | — | router: `0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D` |
-| HyperSwap V2 | uniswap_v2 | — | router: `0xb4a9C4e6Ea8E2191d2FA5B380452a634Fb21240A` |
-| KittenSwap Algebra | algebra_v3 | [kittenswap.finance](https://kittenswap.finance) | router: `0x4e73E421480a7E0C24fB3c11019254edE194f736` |
-| NEST V1 | algebra_v3 | [app.nest.exchange](https://app.nest.exchange) | router: `0xaA26B8e5Cadd04430c32787eCC3AA325e99681e9` |
-| Project X | uniswap_v3 | — | router: `0x1EbDFC75FfE3ba3de61E7138a3E8706aC841Af9B` |
-| Ramses CL | solidly_cl | [app.ramses.exchange](https://app.ramses.exchange) | router: `0x76D91074B46fF76E04FE59a90526a40009943fd2` |
-| Ramses HL | solidly_v2 | [app.ramses.exchange](https://app.ramses.exchange) | router: `0xdcC44285fBc236457A5cd91C2f77AD8421B0D8ED` |
-| Ring Few | solidly_v2 | — | router: `0x701D1d675415efA2d2429fB122ccC6dD4FCcA959` |
-| Curve DEX | curve_stableswap | [curve.fi](https://curve.fi) | factory: `0x5eeE3091f747E60a045a2E715a4c71e600e31F6E` |
-| Balancer V3 | balancer_v3 | [balancer.fi](https://balancer.fi) | vault: `0xbA1333333333a1BA1108E8412f11850A5C319bA9` |
-| WOOFi Swap | woofi | [fi.woo.org](https://fi.woo.org) | router: `0x4c4AF8DBc524681930a27b2F1Af5bcC8062E6fB7` |
-| Valantis STEX | valantis | — | router: `0x5Abe35DDb420703bA6Dd7226ACDCb24be71192e5` |
-| Wombat Exchange | wombat | — | router: `0x7Afa6bEecBdfA7b8c9d0E1F2a3B4C5D6E7F8a9b0` |
-| Hybra V4 | hybra | — | router: `0xCAfDa2b3E5c2B5E30f6d67FEFa5AfFD3f6a93b0a` |
-| Hyperliquid Spot | orderbook_api | [app.hyperliquid.xyz](https://app.hyperliquid.xyz) | — |
+## MCP Server (AI Agent Integration)
 
-### Lending (5)
+18 tools for Claude Code, Cursor, and other AI agents:
 
-| Protocol | Interface | App | Key Contract |
-|----------|-----------|-----|-------------|
-| HyperLend | aave_v3 | [app.hyperlend.finance](https://app.hyperlend.finance) | pool: `0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b` |
-| HypurrFi Pooled | aave_v3 | [app.hypurr.fi](https://app.hypurr.fi) | pool: `0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b` |
-| HypurrFi Isolated | aave_v3 | [app.hypurr.fi/markets/isolated](https://app.hypurr.fi/markets/isolated) | pool: `0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b` (Fraxlend fork) |
-| Felix Morpho | morpho_blue | [usefelix.xyz/lend](https://www.usefelix.xyz/lend) | morpho: `0x68e37dE8d93d3496ae143F2E900490f6280C57cD` |
-| Euler V2 | euler_v2 | [app.euler.finance](https://app.euler.finance) | evc: `0xceAA7cdCD7dDBee8601127a9Abb17A974d613db4`, factory: `0xcF5552580fD364cdBBFcB5Ae345f75674c59273A` |
+```bash
+# Start MCP server
+./target/release/defi-mcp
 
-### Liquid Staking (4) — all LIVE
+# Add to Claude Code config (~/.claude/settings.json)
+{
+  "mcpServers": {
+    "defi": {
+      "command": "/path/to/defi-mcp",
+      "args": []
+    }
+  }
+}
+```
 
-| Protocol | Interface | App | Key Contract |
-|----------|-----------|-----|-------------|
-| Kinetiq | kinetiq_staking | [kinetiq.xyz](https://kinetiq.xyz) | staking: `0x393D0B87Ed38fc779FD9611144aE649BA6082109`, kHYPE: `0xfD739d4e423301CE9385c1fb8850539D657C296D` |
-| stHYPE | sthype_staking | — | staking: `0xB96f07367e69e86d6e9C3F29215885104813eeAE`, stHYPE: `0xfFaa4a3D97fE9107Cef8a3F48c069F577Ff76cC1` |
-| Hyperbeat LST | hyperbeat_lst | — | staking: `0xCeaD893b162D38e714D82d06a7fe0b0dc3c38E0b`, beHYPE: `0xd8FC8F0b03eBA61F64D08B0bef69d80916E5DdA9` |
-| Kintsu | kintsu | — | staking: `0xDDC126c12F9F8DF5a6fC273f6D43C1E21b4d2945`, sHYPE: `0xBeF0142A0955a7d5dcCe5C2A13Fb84E332669D2d` |
+Then ask Claude: *"Mantle WETH 고래 찾아줘"* or *"Scan all chains for exploits"*
 
-### CDP (1)
+## Mantle CLI
 
-| Protocol | Interface | App | Key Contract |
-|----------|-----------|-----|-------------|
-| Felix | liquity_v2 | [usefelix.xyz/borrow](https://www.usefelix.xyz/borrow) | borrower_ops: `0xadfba621...`, trove_mgr: `0x58446c58...`, feUSD: `0x02c6a2fA58cC01A18B8D9E00eA48d65E4dF26c70` |
+Standalone Mantle-only binary with 8 commands:
 
-### Vault (2)
+```bash
+mantle status              # Ecosystem overview
+mantle scan --once         # Exploit detection
+mantle swap --from USDC --to WMNT --amount 100
+mantle bridge --to ethereum --token USDC --amount 1000
+mantle whales --token WETH --top 10
+mantle positions --address 0x...
+mantle lending rates --asset USDC
+mantle yield compare --asset WETH
+```
 
-| Protocol | Interface | App | Key Contract |
-|----------|-----------|-----|-------------|
-| Felix Vaults | erc4626 | [usefelix.xyz/lend](https://www.usefelix.xyz/lend) | feHYPE: `0x2900ABd7...`, feUSDC: `0x8A862fD6...`, feUSDT0: `0xFc512637...` |
-| Upshift | erc4626 | [app.upshift.fi](https://app.upshift.fi) | hbHYPE: `0x96C6cBB6...`, hbUBTC: `0xc061d389...`, HLPe: `0x8fFDcd8A...` |
-
-### Yield Source (2)
-
-| Protocol | Interface | App | Key Contract |
-|----------|-----------|-----|-------------|
-| Pendle | pendle_v2 | [app.pendle.finance](https://app.pendle.finance) | router: `0x888888888889758F76e7103c6CbF23ABbF58F946` |
-| Spectra V2 | spectra | [app.spectra.finance](https://app.spectra.finance) | 5 pools (dnHYPE, USDT0, wVLP, hbHYPE, WHYPE) |
-
-### Yield Aggregator (2)
-
-| Protocol | Interface | App | Key Contract |
-|----------|-----------|-----|-------------|
-| Beefy | beefy_vault | [app.beefy.com](https://app.beefy.com) | vault: `0x4ad02BF0...` (EOL) |
-| Lazy Summer | erc4626 | [summer.fi](https://summer.fi) | USDC: `0x252e5aa4...`, USDT: `0x2cc190fb...` |
-
-### Derivatives (1)
-
-| Protocol | Interface | App | Key Contract |
-|----------|-----------|-----|-------------|
-| Kinetiq Markets | kinetiq_markets | [kinetiq.xyz](https://kinetiq.xyz) | kmHYPE: `0x360C140E5344A1A0593D44B4ea6Fc7C3DAf0C473` |
+See [crates/mantle-cli/README.md](crates/mantle-cli/README.md) for details.
 
 ## Architecture
 
 ```
 defi-cli/
-  Cargo.toml              # Workspace root
-  config/                  # TOML protocol registry (compiled in)
-  crates/
-    defi-core/             # Traits, types, registry, provider
-    defi-protocols/        # Protocol adapters
-    defi-cli/              # CLI binary
-    defi-mcp/              # MCP server binary
+├── crates/
+│   ├── defi-core/        # Registry, multicall, types, traits
+│   ├── defi-protocols/   # Protocol adapters (Aave, Uniswap, Compound, etc.)
+│   ├── defi-cli/         # Multi-chain CLI (22 commands)
+│   ├── mantle-cli/       # Mantle-only CLI (8 commands)
+│   └── defi-mcp/         # MCP server (18 tools)
+├── config/
+│   ├── chains.toml       # 11 chain configs
+│   ├── tokens/           # Per-chain token registries
+│   └── protocols/        # 108 protocol configs (TOML)
+├── skills/
+│   └── defi-cli/         # Claude Code skill
+├── npm/                  # npm wrapper package
+└── docs/                 # DeFi category taxonomy
 ```
 
-## Gas Optimization
+**Key design decisions:**
+- **Single multicall per scan** — all oracle + DEX + stablecoin queries in one RPC call (~200ms)
+- **Parallel chain scanning** — 11 chains in ~1.5 seconds via tokio::JoinSet
+- **Config-driven** — all protocol/chain/token data in TOML, compiled into binary
+- **Agent-first** — every command supports `--json`, MCP server with 18 tools
+- **Dry-run by default** — all transactions simulated unless `--broadcast` is set
 
-- EIP-1559 gas pricing (auto-fetches baseFee + priorityFee)
-- 20% gas buffer on estimates to prevent out-of-gas
-- Dynamic `eth_estimateGas` in both simulation and broadcast modes
+## Global Options
 
-## Safety
+| Flag | Description |
+|------|-------------|
+| `--chain <name>` | Target chain (default: hyperevm) |
+| `--json` | JSON output |
+| `--ndjson` | Newline-delimited JSON (streaming) |
+| `--fields` | Select specific output fields |
+| `--broadcast` | Actually send transactions (default: dry-run) |
 
-- All mutation operations default to `--dry-run`
-- Use `--broadcast` to actually send transactions
-- Requires `DEFI_PRIVATE_KEY` environment variable for broadcast
-- Transaction simulation via `eth_call` before broadcast
+## Environment Variables
 
-## Agent Mode
-
-```bash
-echo '{"action":"dex.swap","params":{"protocol":"hyperswap-v2","token_in":"WHYPE","token_out":"USDC","amount":"1.0"}}' | defi agent
-```
-
-## MCP Server
-
-```bash
-defi-mcp
-```
-
-Exposes tools: `defi_status`, `defi_list_protocols`, `defi_dex_swap`, `defi_lending_supply`, `defi_lending_rates`, `defi_staking_stake`, `defi_vault_deposit`
+| Variable | Description |
+|----------|-------------|
+| `{CHAIN}_RPC_URL` | Override RPC URL (e.g., `MANTLE_RPC_URL`) |
+| `DEFI_PRIVATE_KEY` | Private key for `--broadcast` mode |
+| `DEFI_WALLET_ADDRESS` | Default wallet address |
+| `ETHERSCAN_API_KEY` | For whale tracking on BNB, Arbitrum, Base, Polygon, Scroll, Linea |
 
 ## License
 

@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"ls .github/workflows/\",\"description\":\"Check existing workflows\"}",
+  "error": "Exit code 1\nls: .github/workflows/: No such file or directory",
+  "timestamp": "2026-03-18T10:10:06.815Z",
+  "retry_count": 1
+}
