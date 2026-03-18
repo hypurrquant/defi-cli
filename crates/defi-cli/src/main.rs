@@ -2,6 +2,7 @@ pub mod agent;
 mod commands;
 mod executor;
 mod output;
+mod table;
 
 use clap::Parser;
 use commands::Cli;

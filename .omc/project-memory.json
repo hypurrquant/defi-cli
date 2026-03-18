@@ -135,6 +135,12 @@
       "type": "file"
     },
     {
+      "path": "crates/defi-cli/src/table.rs",
+      "accessCount": 5,
+      "lastAccessed": 1773826170351,
+      "type": "file"
+    },
+    {
       "path": "crates/defi-core/src/registry/mod.rs",
       "accessCount": 4,
       "lastAccessed": 1773738642077,
@@ -142,8 +148,14 @@
     },
     {
       "path": "Cargo.toml",
+      "accessCount": 4,
+      "lastAccessed": 1773825913066,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/src/main.rs",
       "accessCount": 3,
-      "lastAccessed": 1773739684404,
+      "lastAccessed": 1773826010691,
       "type": "file"
     },
     {
@@ -165,6 +177,12 @@
       "type": "file"
     },
     {
+      "path": "crates/defi-cli/src/output.rs",
+      "accessCount": 2,
+      "lastAccessed": 1773825987854,
+      "type": "file"
+    },
+    {
       "path": "config/chains.toml",
       "accessCount": 1,
       "lastAccessed": 1773738612514,
@@ -180,12 +198,6 @@
       "path": "crates/defi-cli/src/commands/mod.rs",
       "accessCount": 1,
       "lastAccessed": 1773738626904,
-      "type": "file"
-    },
-    {
-      "path": "crates/defi-cli/src/main.rs",
-      "accessCount": 1,
-      "lastAccessed": 1773738627126,
       "type": "file"
     },
     {
@@ -300,6 +312,24 @@
       "path": "mcp-config.example.json",
       "accessCount": 1,
       "lastAccessed": 1773824534931,
+      "type": "file"
+    },
+    {
+      "path": "skills/defi-cli/SKILL.md",
+      "accessCount": 1,
+      "lastAccessed": 1773824948115,
+      "type": "file"
+    },
+    {
+      "path": "skills/defi-cli/references/chains.md",
+      "accessCount": 1,
+      "lastAccessed": 1773824962350,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/Cargo.toml",
+      "accessCount": 1,
+      "lastAccessed": 1773825920001,
       "type": "file"
     }
   ],

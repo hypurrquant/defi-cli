@@ -40,6 +40,9 @@ eyre = "0.6"
 # MCP
 rmcp = { version = "0.1", features = ["server", "transport-stdio"] }
 
+# Table output
+comfy-table = "7"
+
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

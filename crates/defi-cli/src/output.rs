@@ -41,12 +41,14 @@ impl OutputMode {
 
             println!("{}", serde_json::to_string_pretty(&json_val).unwrap());
         } else {
-            // Human-readable: just pretty-print JSON for now
-            println!(
-                "{}",
-                serde_json::to_string_pretty(value)
-                    .map_err(|e| defi_core::error::DefiError::Internal(e.to_string()))?
-            );
+            // Human-readable: try table format, fallback to pretty JSON
+            let json_val = serde_json::to_value(value)
+                .map_err(|e| defi_core::error::DefiError::Internal(e.to_string()))?;
+            if let Some(table) = crate::table::render(&json_val) {
+                println!("{}", table);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&json_val).unwrap());
+            }
         }
         Ok(())
     }
