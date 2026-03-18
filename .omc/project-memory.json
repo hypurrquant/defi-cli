@@ -111,6 +111,12 @@
       "type": "file"
     },
     {
+      "path": "crates/defi-mcp/src/main.rs",
+      "accessCount": 9,
+      "lastAccessed": 1773824621726,
+      "type": "file"
+    },
+    {
       "path": "crates/defi-cli/src/commands/whales.rs",
       "accessCount": 6,
       "lastAccessed": 1773740022908,
@@ -150,6 +156,12 @@
       "path": "crates/mantle-cli/src/commands/whales.rs",
       "accessCount": 2,
       "lastAccessed": 1773739699652,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-mcp/Cargo.toml",
+      "accessCount": 2,
+      "lastAccessed": 1773824256443,
       "type": "file"
     },
     {
@@ -282,6 +294,12 @@
       "path": "crates/mantle-cli/CONTENT_PLAN.md",
       "accessCount": 1,
       "lastAccessed": 1773740969795,
+      "type": "file"
+    },
+    {
+      "path": "mcp-config.example.json",
+      "accessCount": 1,
+      "lastAccessed": 1773824534931,
       "type": "file"
     }
   ],

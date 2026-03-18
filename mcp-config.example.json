@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "defi": {
+      "command": "defi-mcp",
+      "args": []
+    }
+  }
+}

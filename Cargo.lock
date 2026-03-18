@@ -1607,11 +1607,13 @@ dependencies = [
  "alloy",
  "defi-core",
  "defi-protocols",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
