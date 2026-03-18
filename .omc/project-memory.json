@@ -160,8 +160,14 @@
     },
     {
       "path": "crates/defi-cli/src/main.rs",
+      "accessCount": 4,
+      "lastAccessed": 1773826727958,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/src/commands/mod.rs",
       "accessCount": 3,
-      "lastAccessed": 1773826010691,
+      "lastAccessed": 1773826753044,
       "type": "file"
     },
     {
@@ -189,6 +195,12 @@
       "type": "file"
     },
     {
+      "path": "crates/mantle-cli/src/commands/mod.rs",
+      "accessCount": 2,
+      "lastAccessed": 1773826764376,
+      "type": "file"
+    },
+    {
       "path": "config/chains.toml",
       "accessCount": 1,
       "lastAccessed": 1773738612514,
@@ -198,12 +210,6 @@
       "path": "config/tokens/mantle.toml",
       "accessCount": 1,
       "lastAccessed": 1773738617241,
-      "type": "file"
-    },
-    {
-      "path": "crates/defi-cli/src/commands/mod.rs",
-      "accessCount": 1,
-      "lastAccessed": 1773738626904,
       "type": "file"
     },
     {
@@ -246,12 +252,6 @@
       "path": "crates/mantle-cli/src/main.rs",
       "accessCount": 1,
       "lastAccessed": 1773739463244,
-      "type": "file"
-    },
-    {
-      "path": "crates/mantle-cli/src/commands/mod.rs",
-      "accessCount": 1,
-      "lastAccessed": 1773739486491,
       "type": "file"
     },
     {
@@ -336,6 +336,18 @@
       "path": "crates/defi-cli/Cargo.toml",
       "accessCount": 1,
       "lastAccessed": 1773825920001,
+      "type": "file"
+    },
+    {
+      "path": "npm/package.json",
+      "accessCount": 1,
+      "lastAccessed": 1773826698443,
+      "type": "file"
+    },
+    {
+      "path": "npm/install.js",
+      "accessCount": 1,
+      "lastAccessed": 1773826720221,
       "type": "file"
     }
   ],

@@ -1,0 +1,48 @@
+{
+  "name": "@hypurrquant/defi-cli",
+  "version": "0.2.0",
+  "description": "Multi-chain DeFi CLI — scan exploits, swap tokens, bridge assets, track whales across 11 EVM chains",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hypurrquant/defi-cli"
+  },
+  "homepage": "https://github.com/hypurrquant/defi-cli",
+  "keywords": [
+    "defi",
+    "cli",
+    "ethereum",
+    "mantle",
+    "arbitrum",
+    "base",
+    "bnb",
+    "swap",
+    "bridge",
+    "lending",
+    "yield",
+    "whale",
+    "oracle",
+    "exploit",
+    "mcp",
+    "ai-agent"
+  ],
+  "bin": {
+    "defi": "./bin/defi",
+    "mantle": "./bin/mantle",
+    "defi-mcp": "./bin/defi-mcp"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "arm64",
+    "x64"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
