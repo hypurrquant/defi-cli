@@ -77,9 +77,15 @@ pub async fn run(args: CompareArgs, registry: &Registry, output: &OutputMode) ->
 
 /// Fetch perp funding rates by calling `perp --json arb scan --rates`
 async fn fetch_perp_rates() -> std::result::Result<Vec<serde_json::Value>, String> {
+    // Try global `perp` first, fallback to `npx perp-cli`
     let output = Command::new("perp")
         .args(["--json", "arb", "scan", "--rates"])
         .output()
+        .or_else(|_| {
+            Command::new("npx")
+                .args(["-y", "perp-cli@latest", "--json", "arb", "scan", "--rates"])
+                .output()
+        })
         .map_err(|e| format!("perp-cli not found: {e}"))?;
 
     if !output.status.success() {

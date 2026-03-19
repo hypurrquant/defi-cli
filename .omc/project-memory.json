@@ -117,6 +117,12 @@
       "type": "file"
     },
     {
+      "path": "crates/defi-cli/src/commands/compare.rs",
+      "accessCount": 10,
+      "lastAccessed": 1773922690409,
+      "type": "file"
+    },
+    {
       "path": "crates/defi-mcp/src/main.rs",
       "accessCount": 9,
       "lastAccessed": 1773824621726,
@@ -150,12 +156,6 @@
       "path": "crates/defi-cli/src/commands/positions.rs",
       "accessCount": 5,
       "lastAccessed": 1773745726311,
-      "type": "file"
-    },
-    {
-      "path": "crates/defi-cli/src/commands/compare.rs",
-      "accessCount": 5,
-      "lastAccessed": 1773892543048,
       "type": "file"
     },
     {
