@@ -111,15 +111,15 @@
       "type": "file"
     },
     {
-      "path": "crates/defi-mcp/src/main.rs",
-      "accessCount": 9,
-      "lastAccessed": 1773824621726,
+      "path": "crates/defi-cli/src/table.rs",
+      "accessCount": 10,
+      "lastAccessed": 1773892423736,
       "type": "file"
     },
     {
-      "path": "crates/defi-cli/src/table.rs",
-      "accessCount": 8,
-      "lastAccessed": 1773826378964,
+      "path": "crates/defi-mcp/src/main.rs",
+      "accessCount": 9,
+      "lastAccessed": 1773824621726,
       "type": "file"
     },
     {
@@ -135,6 +135,12 @@
       "type": "file"
     },
     {
+      "path": "crates/defi-cli/src/commands/mod.rs",
+      "accessCount": 6,
+      "lastAccessed": 1773892400072,
+      "type": "file"
+    },
+    {
       "path": "crates/mantle-cli/demo.sh",
       "accessCount": 5,
       "lastAccessed": 1773740619463,
@@ -144,6 +150,12 @@
       "path": "crates/defi-cli/src/commands/positions.rs",
       "accessCount": 5,
       "lastAccessed": 1773745726311,
+      "type": "file"
+    },
+    {
+      "path": "crates/defi-cli/src/commands/compare.rs",
+      "accessCount": 5,
+      "lastAccessed": 1773892543048,
       "type": "file"
     },
     {
@@ -162,12 +174,6 @@
       "path": "crates/defi-cli/src/main.rs",
       "accessCount": 4,
       "lastAccessed": 1773826727958,
-      "type": "file"
-    },
-    {
-      "path": "crates/defi-cli/src/commands/mod.rs",
-      "accessCount": 3,
-      "lastAccessed": 1773826753044,
       "type": "file"
     },
     {

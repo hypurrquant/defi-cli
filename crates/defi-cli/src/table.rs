@@ -11,6 +11,9 @@ pub fn render(value: &Value) -> Option<String> {
     if value.get("holders").is_some() {
         return Some(render_whales(value));
     }
+    if value.get("opportunities").is_some() && value.get("total_opportunities").is_some() {
+        return Some(render_compare(value));
+    }
     if value.get("arb_opportunities").is_some() && value.get("rates").is_some() {
         return Some(render_yield_scan(value));
     }
@@ -321,6 +324,59 @@ fn render_status(v: &Value) -> String {
         ));
     }
     format!("{}\n\n{}", out, t)
+}
+
+fn render_compare(v: &Value) -> String {
+    let asset = v["asset"].as_str().unwrap_or("?");
+    let ms = v["scan_duration_ms"].as_u64().unwrap_or(0);
+    let total = v["total_opportunities"].as_u64().unwrap_or(0);
+
+    let mut t = Table::new();
+    t.load_preset(UTF8_FULL_CONDENSED);
+    t.set_header(vec!["Type", "Asset", "APY", "Where", "Risk"]);
+
+    let empty = vec![];
+    for opp in v["opportunities"].as_array().unwrap_or(&empty) {
+        let typ = opp["type"].as_str().unwrap_or("?");
+        let apy = opp["apy"].as_f64().unwrap_or(0.0);
+        let detail = opp["detail"].as_str().unwrap_or("?");
+        let risk = opp["risk"].as_str().unwrap_or("?");
+        let opp_asset = opp["asset"].as_str().unwrap_or("?");
+
+        let type_label = match typ {
+            "perp_funding" => "Perp Arb",
+            "perp_rate" => "Perp Rate",
+            "lending_supply" => "Lending",
+            _ => typ,
+        };
+
+        let color = if apy.abs() > 20.0 {
+            Color::Green
+        } else if apy.abs() > 5.0 {
+            Color::Cyan
+        } else {
+            Color::White
+        };
+
+        let risk_color = match risk {
+            "high" => Color::Red,
+            "medium" => Color::Yellow,
+            _ => Color::Green,
+        };
+
+        t.add_row(vec![
+            Cell::new(type_label),
+            Cell::new(opp_asset),
+            Cell::new(format!("{:.1}%", apy)).fg(color),
+            Cell::new(detail),
+            Cell::new(risk).fg(risk_color),
+        ]);
+    }
+
+    format!(
+        "  Yield Compare: {} ({} opportunities, {}ms)\n\n{}",
+        asset, total, ms, t
+    )
 }
 
 fn render_yield_scan(v: &Value) -> String {

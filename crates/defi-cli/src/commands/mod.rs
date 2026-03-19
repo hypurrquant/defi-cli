@@ -2,6 +2,7 @@ pub mod alert;
 pub mod arb;
 pub mod bridge;
 pub mod cdp;
+pub mod compare;
 pub mod dex;
 pub mod gauge;
 pub mod lending;
@@ -111,6 +112,8 @@ pub enum Commands {
     Token(token::TokenArgs),
     /// Find top token holders (whales) and their positions
     Whales(whales::WhalesArgs),
+    /// Compare all yield sources: perp funding vs lending APY vs staking
+    Compare(compare::CompareArgs),
     /// Aggregator swap: best price across all DEXes (ODOS)
     Swap(swap::SwapArgs),
     /// Cross-chain bridge: move assets between chains (LI.FI)
@@ -149,6 +152,7 @@ pub async fn run(cli: Cli) -> Result<(), DefiError> {
         Commands::Wallet(args) => wallet::run(args, &registry, &output_mode).await,
         Commands::Token(args) => token::run(args, &registry, chain, &executor, &output_mode).await,
         Commands::Whales(args) => whales::run(args, &registry, chain, &output_mode).await,
+        Commands::Compare(args) => compare::run(args, &registry, &output_mode).await,
         Commands::Swap(args) => swap::run(args, &registry, chain, &executor, &output_mode).await,
         Commands::Bridge(args) => bridge::run(args, &registry, &output_mode).await,
         Commands::Agent => crate::agent::run_agent(&registry, &executor).await,
