@@ -9,3 +9,4 @@ description = "Alien Base V3 on Base ($2M TVL)"
 [protocol.contracts]
 router = "0xB20C411FC84FBB27e78608C24d0056D974ea9411"
 factory = "0x0Fd83557b2be93617c9C1C1B6fd549401C74558C"
+position_manager = "0xB7996D1ECD07fB227e8DcA8CD5214bDfb04534E5"

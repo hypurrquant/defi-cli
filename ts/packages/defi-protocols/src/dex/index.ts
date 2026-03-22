@@ -6,4 +6,5 @@ export { CurveStableSwapAdapter } from "./curve.js";
 export { SolidlyAdapter } from "./solidly.js";
 export { WooFiAdapter } from "./woofi.js";
 export { SolidlyGaugeAdapter } from "./solidly_gauge.js";
+export { MasterChefAdapter } from "./masterchef.js";
 export { DexSpotPrice } from "./dex_price.js";

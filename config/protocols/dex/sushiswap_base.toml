@@ -10,3 +10,4 @@ description = "SushiSwap V2 on Base"
 [protocol.contracts]
 router = "0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891"
 factory = "0x71524B4f93c58fcbF659783284E38825f0622859"
+position_manager = "0x80c7dd17b01855a6d2347444a0fcc36136a314de"

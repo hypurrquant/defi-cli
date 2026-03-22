@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData, parseAbi, createPublicClient, http, decodeFunctionResult } from "viem";
 import type { Address } from "viem";
 
 import { DefiError } from "@hypurrquant/defi-core";
@@ -23,14 +23,16 @@ const abi = parseAbi([
 export class UniswapV2Adapter implements IDex {
   private readonly protocolName: string;
   private readonly router: Address;
+  private readonly rpcUrl: string | undefined;
 
-  constructor(entry: ProtocolEntry, _rpcUrl?: string) {
+  constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
     const router = entry.contracts?.["router"];
     if (!router) {
       throw new DefiError("CONTRACT_ERROR", "Missing 'router' contract address");
     }
     this.router = router;
+    this.rpcUrl = rpcUrl;
   }
 
   name(): string {
@@ -57,8 +59,42 @@ export class UniswapV2Adapter implements IDex {
     };
   }
 
-  async quote(_params: QuoteParams): Promise<QuoteResult> {
-    throw DefiError.unsupported(`[${this.protocolName}] quote requires RPC connection`);
+  async quote(params: QuoteParams): Promise<QuoteResult> {
+    if (!this.rpcUrl) {
+      throw DefiError.rpcError("No RPC URL configured");
+    }
+
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    const path: Address[] = [params.token_in, params.token_out];
+
+    const result = await client.call({
+      to: this.router,
+      data: encodeFunctionData({
+        abi,
+        functionName: "getAmountsOut",
+        args: [params.amount_in, path],
+      }),
+    });
+
+    if (!result.data) {
+      throw DefiError.rpcError(`[${this.protocolName}] getAmountsOut returned no data`);
+    }
+
+    const decoded = decodeFunctionResult({
+      abi,
+      functionName: "getAmountsOut",
+      data: result.data,
+    }) as unknown as bigint[];
+
+    const amountOut = decoded[decoded.length - 1];
+
+    return {
+      protocol: this.protocolName,
+      amount_out: amountOut,
+      price_impact_bps: undefined,
+      fee_bps: 30,
+      route: [`${params.token_in} -> ${params.token_out}`],
+    };
   }
 
   async buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx> {

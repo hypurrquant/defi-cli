@@ -11,6 +11,7 @@ import { CurveStableSwapAdapter } from "./dex/curve.js";
 import { SolidlyAdapter } from "./dex/solidly.js";
 import { WooFiAdapter } from "./dex/woofi.js";
 import { SolidlyGaugeAdapter } from "./dex/solidly_gauge.js";
+import { MasterChefAdapter } from "./dex/masterchef.js";
 
 // Trait interfaces
 import type { IDex } from "@hypurrquant/defi-core";
@@ -19,6 +20,7 @@ import type { ICdp } from "@hypurrquant/defi-core";
 import type { IVault } from "@hypurrquant/defi-core";
 import type { ILiquidStaking } from "@hypurrquant/defi-core";
 import type { IGaugeSystem } from "@hypurrquant/defi-core";
+import type { IGauge } from "@hypurrquant/defi-core";
 import type { IYieldSource } from "@hypurrquant/defi-core";
 import type { IDerivatives } from "@hypurrquant/defi-core";
 import type { IOptions } from "@hypurrquant/defi-core";
@@ -72,7 +74,7 @@ export function createDex(entry: ProtocolEntry, rpcUrl?: string): IDex {
     case "algebra_v3":
       return new AlgebraV3Adapter(entry, rpcUrl);
     case "uniswap_v2":
-      return new UniswapV2Adapter(entry);
+      return new UniswapV2Adapter(entry, rpcUrl);
     case "solidly_v2":
     case "solidly_cl":
       return new SolidlyAdapter(entry, rpcUrl);
@@ -173,6 +175,11 @@ export function createGauge(entry: ProtocolEntry): IGaugeSystem {
     default:
       throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported`);
   }
+}
+
+/** Create a MasterChef IGauge implementation from a protocol registry entry */
+export function createMasterChef(entry: ProtocolEntry, rpcUrl?: string): IGauge {
+  return new MasterChefAdapter(entry, rpcUrl);
 }
 
 // ============================================================
