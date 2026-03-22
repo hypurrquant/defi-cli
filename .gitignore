@@ -1,5 +1,8 @@
-# Rust
+# Rust (legacy, ported to TS)
 /target/
+/crates/
+/Cargo.toml
+/Cargo.lock
 **/*.rs.bk
 *.pdb
 

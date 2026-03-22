@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"# Replace all {:,.N} patterns with {:.N} and {:,.0} with {:.0}\\nsed -i '' 's/{:,\\\\./{:./g' crates/defi-cli/src/table.rs\\n# Verify\\ngrep -n \\\":,\\\" crates/defi-cli/src/table.rs\",\"description...",
-  "error": "Exit code 1",
-  "timestamp": "2026-03-18T09:28:13.312Z",
-  "retry_count": 1
-}
