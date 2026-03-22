@@ -24,11 +24,11 @@ describe("jsonReplacerDecimal", () => {
 });
 
 describe("jsonStringify", () => {
-  it("handles objects with bigint fields (hex)", () => {
+  it("handles objects with bigint fields (decimal)", () => {
     const obj = { amount: 123456789n, name: "test" };
     const result = jsonStringify(obj);
     const parsed = JSON.parse(result);
-    expect(parsed.amount).toBe("0x75bcd15");
+    expect(parsed.amount).toBe("123456789");
     expect(parsed.name).toBe("test");
   });
 
@@ -36,7 +36,7 @@ describe("jsonStringify", () => {
     const obj = { token: { amount: 1000000000000000000n } };
     const result = jsonStringify(obj);
     const parsed = JSON.parse(result);
-    expect(parsed.token.amount).toBe("0xde0b6b3a7640000");
+    expect(parsed.token.amount).toBe("1000000000000000000");
   });
 });
 

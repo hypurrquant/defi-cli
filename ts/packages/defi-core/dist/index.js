@@ -116,7 +116,7 @@ function jsonReplacerDecimal(_key, value) {
   return value;
 }
 function jsonStringify(data, pretty = true) {
-  return pretty ? JSON.stringify(data, jsonReplacer, 2) : JSON.stringify(data, jsonReplacer);
+  return pretty ? JSON.stringify(data, jsonReplacerDecimal, 2) : JSON.stringify(data, jsonReplacerDecimal);
 }
 function parseBigInt(value) {
   if (value.startsWith("0x") || value.startsWith("0X")) {

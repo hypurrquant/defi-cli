@@ -315,14 +315,14 @@ describe("Snapshot Tests: Rust vs TypeScript CLI", () => {
     });
   }
 
-  describe("BigInt serialization (0x-hex)", () => {
-    it("jsonStringify produces 0x-hex for bigint", async () => {
+  describe("BigInt serialization (decimal)", () => {
+    it("jsonStringify produces decimal string for bigint", async () => {
       const { jsonStringify } = await import(
         "../../packages/defi-core/src/json.js"
       );
       const data = { amount: 123456789n, name: "test" };
       const result = JSON.parse(jsonStringify(data));
-      expect(result.amount).toBe("0x75bcd15");
+      expect(result.amount).toBe("123456789");
     });
   });
 

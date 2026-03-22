@@ -23,6 +23,19 @@ const POOL_ABI = parseAbi([
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)",
 ]);
 
+const ERC20_ABI = parseAbi([
+  "function totalSupply() external view returns (uint256)",
+]);
+
+const INCENTIVES_ABI = parseAbi([
+  "function getIncentivesController() external view returns (address)",
+]);
+
+const REWARDS_CONTROLLER_ABI = parseAbi([
+  "function getRewardsByAsset(address asset) external view returns (address[])",
+  "function getRewardsData(address asset, address reward) external view returns (uint256 index, uint256 emissionsPerSecond, uint256 lastUpdateTimestamp, uint256 distributionEnd)",
+]);
+
 function u256ToF64(v: bigint): number {
   const MAX_U128 = (1n << 128n) - 1n;
   if (v > MAX_U128) return Infinity;
@@ -120,10 +133,107 @@ export class AaveV3Adapter implements ILending {
       throw DefiError.rpcError(`[${this.protocolName}] getReserveData failed: ${e}`);
     });
 
-    const ray = 1e27;
-    const supplyRate = Number(result[2]) / ray * 100;
-    const variableRate = Number(result[4]) / ray * 100;
-    const stableRate = Number(result[5]) / ray * 100;
+    const RAY = 1e27;
+    const SECONDS_PER_YEAR = 31536000;
+
+    // Convert ray rate to APY: ((1 + rate/SECONDS_PER_YEAR)^SECONDS_PER_YEAR - 1) * 100
+    const toApy = (rayRate: bigint): number => {
+      const rate = Number(rayRate) / RAY;
+      return (Math.pow(1 + rate / SECONDS_PER_YEAR, SECONDS_PER_YEAR) - 1) * 100;
+    };
+
+    const supplyRate = toApy(result[2]);
+    const variableRate = toApy(result[4]);
+    const stableRate = toApy(result[5]);
+
+    const aTokenAddress = result[8] as Address;
+    const variableDebtTokenAddress = result[10] as Address;
+
+    const [totalSupply, totalBorrow] = await Promise.all([
+      client.readContract({
+        address: aTokenAddress,
+        abi: ERC20_ABI,
+        functionName: "totalSupply",
+      }).catch(() => 0n),
+      client.readContract({
+        address: variableDebtTokenAddress,
+        abi: ERC20_ABI,
+        functionName: "totalSupply",
+      }).catch(() => 0n),
+    ]);
+
+    const utilization = totalSupply > 0n
+      ? Number((totalBorrow * 10000n) / totalSupply) / 100
+      : 0;
+
+    // Fetch incentive/reward data (best-effort, never breaks base rates)
+    const supplyRewardTokens: string[] = [];
+    const borrowRewardTokens: string[] = [];
+    const supplyEmissions: string[] = [];
+    const borrowEmissions: string[] = [];
+
+    try {
+      const controllerAddr = await client.readContract({
+        address: aTokenAddress,
+        abi: INCENTIVES_ABI,
+        functionName: "getIncentivesController",
+      });
+
+      if (controllerAddr && controllerAddr !== zeroAddress) {
+        const [supplyRewards, borrowRewards] = await Promise.all([
+          client.readContract({
+            address: controllerAddr,
+            abi: REWARDS_CONTROLLER_ABI,
+            functionName: "getRewardsByAsset",
+            args: [aTokenAddress],
+          }).catch(() => [] as Address[]),
+          client.readContract({
+            address: controllerAddr,
+            abi: REWARDS_CONTROLLER_ABI,
+            functionName: "getRewardsByAsset",
+            args: [variableDebtTokenAddress],
+          }).catch(() => [] as Address[]),
+        ]);
+
+        // Fetch emissions data for supply rewards
+        const supplyDataPromises = supplyRewards.map((reward) =>
+          client.readContract({
+            address: controllerAddr,
+            abi: REWARDS_CONTROLLER_ABI,
+            functionName: "getRewardsData",
+            args: [aTokenAddress, reward],
+          }).catch(() => null),
+        );
+        const supplyData = await Promise.all(supplyDataPromises);
+        for (let i = 0; i < supplyRewards.length; i++) {
+          const data = supplyData[i];
+          if (data && data[1] > 0n) {
+            supplyRewardTokens.push(supplyRewards[i]);
+            supplyEmissions.push(data[1].toString());
+          }
+        }
+
+        // Fetch emissions data for borrow rewards
+        const borrowDataPromises = borrowRewards.map((reward) =>
+          client.readContract({
+            address: controllerAddr,
+            abi: REWARDS_CONTROLLER_ABI,
+            functionName: "getRewardsData",
+            args: [variableDebtTokenAddress, reward],
+          }).catch(() => null),
+        );
+        const borrowData = await Promise.all(borrowDataPromises);
+        for (let i = 0; i < borrowRewards.length; i++) {
+          const data = borrowData[i];
+          if (data && data[1] > 0n) {
+            borrowRewardTokens.push(borrowRewards[i]);
+            borrowEmissions.push(data[1].toString());
+          }
+        }
+      }
+    } catch {
+      // Incentives not supported by this deployment — silently ignore
+    }
 
     return {
       protocol: this.protocolName,
@@ -131,9 +241,17 @@ export class AaveV3Adapter implements ILending {
       supply_apy: supplyRate,
       borrow_variable_apy: variableRate,
       borrow_stable_apy: stableRate,
-      utilization: 0,
-      total_supply: 0n,
-      total_borrow: 0n,
+      utilization,
+      total_supply: totalSupply,
+      total_borrow: totalBorrow,
+      ...(supplyRewardTokens.length > 0 && {
+        supply_reward_tokens: supplyRewardTokens,
+        supply_emissions_per_second: supplyEmissions,
+      }),
+      ...(borrowRewardTokens.length > 0 && {
+        borrow_reward_tokens: borrowRewardTokens,
+        borrow_emissions_per_second: borrowEmissions,
+      }),
     };
   }
 

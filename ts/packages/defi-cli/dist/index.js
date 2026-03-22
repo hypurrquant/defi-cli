@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   program
-} from "./chunk-SYCGEEQX.js";
+} from "./chunk-AY6YDYJM.js";
 export {
   program
 };

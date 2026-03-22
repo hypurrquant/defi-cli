@@ -1,16 +1,13 @@
 [protocol]
 name = "PrimeFi"
-slug = "primefi"
+slug = "primefi-hyperevm"
 category = "lending"
-interface = "aave_v3"
+interface = "aave_v2"
 chain = "hyperevm"
 native = false
-description = "PrimeFi — omnichain Aave V3 fork lending on HyperEVM ($97K TVL)"
+description = "PrimeFi lending on HyperEVM"
 
 [protocol.contracts]
-# Core market (Aave V3 PoolAddressesProvider)
-pool_addresses_provider = "0x69A3c30A85aA1E22791466a08819c1080f0Aab7f"
-# Prime market (Aave V2-style isolated pool)
-prime_pool = "0xb339448E13E273f6F46e3390e0932Ab7fF9F113F"
-pool2_staking = "0x33cd734739c6DeD500fD080d476D93135cB813Ef"
-pool2_token = "0x981F145a71Da6DF4A7cBe892807782c9CC9a5515"
+pool = "0xb339448E13E273f6F46e3390e0932Ab7fF9F113F"
+pool_addresses_provider = "0x07093ca1e6c8c03ff77dea07532f738d88de1d75"
+oracle = "0x8bd82c5f94d2caff3f980f0137f16add71e98dfb"

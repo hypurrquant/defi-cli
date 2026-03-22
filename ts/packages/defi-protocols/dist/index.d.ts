@@ -1,4 +1,4 @@
-import { ProtocolEntry, ICdp, IDerivatives, IDex, IGaugeSystem, ILending, ILiquidStaking, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, DeFiTx, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, RewardInfo, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
+import { ProtocolEntry, ICdp, IDerivatives, IDex, IGaugeSystem, ILending, ILiquidStaking, IGauge, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, DeFiTx, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, RewardInfo, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
 import { Address } from 'viem';
 
 /** Create a Dex implementation from a protocol registry entry */
@@ -13,6 +13,8 @@ declare function createVault(entry: ProtocolEntry, rpcUrl?: string): IVault;
 declare function createLiquidStaking(entry: ProtocolEntry, rpcUrl?: string): ILiquidStaking;
 /** Create a GaugeSystem implementation from a protocol registry entry */
 declare function createGauge(entry: ProtocolEntry): IGaugeSystem;
+/** Create a MasterChef IGauge implementation from a protocol registry entry */
+declare function createMasterChef(entry: ProtocolEntry, rpcUrl?: string): IGauge;
 /** Create a YieldSource implementation — falls back to GenericYield for unknown interfaces */
 declare function createYieldSource(entry: ProtocolEntry, rpcUrl?: string): IYieldSource;
 /** Create a Derivatives implementation — falls back to GenericDerivatives for unknown interfaces */
@@ -29,10 +31,14 @@ declare function createOracleFromCdp(entry: ProtocolEntry, _asset: Address, rpcU
 declare class UniswapV2Adapter implements IDex {
     private readonly protocolName;
     private readonly router;
-    constructor(entry: ProtocolEntry, _rpcUrl?: string);
+    private readonly rpcUrl;
+    private readonly lbQuoter;
+    private readonly lbIntermediaries;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
-    quote(_params: QuoteParams): Promise<QuoteResult>;
+    quote(params: QuoteParams): Promise<QuoteResult>;
+    private lbQuote;
     buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx>;
     buildRemoveLiquidity(params: RemoveLiquidityParams): Promise<DeFiTx>;
 }
@@ -126,6 +132,35 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
     buildVote(tokenId: bigint, pools: Address[], weights: bigint[]): Promise<DeFiTx>;
     buildClaimBribes(bribes: Address[], tokenId: bigint): Promise<DeFiTx>;
     buildClaimFees(fees: Address[], tokenId: bigint): Promise<DeFiTx>;
+}
+
+declare class MasterChefAdapter implements IGauge {
+    private readonly protocolName;
+    private readonly masterchef;
+    private readonly rpcUrl?;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
+    name(): string;
+    /**
+     * Deposit LP tokens into a MasterChef farm.
+     * `gauge` is the pool address (unused for calldata — MasterChef is the target).
+     * `tokenId` carries the farm pid.
+     */
+    buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
+    /**
+     * Withdraw LP tokens from a MasterChef farm.
+     * `gauge` is used to look up the pid description only; call site should pass pid via tokenId
+     * on the deposit flow. Here pid defaults to 0 — callers should encode the pid in the gauge
+     * address slot or wrap this adapter with a pid-aware helper.
+     */
+    buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
+    /** Withdraw LP tokens specifying a pid explicitly (MasterChef extension beyond IGauge). */
+    buildWithdrawPid(pid: bigint, amount: bigint): Promise<DeFiTx>;
+    /** Claim pending MOE rewards. IGauge interface provides no pid — defaults to pid=0. */
+    buildClaimRewards(gauge: Address): Promise<DeFiTx>;
+    /** Claim pending MOE rewards for a specific pid (MasterChef extension beyond IGauge). */
+    buildClaimRewardsPid(pid: bigint): Promise<DeFiTx>;
+    /** Get pending MOE rewards for a user. Requires rpcUrl. */
+    getPendingRewards(_gauge: Address, user: Address): Promise<RewardInfo[]>;
 }
 
 /**
@@ -363,4 +398,4 @@ declare class ERC721Adapter implements INft {
     getBalance(owner: Address, collection: Address): Promise<bigint>;
 }
 
-export { AaveOracleAdapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, KinetiqAdapter, MorphoBlueAdapter, PendleAdapter, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createLending, createLiquidStaking, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };
+export { AaveOracleAdapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, KinetiqAdapter, MasterChefAdapter, MorphoBlueAdapter, PendleAdapter, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createLending, createLiquidStaking, createMasterChef, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };

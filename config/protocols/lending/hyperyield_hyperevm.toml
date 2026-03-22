@@ -1,13 +1,14 @@
 [protocol]
 name = "HyperYield"
-slug = "hyperyield"
+slug = "hyperyield-hyperevm"
 category = "lending"
 interface = "aave_v3"
 chain = "hyperevm"
 native = true
-description = "HyperYield — Aave V3 fork lending markets on HyperEVM ($27K TVL)"
+description = "HyperYield lending on HyperEVM"
 
 [protocol.contracts]
-# Two Aave V3 pool addresses provider contracts
-pool_addresses_provider = "0xf8b130AaF759C24d91BeC7Dd64e4A82D2CF51194"
-pool_addresses_provider_2 = "0x022F164dDBa35a994ad0f001705e9c187156E244"
+pool = "0x8cc02b048dea40d8d0d13eac9866f5bb42d3f4e9"
+pool_addresses_provider = "0x5dcb4c8c080ced472ac765ce3918003e0cee5da2"
+oracle = "0xa9e767e74aaaf77419a10f8c58535a785321647a"
+pool_data_provider = "0xf8b130AaF759C24d91BeC7Dd64e4A82D2CF51194"

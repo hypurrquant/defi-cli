@@ -179,7 +179,7 @@ function extractRevertReason(err) {
 }
 
 // src/output.ts
-import { jsonStringify } from "@hypurrquant/defi-core";
+import { jsonStringify, jsonReplacerDecimal } from "@hypurrquant/defi-core";
 
 // src/table.ts
 import pc from "picocolors";
@@ -465,7 +465,7 @@ function parseOutputMode(opts) {
 }
 function formatOutput(value, mode) {
   if (mode.ndjson) {
-    return JSON.stringify(value, jsonReplacer);
+    return JSON.stringify(value, jsonReplacerDecimal);
   }
   if (mode.json) {
     let jsonVal2 = JSON.parse(jsonStringify(value));
@@ -485,10 +485,6 @@ function formatOutput(value, mode) {
 }
 function printOutput(value, mode) {
   console.log(formatOutput(value, mode));
-}
-function jsonReplacer(_key, val) {
-  if (typeof val === "bigint") return "0x" + val.toString(16);
-  return val;
 }
 
 // src/commands/status.ts
@@ -1214,12 +1210,54 @@ async function runYieldScan(registry, asset, output) {
     output
   );
 }
-function registerYield(parent, getOpts) {
-  const yieldCmd = parent.command("yield").description("Yield operations: compare, scan, optimize");
-  yieldCmd.command("compare").description("Compare lending rates across protocols for an asset").requiredOption("--asset <token>", "Token symbol or address").option("--chain <chain>", "Chain to query", "hyperevm").action(async (opts) => {
+async function scanRatesForExecute(registry, asset) {
+  const chainKeys = Array.from(registry.chains.keys());
+  const tasks = chainKeys.map(async (ck) => {
+    try {
+      const chain = registry.getChain(ck);
+      const chainName = chain.name.toLowerCase();
+      let assetAddr;
+      try {
+        assetAddr = registry.resolveToken(chainName, asset).address;
+      } catch {
+        return [];
+      }
+      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+      if (protos.length === 0) return [];
+      const rpc = chain.effectiveRpcUrl();
+      const rates = [];
+      for (const proto of protos) {
+        try {
+          const lending = createLending2(proto, rpc);
+          const r = await lending.getRates(assetAddr);
+          if (r.supply_apy > 0) {
+            rates.push({
+              chain: chain.name,
+              protocol: r.protocol,
+              slug: proto.slug,
+              supply_apy: r.supply_apy,
+              borrow_variable_apy: r.borrow_variable_apy
+            });
+          }
+        } catch {
+        }
+      }
+      return rates;
+    } catch {
+      return [];
+    }
+  });
+  const nested = await Promise.all(tasks);
+  const all = nested.flat();
+  all.sort((a, b) => b.supply_apy - a.supply_apy);
+  return all;
+}
+function registerYield(parent, getOpts, executor) {
+  const yieldCmd = parent.command("yield").description("Yield operations: compare, scan, optimize, execute");
+  yieldCmd.command("compare").description("Compare lending rates across protocols for an asset").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
     try {
       const registry = Registry8.loadEmbedded();
-      const chainName = (opts.chain ?? "hyperevm").toLowerCase();
+      const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
       const chain = registry.getChain(chainName);
       const rpc = chain.effectiveRpcUrl();
       const assetAddr = resolveAsset(registry, chainName, opts.asset);
@@ -1261,10 +1299,200 @@ function registerYield(parent, getOpts) {
       process.exit(1);
     }
   });
-  yieldCmd.command("optimize").description("Find the optimal yield strategy for an asset").requiredOption("--asset <token>", "Token symbol or address").option("--chain <chain>", "Chain to query", "hyperevm").option("--strategy <strategy>", "Strategy: best-supply, leverage-loop, auto", "auto").option("--amount <amount>", "Amount to deploy (for allocation breakdown)").action(async (opts) => {
+  yieldCmd.command("execute").description("Find the best yield opportunity and execute supply (or show cross-chain plan)").requiredOption("--asset <token>", "Token symbol or address (e.g. USDC)").requiredOption("--amount <amount>", "Human-readable amount to supply (e.g. 1000)").option("--min-spread <percent>", "Minimum spread % required to execute cross-chain arb", "1.0").option("--target-chain <chain>", "Override auto-detected best chain").option("--target-protocol <protocol>", "Override auto-detected best protocol slug").action(async (opts) => {
     try {
       const registry = Registry8.loadEmbedded();
-      const chainName = (opts.chain ?? "hyperevm").toLowerCase();
+      const asset = opts.asset;
+      const humanAmount = parseFloat(opts.amount);
+      if (isNaN(humanAmount) || humanAmount <= 0) {
+        printOutput({ error: `Invalid amount: ${opts.amount}` }, getOpts());
+        process.exit(1);
+        return;
+      }
+      const minSpread = parseFloat(opts.minSpread ?? "1.0");
+      let targetChainName;
+      let targetProtocolSlug = opts.targetProtocol;
+      if (opts.targetChain) {
+        targetChainName = opts.targetChain.toLowerCase();
+      } else {
+        process.stderr.write(`Scanning all chains for best ${asset} yield...
+`);
+        const t0 = Date.now();
+        const allRates = await scanRatesForExecute(registry, asset);
+        process.stderr.write(`Scan done in ${Date.now() - t0}ms \u2014 ${allRates.length} rates found
+`);
+        if (allRates.length === 0) {
+          printOutput({ error: `No yield opportunities found for ${asset}` }, getOpts());
+          process.exit(1);
+          return;
+        }
+        let bestArb = null;
+        for (const s of allRates) {
+          for (const b of allRates) {
+            const spread = s.supply_apy - b.borrow_variable_apy;
+            if (spread > 0 && b.borrow_variable_apy > 0 && (s.chain !== b.chain || s.slug !== b.slug)) {
+              if (!bestArb || spread > bestArb.spread_pct) {
+                bestArb = {
+                  spread_pct: Math.round(spread * 1e4) / 1e4,
+                  supply_chain: s.chain,
+                  supply_protocol: s.protocol,
+                  supply_slug: s.slug,
+                  supply_apy: s.supply_apy,
+                  borrow_chain: b.chain,
+                  borrow_protocol: b.protocol,
+                  borrow_apy: b.borrow_variable_apy,
+                  strategy: s.chain === b.chain ? "same-chain" : "cross-chain"
+                };
+              }
+            }
+          }
+        }
+        if (bestArb && bestArb.strategy === "cross-chain" && bestArb.spread_pct >= minSpread) {
+          const supplyChainLower = bestArb.supply_chain.toLowerCase();
+          let supplyAssetAddr;
+          let supplyDecimals = 18;
+          try {
+            const tok = registry.resolveToken(supplyChainLower, asset);
+            supplyAssetAddr = tok.address;
+            supplyDecimals = tok.decimals;
+          } catch {
+          }
+          const amountWei2 = BigInt(Math.round(humanAmount * 10 ** supplyDecimals));
+          printOutput(
+            {
+              mode: "plan_only",
+              reason: "cross-chain arb requires manual bridge execution",
+              asset,
+              amount_human: humanAmount,
+              amount_wei: amountWei2.toString(),
+              best_arb: bestArb,
+              steps: [
+                {
+                  step: 1,
+                  action: "bridge",
+                  description: `Bridge ${humanAmount} ${asset} from current chain to ${bestArb.supply_chain}`,
+                  from_chain: "current",
+                  to_chain: bestArb.supply_chain,
+                  token: asset,
+                  amount_wei: amountWei2.toString()
+                },
+                {
+                  step: 2,
+                  action: "supply",
+                  description: `Supply ${humanAmount} ${asset} on ${bestArb.supply_protocol}`,
+                  chain: bestArb.supply_chain,
+                  protocol: bestArb.supply_protocol,
+                  protocol_slug: bestArb.supply_slug,
+                  asset_address: supplyAssetAddr,
+                  amount_wei: amountWei2.toString(),
+                  expected_apy: bestArb.supply_apy
+                }
+              ],
+              expected_spread_pct: bestArb.spread_pct,
+              supply_apy: bestArb.supply_apy,
+              borrow_apy: bestArb.borrow_apy
+            },
+            getOpts()
+          );
+          return;
+        }
+        targetChainName = allRates[0].chain.toLowerCase();
+        if (!targetProtocolSlug) {
+          targetProtocolSlug = allRates[0].slug;
+        }
+      }
+      const chain = registry.getChain(targetChainName);
+      const chainName = chain.name.toLowerCase();
+      const rpc = chain.effectiveRpcUrl();
+      let assetAddr;
+      let decimals = 18;
+      try {
+        const tok = registry.resolveToken(chainName, asset);
+        assetAddr = tok.address;
+        decimals = tok.decimals;
+      } catch {
+        if (/^0x[0-9a-fA-F]{40}$/.test(asset)) {
+          assetAddr = asset;
+        } else {
+          printOutput({ error: `Cannot resolve ${asset} on chain ${chainName}` }, getOpts());
+          process.exit(1);
+          return;
+        }
+      }
+      const amountWei = BigInt(Math.round(humanAmount * 10 ** decimals));
+      let proto;
+      if (targetProtocolSlug) {
+        try {
+          proto = registry.getProtocol(targetProtocolSlug);
+        } catch {
+          printOutput({ error: `Protocol not found: ${targetProtocolSlug}` }, getOpts());
+          process.exit(1);
+          return;
+        }
+      } else {
+        const candidates = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+        if (candidates.length === 0) {
+          printOutput({ error: `No aave_v3 lending protocol found on ${chainName}` }, getOpts());
+          process.exit(1);
+          return;
+        }
+        let bestRate = null;
+        let bestProto = candidates[0];
+        for (const c of candidates) {
+          try {
+            const lending = createLending2(c, rpc);
+            const r = await lending.getRates(assetAddr);
+            if (!bestRate || r.supply_apy > bestRate.supply_apy) {
+              bestRate = r;
+              bestProto = c;
+            }
+          } catch {
+          }
+        }
+        proto = bestProto;
+      }
+      const onBehalfOf = process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+      const adapter = createLending2(proto, rpc);
+      let currentApy;
+      try {
+        const r = await adapter.getRates(assetAddr);
+        currentApy = r.supply_apy;
+      } catch {
+      }
+      process.stderr.write(
+        `Supplying ${humanAmount} ${asset} (${amountWei} wei) on ${proto.name} (${chain.name})...
+`
+      );
+      const tx = await adapter.buildSupply({
+        protocol: proto.name,
+        asset: assetAddr,
+        amount: amountWei,
+        on_behalf_of: onBehalfOf
+      });
+      const result = await executor.execute(tx);
+      printOutput(
+        {
+          action: "yield_execute",
+          asset,
+          amount_human: humanAmount,
+          amount_wei: amountWei.toString(),
+          chain: chain.name,
+          protocol: proto.name,
+          protocol_slug: proto.slug,
+          supply_apy: currentApy,
+          result
+        },
+        getOpts()
+      );
+    } catch (err) {
+      printOutput({ error: String(err) }, getOpts());
+      process.exit(1);
+    }
+  });
+  yieldCmd.command("optimize").description("Find the optimal yield strategy for an asset").requiredOption("--asset <token>", "Token symbol or address").option("--strategy <strategy>", "Strategy: best-supply, leverage-loop, auto", "auto").option("--amount <amount>", "Amount to deploy (for allocation breakdown)").action(async (opts) => {
+    try {
+      const registry = Registry8.loadEmbedded();
+      const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
       const chain = registry.getChain(chainName);
       const rpc = chain.effectiveRpcUrl();
       const asset = opts.asset;
@@ -1846,47 +2074,134 @@ function registerPortfolio(parent, getOpts) {
 }
 
 // src/commands/monitor.ts
-import { Registry as Registry11 } from "@hypurrquant/defi-core";
+import { Registry as Registry11, ProtocolCategory as ProtocolCategory4 } from "@hypurrquant/defi-core";
 import { createLending as createLending3 } from "@hypurrquant/defi-protocols";
-function registerMonitor(parent, getOpts) {
-  parent.command("monitor").description("Monitor health factor with alerts").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--address <address>", "Wallet address to monitor").option("--threshold <hf>", "Health factor alert threshold", "1.5").option("--interval <secs>", "Polling interval in seconds", "60").option("--once", "Run once instead of continuously").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry11.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createLending3(protocol, chain.effectiveRpcUrl());
-    const threshold = parseFloat(opts.threshold);
-    const poll = async () => {
+async function checkChainLendingPositions(chainKey, registry, address, threshold) {
+  let chain;
+  try {
+    chain = registry.getChain(chainKey);
+  } catch {
+    return [];
+  }
+  const rpc = chain.effectiveRpcUrl();
+  const chainName = chain.name;
+  const protocols = registry.getProtocolsForChain(chainKey).filter(
+    (p) => p.category === ProtocolCategory4.Lending
+  );
+  const results = await Promise.all(
+    protocols.map(async (proto) => {
       try {
-        const position = await adapter.getUserPosition(opts.address);
+        const adapter = createLending3(proto, rpc);
+        const position = await adapter.getUserPosition(address);
         const hf = position.health_factor ?? Infinity;
-        const alert = hf < threshold;
-        printOutput({
-          protocol: protocol.name,
-          user: opts.address,
-          health_factor: hf,
-          threshold,
-          alert,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          supplies: position.supplies,
-          borrows: position.borrows
-        }, getOpts());
-      } catch (e) {
-        printOutput({
-          error: e instanceof Error ? e.message : String(e),
-          protocol: protocol.name,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString()
-        }, getOpts());
+        const totalBorrow = position.borrows?.reduce(
+          (sum, b) => sum + (b.value_usd ?? 0),
+          0
+        ) ?? 0;
+        if (totalBorrow === 0) return null;
+        const totalSupply = position.supplies?.reduce(
+          (sum, s) => sum + (s.value_usd ?? 0),
+          0
+        ) ?? 0;
+        return {
+          chain: chainName,
+          protocol: proto.name,
+          health_factor: hf === Infinity ? 999999 : Math.round(hf * 100) / 100,
+          total_supply_usd: Math.round(totalSupply * 100) / 100,
+          total_borrow_usd: Math.round(totalBorrow * 100) / 100,
+          alert: hf < threshold
+        };
+      } catch {
+        return null;
       }
-    };
-    await poll();
-    if (!opts.once) {
-      const intervalMs = parseInt(opts.interval) * 1e3;
-      const timer = setInterval(poll, intervalMs);
-      process.on("SIGINT", () => {
-        clearInterval(timer);
-        process.exit(0);
-      });
+    })
+  );
+  return results.filter((r) => r !== null);
+}
+function registerMonitor(parent, getOpts) {
+  parent.command("monitor").description("Monitor health factor with alerts").option("--protocol <protocol>", "Protocol slug (required unless --all-chains)").requiredOption("--address <address>", "Wallet address to monitor").option("--threshold <hf>", "Health factor alert threshold", "1.5").option("--interval <secs>", "Polling interval in seconds", "60").option("--once", "Run once instead of continuously").option("--all-chains", "Scan all chains for lending positions").action(async (opts) => {
+    const threshold = parseFloat(opts.threshold);
+    const address = opts.address;
+    if (opts.allChains) {
+      const registry = Registry11.loadEmbedded();
+      const chainKeys = Array.from(registry.chains.keys());
+      const poll = async () => {
+        const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+        const chainResults = await Promise.all(
+          chainKeys.map(
+            (ck) => checkChainLendingPositions(ck, registry, address, threshold)
+          )
+        );
+        const positions = chainResults.flat();
+        const alertsCount = positions.filter((p) => p.alert).length;
+        const output = {
+          timestamp,
+          address,
+          threshold,
+          positions,
+          alerts_count: alertsCount
+        };
+        for (const pos of positions) {
+          if (pos.alert) {
+            process.stderr.write(
+              `ALERT: ${pos.chain}/${pos.protocol} HF=${pos.health_factor} < ${threshold}
+`
+            );
+          }
+        }
+        printOutput(output, getOpts());
+      };
+      await poll();
+      if (!opts.once) {
+        const intervalMs = parseInt(opts.interval) * 1e3;
+        const timer = setInterval(poll, intervalMs);
+        process.on("SIGINT", () => {
+          clearInterval(timer);
+          process.exit(0);
+        });
+      }
+    } else {
+      if (!opts.protocol) {
+        printOutput({ error: "Either --protocol or --all-chains is required" }, getOpts());
+        process.exit(1);
+      }
+      const chainName = parent.opts().chain ?? "hyperevm";
+      const registry = Registry11.loadEmbedded();
+      const chain = registry.getChain(chainName);
+      const protocol = registry.getProtocol(opts.protocol);
+      const adapter = createLending3(protocol, chain.effectiveRpcUrl());
+      const poll = async () => {
+        try {
+          const position = await adapter.getUserPosition(address);
+          const hf = position.health_factor ?? Infinity;
+          const alert = hf < threshold;
+          printOutput({
+            protocol: protocol.name,
+            user: opts.address,
+            health_factor: hf,
+            threshold,
+            alert,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            supplies: position.supplies,
+            borrows: position.borrows
+          }, getOpts());
+        } catch (e) {
+          printOutput({
+            error: e instanceof Error ? e.message : String(e),
+            protocol: protocol.name,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          }, getOpts());
+        }
+      };
+      await poll();
+      if (!opts.once) {
+        const intervalMs = parseInt(opts.interval) * 1e3;
+        const timer = setInterval(poll, intervalMs);
+        process.on("SIGINT", () => {
+          clearInterval(timer);
+          process.exit(0);
+        });
+      }
     }
   });
 }
@@ -1937,7 +2252,7 @@ function registerAlert(parent, getOpts) {
 
 // src/commands/scan.ts
 import { encodeFunctionData as encodeFunctionData3, parseAbi as parseAbi3 } from "viem";
-import { Registry as Registry13, ProtocolCategory as ProtocolCategory4, multicallRead as multicallRead3 } from "@hypurrquant/defi-core";
+import { Registry as Registry13, ProtocolCategory as ProtocolCategory5, multicallRead as multicallRead3 } from "@hypurrquant/defi-core";
 var AAVE_ORACLE_ABI = parseAbi3([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
@@ -2015,16 +2330,16 @@ function registerScan(parent, getOpts) {
         (t) => t.address !== "0x0000000000000000000000000000000000000000" && !STABLECOINS.has(t.symbol)
       );
       const oracles = registry.getProtocolsForChain(chainName).filter(
-        (p) => p.category === ProtocolCategory4.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2" || p.interface === "aave_v3_isolated")
+        (p) => p.category === ProtocolCategory5.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2" || p.interface === "aave_v3_isolated")
       ).flatMap((p) => {
         const oracleAddr = p.contracts?.["oracle"];
         if (!oracleAddr) return [];
         const decimals = p.interface === "aave_v2" ? 18 : 8;
         return [{ name: p.name, addr: oracleAddr, decimals }];
       });
-      const dexProto = registry.getProtocolsForChain(chainName).find((p) => p.category === ProtocolCategory4.Dex && p.interface === "uniswap_v2");
+      const dexProto = registry.getProtocolsForChain(chainName).find((p) => p.category === ProtocolCategory5.Dex && p.interface === "uniswap_v2");
       const dexRouter = dexProto?.contracts?.["router"];
-      const compoundForks = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory4.Lending && p.interface === "compound_v2").map((p) => ({
+      const compoundForks = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory5.Lending && p.interface === "compound_v2").map((p) => ({
         name: p.name,
         vtokens: Object.entries(p.contracts ?? {}).filter(([k]) => k.startsWith("v")).map(([k, a]) => ({ key: k, addr: a }))
       }));
@@ -2284,13 +2599,13 @@ async function runAllChains(registry, patterns, oracleThreshold, stableThreshold
       const doOracle = pats.includes("oracle");
       const doStable = pats.includes("stable");
       const oracles = registry.getProtocolsForChain(chainName).filter(
-        (p) => p.category === ProtocolCategory4.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2" || p.interface === "aave_v3_isolated")
+        (p) => p.category === ProtocolCategory5.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2" || p.interface === "aave_v3_isolated")
       ).flatMap((p) => {
         const oracleAddr = p.contracts?.["oracle"];
         if (!oracleAddr) return [];
         return [{ name: p.name, addr: oracleAddr, decimals: p.interface === "aave_v2" ? 18 : 8 }];
       });
-      const dexProto = registry.getProtocolsForChain(chainName).find((p) => p.category === ProtocolCategory4.Dex && p.interface === "uniswap_v2");
+      const dexProto = registry.getProtocolsForChain(chainName).find((p) => p.category === ProtocolCategory5.Dex && p.interface === "uniswap_v2");
       const dexRouter = dexProto?.contracts?.["router"];
       const usdc = (() => {
         try {
@@ -2458,7 +2773,7 @@ function registerArb(parent, getOpts, executor) {
 
 // src/commands/positions.ts
 import { encodeFunctionData as encodeFunctionData4, parseAbi as parseAbi4 } from "viem";
-import { Registry as Registry15, ProtocolCategory as ProtocolCategory5, multicallRead as multicallRead4 } from "@hypurrquant/defi-core";
+import { Registry as Registry15, ProtocolCategory as ProtocolCategory6, multicallRead as multicallRead4 } from "@hypurrquant/defi-core";
 var ERC20_ABI3 = parseAbi4([
   "function balanceOf(address owner) external view returns (uint256)"
 ]);
@@ -2610,7 +2925,7 @@ function registerPositions(parent, getOpts) {
       }));
       const chainProtocols = registry.getProtocolsForChain(chainKey);
       const lendingPools = chainProtocols.filter(
-        (p) => p.category === ProtocolCategory5.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2")
+        (p) => p.category === ProtocolCategory6.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2")
       ).filter((p) => p.contracts?.["pool"]).map((p) => ({
         name: p.name,
         pool: p.contracts["pool"],
@@ -2664,7 +2979,7 @@ function registerPositions(parent, getOpts) {
 }
 
 // src/commands/price.ts
-import { Registry as Registry16, ProtocolCategory as ProtocolCategory6 } from "@hypurrquant/defi-core";
+import { Registry as Registry16, ProtocolCategory as ProtocolCategory7 } from "@hypurrquant/defi-core";
 import { createOracleFromLending, createOracleFromCdp, createDex as createDex4, DexSpotPrice } from "@hypurrquant/defi-protocols";
 function round23(x) {
   return Math.round(x * 100) / 100;
@@ -2706,7 +3021,7 @@ function registerPrice(parent, getOpts) {
     const fetchDex = opts.source === "all" || opts.source === "dex";
     const allPrices = [];
     if (fetchOracle) {
-      const lendingProtocols = registry.getProtocolsByCategory(ProtocolCategory6.Lending).filter((p) => p.chain.toLowerCase() === chainName);
+      const lendingProtocols = registry.getProtocolsByCategory(ProtocolCategory7.Lending).filter((p) => p.chain.toLowerCase() === chainName);
       await Promise.all(
         lendingProtocols.map(async (entry) => {
           try {
@@ -2723,7 +3038,7 @@ function registerPrice(parent, getOpts) {
       );
       const isWhype = assetAddr.toLowerCase() === WHYPE_ADDRESS.toLowerCase() || assetSymbol.toUpperCase() === "WHYPE" || assetSymbol.toUpperCase() === "HYPE";
       if (isWhype) {
-        const cdpProtocols = registry.getProtocolsByCategory(ProtocolCategory6.Cdp).filter((p) => p.chain.toLowerCase() === chainName);
+        const cdpProtocols = registry.getProtocolsByCategory(ProtocolCategory7.Cdp).filter((p) => p.chain.toLowerCase() === chainName);
         await Promise.all(
           cdpProtocols.map(async (entry) => {
             try {
@@ -2748,7 +3063,7 @@ function registerPrice(parent, getOpts) {
         process.stderr.write("USDC token not found in registry \u2014 skipping DEX prices\n");
       }
       if (usdcToken) {
-        const dexProtocols = registry.getProtocolsByCategory(ProtocolCategory6.Dex).filter((p) => p.chain.toLowerCase() === chainName);
+        const dexProtocols = registry.getProtocolsByCategory(ProtocolCategory7.Dex).filter((p) => p.chain.toLowerCase() === chainName);
         await Promise.all(
           dexProtocols.map(async (entry) => {
             try {
@@ -2887,7 +3202,7 @@ function registerToken(parent, getOpts, executor) {
 
 // src/commands/whales.ts
 import { encodeFunctionData as encodeFunctionData5, parseAbi as parseAbi5 } from "viem";
-import { Registry as Registry19, ProtocolCategory as ProtocolCategory7, multicallRead as multicallRead5 } from "@hypurrquant/defi-core";
+import { Registry as Registry19, ProtocolCategory as ProtocolCategory8, multicallRead as multicallRead5 } from "@hypurrquant/defi-core";
 var POOL_ABI4 = parseAbi5([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)"
 ]);
@@ -2988,7 +3303,7 @@ function registerWhales(parent, getOpts) {
     const whaleData = [];
     if (opts.positions && whaleList.length > 0) {
       const lendingPools = registry.getProtocolsForChain(chainName).filter(
-        (p) => p.category === ProtocolCategory7.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2")
+        (p) => p.category === ProtocolCategory8.Lending && (p.interface === "aave_v3" || p.interface === "aave_v2")
       ).filter((p) => p.contracts?.["pool"]).map((p) => ({
         name: p.name,
         pool: p.contracts["pool"],
@@ -3074,7 +3389,7 @@ function registerWhales(parent, getOpts) {
 
 // src/commands/compare.ts
 import { spawnSync } from "child_process";
-import { Registry as Registry20, ProtocolCategory as ProtocolCategory8 } from "@hypurrquant/defi-core";
+import { Registry as Registry20, ProtocolCategory as ProtocolCategory9 } from "@hypurrquant/defi-core";
 import { createLending as createLending4 } from "@hypurrquant/defi-protocols";
 function round25(x) {
   return Math.round(x * 100) / 100;
@@ -3145,7 +3460,7 @@ async function fetchLendingRates(registry, asset) {
       } catch {
         return [];
       }
-      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory8.Lending && p.interface === "aave_v3");
+      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory9.Lending && p.interface === "aave_v3");
       if (protos.length === 0) return [];
       const rpc = chain.effectiveRpcUrl();
       const rates = [];
@@ -3380,6 +3695,70 @@ function registerNft(parent, getOpts) {
   });
 }
 
+// src/commands/farm.ts
+import { Registry as Registry24 } from "@hypurrquant/defi-core";
+import { createMasterChef } from "@hypurrquant/defi-protocols";
+function registerFarm(parent, getOpts, executor) {
+  const farm = parent.command("farm").description("LP farm operations: deposit, withdraw, claim rewards (MasterChef)");
+  farm.command("deposit").description("Deposit LP tokens into a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").requiredOption("--amount <amount>", "LP token amount in wei").action(async (opts) => {
+    const registry = Registry24.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "hyperevm");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMasterChef(protocol, rpcUrl);
+    const tx = await adapter.buildDeposit(
+      protocol.contracts?.["masterchef"],
+      BigInt(opts.amount),
+      BigInt(opts.pid)
+    );
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  farm.command("withdraw").description("Withdraw LP tokens from a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").requiredOption("--amount <amount>", "LP token amount in wei").action(async (opts) => {
+    const registry = Registry24.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "hyperevm");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMasterChef(protocol, rpcUrl);
+    const tx = await adapter.buildWithdrawPid(
+      BigInt(opts.pid),
+      BigInt(opts.amount)
+    );
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  farm.command("claim").description("Claim pending rewards from a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").action(async (opts) => {
+    const registry = Registry24.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "hyperevm");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMasterChef(protocol, rpcUrl);
+    const tx = await adapter.buildClaimRewardsPid(
+      BigInt(opts.pid)
+    );
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  farm.command("info").description("Show pending rewards and farm info").requiredOption("--protocol <protocol>", "Protocol slug").option("--pid <pid>", "Farm pool ID (optional)").option("--address <address>", "Wallet address to query (defaults to DEFI_WALLET_ADDRESS env)").action(async (opts) => {
+    const registry = Registry24.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "hyperevm");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMasterChef(protocol, rpcUrl);
+    const walletAddress = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!walletAddress) {
+      throw new Error("--address or DEFI_WALLET_ADDRESS required");
+    }
+    const masterchef = protocol.contracts?.["masterchef"];
+    const rewards = await adapter.getPendingRewards(masterchef, walletAddress);
+    printOutput(rewards, getOpts());
+  });
+}
+
 // src/cli.ts
 var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2557
@@ -3411,7 +3790,7 @@ registerLending(program, getOutputMode, makeExecutor());
 registerCdp(program, getOutputMode, makeExecutor());
 registerStaking(program, getOutputMode, makeExecutor());
 registerVault(program, getOutputMode, makeExecutor());
-registerYield(program, getOutputMode);
+registerYield(program, getOutputMode, makeExecutor());
 registerPortfolio(program, getOutputMode);
 registerMonitor(program, getOutputMode);
 registerAlert(program, getOutputMode);
@@ -3426,6 +3805,7 @@ registerCompare(program, getOutputMode);
 registerSwap(program, getOutputMode, makeExecutor());
 registerBridge(program, getOutputMode);
 registerNft(program, getOutputMode);
+registerFarm(program, getOutputMode, makeExecutor());
 program.command("agent").description("Agent mode: read JSON commands from stdin (for AI agents)").action(async () => {
   const executor = makeExecutor();
   process.stderr.write("Agent mode: reading JSON commands from stdin...\n");
@@ -3436,4 +3816,4 @@ program.command("agent").description("Agent mode: read JSON commands from stdin 
 export {
   program
 };
-//# sourceMappingURL=chunk-SYCGEEQX.js.map
+//# sourceMappingURL=chunk-AY6YDYJM.js.map

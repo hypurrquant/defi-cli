@@ -302,11 +302,10 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, execut
     .command("compare")
     .description("Compare lending rates across protocols for an asset")
     .requiredOption("--asset <token>", "Token symbol or address")
-    .option("--chain <chain>", "Chain to query", "hyperevm")
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();
-        const chainName: string = (opts.chain ?? "hyperevm").toLowerCase();
+        const chainName: string = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
         const chain = registry.getChain(chainName);
         const rpc = chain.effectiveRpcUrl();
         const assetAddr = resolveAsset(registry, chainName, opts.asset as string);
@@ -608,13 +607,12 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, execut
     .command("optimize")
     .description("Find the optimal yield strategy for an asset")
     .requiredOption("--asset <token>", "Token symbol or address")
-    .option("--chain <chain>", "Chain to query", "hyperevm")
     .option("--strategy <strategy>", "Strategy: best-supply, leverage-loop, auto", "auto")
     .option("--amount <amount>", "Amount to deploy (for allocation breakdown)")
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();
-        const chainName: string = (opts.chain ?? "hyperevm").toLowerCase();
+        const chainName: string = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
         const chain = registry.getChain(chainName);
         const rpc = chain.effectiveRpcUrl();
         const asset = opts.asset as string;

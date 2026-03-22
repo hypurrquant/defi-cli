@@ -22,11 +22,11 @@ export function jsonReplacerDecimal(_key: string, value: unknown): unknown {
   return value;
 }
 
-/** Stringify with 0x-hex bigint handling (matches Rust CLI output) */
+/** Stringify with decimal bigint handling */
 export function jsonStringify(data: unknown, pretty = true): string {
   return pretty
-    ? JSON.stringify(data, jsonReplacer, 2)
-    : JSON.stringify(data, jsonReplacer);
+    ? JSON.stringify(data, jsonReplacerDecimal, 2)
+    : JSON.stringify(data, jsonReplacerDecimal);
 }
 
 /** Parse a 0x-hex or decimal string to bigint */

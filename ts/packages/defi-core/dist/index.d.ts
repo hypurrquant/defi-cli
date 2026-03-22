@@ -126,6 +126,14 @@ interface LendingRates {
     utilization: number;
     total_supply: bigint;
     total_borrow: bigint;
+    /** Reward token addresses for supply-side incentives */
+    supply_reward_tokens?: string[];
+    /** Reward token addresses for borrow-side incentives */
+    borrow_reward_tokens?: string[];
+    /** Emissions per second per supply reward token (raw uint256 as string) */
+    supply_emissions_per_second?: string[];
+    /** Emissions per second per borrow reward token (raw uint256 as string) */
+    borrow_emissions_per_second?: string[];
 }
 interface UserPosition {
     protocol: string;
@@ -307,7 +315,7 @@ type Result<T> = T;
 declare function jsonReplacer(_key: string, value: unknown): unknown;
 /** JSON replacer for SDK consumers — bigint becomes decimal string */
 declare function jsonReplacerDecimal(_key: string, value: unknown): unknown;
-/** Stringify with 0x-hex bigint handling (matches Rust CLI output) */
+/** Stringify with decimal bigint handling */
 declare function jsonStringify(data: unknown, pretty?: boolean): string;
 /** Parse a 0x-hex or decimal string to bigint */
 declare function parseBigInt(value: string): bigint;

@@ -167,6 +167,14 @@ export interface LendingRates {
   utilization: number;
   total_supply: bigint;
   total_borrow: bigint;
+  /** Reward token addresses for supply-side incentives */
+  supply_reward_tokens?: string[];
+  /** Reward token addresses for borrow-side incentives */
+  borrow_reward_tokens?: string[];
+  /** Emissions per second per supply reward token (raw uint256 as string) */
+  supply_emissions_per_second?: string[];
+  /** Emissions per second per borrow reward token (raw uint256 as string) */
+  borrow_emissions_per_second?: string[];
 }
 
 export interface UserPosition {

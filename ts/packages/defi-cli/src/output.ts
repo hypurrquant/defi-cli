@@ -1,4 +1,4 @@
-import { jsonStringify } from "@hypurrquant/defi-core";
+import { jsonStringify, jsonReplacerDecimal } from "@hypurrquant/defi-core";
 import { renderTable } from "./table.js";
 
 export interface OutputMode {
@@ -23,7 +23,7 @@ export function parseOutputMode(opts: {
 
 export function formatOutput(value: unknown, mode: OutputMode): string {
   if (mode.ndjson) {
-    return JSON.stringify(value, jsonReplacer);
+    return JSON.stringify(value, jsonReplacerDecimal);
   }
 
   if (mode.json) {
@@ -49,9 +49,4 @@ export function formatOutput(value: unknown, mode: OutputMode): string {
 
 export function printOutput(value: unknown, mode: OutputMode): void {
   console.log(formatOutput(value, mode));
-}
-
-function jsonReplacer(_key: string, val: unknown): unknown {
-  if (typeof val === "bigint") return "0x" + val.toString(16);
-  return val;
 }
