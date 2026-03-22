@@ -1,0 +1,49 @@
+[[token]]
+symbol = "ETH"
+name = "Ether"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x176211869cA2b568f2A7D4EE941E073a821EE1ff"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT"
+name = "Tether USD"
+address = "0xA219439258ca9da29E9Cc4cE5596924745e12B93"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "DAI"
+name = "Dai Stablecoin"
+address = "0x4AF15ec2A0BD43Db75dd04E62FAA3B8EF36b00d5"
+decimals = 18
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WBTC"
+name = "Wrapped Bitcoin"
+address = "0x3aAB2285ddcDdaD8edf438C1bAB47e1a9D05a9b4"
+decimals = 8
+tags = ["blue_chip"]
+
+[[token]]
+symbol = "wstETH"
+name = "Wrapped liquid staked Ether 2.0"
+address = "0xB5beDd42000b71FddE22D3eE8a79Bd49A568fC8F"
+decimals = 18
+tags = ["lst"]

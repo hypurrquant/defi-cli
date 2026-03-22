@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Linea"
+slug = "aave-v3-linea"
+category = "lending"
+interface = "aave_v3"
+chain = "linea"
+native = false
+description = "Aave V3 on Linea"
+
+[protocol.contracts]
+pool = "0xc47b8C00b0f69a36fa203Ffeac0334874574a8Ac"
+oracle = "0xCFDAdA7DCd2e785cF706BaDBC2B8Af5084d595e9"
+pool_data_provider = "0x47cd4b507B81cB831669c71c7077f4daF6762FF4"
+pool_addresses_provider = "0x89502c3731F69DDC95B65753708A07F8Cd0373F4"

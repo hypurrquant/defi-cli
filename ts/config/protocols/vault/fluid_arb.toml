@@ -1,0 +1,13 @@
+[protocol]
+name = "Fluid Arbitrum"
+slug = "fluid-arb"
+category = "vault"
+interface = "erc4626"
+chain = "arbitrum"
+native = false
+description = "Fluid (Instadapp) ERC-4626 fToken lending vaults on Arbitrum ($156M TVL)"
+
+[protocol.contracts]
+fusdc = "0x1A996cb54bb95462040408C06122D45D6Cdb6096"
+fweth = "0x45Df0656F8aDf017590009d2f1898eeca4F0a205"
+fusdt = "0x4A03F37e7d3fC243e3f99341d36f4b829BEe5E03"

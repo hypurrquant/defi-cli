@@ -1,0 +1,12 @@
+[protocol]
+name = "SushiSwap V3 Moonbeam"
+slug = "sushiswap-v3-moonbeam"
+category = "dex"
+interface = "uniswap_v3"
+chain = "moonbeam"
+native = false
+description = "SushiSwap V3 on Moonbeam"
+
+[protocol.contracts]
+router = "0xD045d27c1f7e7f770a807B0a85d8e3F852e0F2BE"
+factory = "0x2ecd58F51819E8F8BA08A650BEA04Fc0DEa1d523"

@@ -1,0 +1,14 @@
+[protocol]
+name = "HyperSwap V2"
+slug = "hyperswap-v2"
+category = "dex"
+interface = "uniswap_v2"
+chain = "hyperevm"
+native = true
+description = "Uniswap V2 fork on HyperEVM"
+
+[protocol.contracts]
+# Previous addresses (0xDa0f51... and 0x4df039...) were EOAs with no code.
+# Correct addresses sourced from verified contracts on hyperevmscan.io.
+router = "0xb4a9C4e6Ea8E2191d2FA5B380452a634Fb21240A"
+factory = "0x724412c00059bF7d6ee7d4a1D0d5Cd4De3ea1C48"

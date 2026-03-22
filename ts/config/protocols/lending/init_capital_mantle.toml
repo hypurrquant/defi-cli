@@ -1,0 +1,17 @@
+[protocol]
+name = "INIT Capital"
+slug = "init-capital-mantle"
+category = "lending"
+interface = "init_capital"
+chain = "mantle"
+native = true
+description = "INIT Capital — lending protocol on Mantle with position-based architecture"
+
+[protocol.contracts]
+core = "0x972BcB0284cca0152527c4f70f8F689852bCAFc5"
+oracle = "0x4E195A32b2f6eBa9c4565bA49bef34F23c2C0350"
+config = "0x007F91636E0f986068Ef27c950FA18734BA553Ac"
+risk_manager = "0x0c03cd3e8b669680Bf306Fc72F1dc2cAC592f951"
+pos_manager = "0x0e7401707CD08c03CDb53DAEF3295DDFb68BBa92"
+lens = "0x7d2b278b8ef87bEb83AeC01243ff2Fed57456042"
+money_market_hook = "0xf82CBcAB75C1138a8F1F20179613e7C0C8337346"

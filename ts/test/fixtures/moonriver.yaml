@@ -1,0 +1,84 @@
+# Auto-generated test fixture for moonriver
+chain:
+  name: "Moonriver"
+  slug: "moonriver"
+  chain_id: 1285
+  rpc_url: "https://rpc.api.moonriver.moonbeam.network"
+  native_token: "MOVR"
+
+tokens:
+  native:
+    symbol: "MOVR"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WMOVR"
+    address: "0x98878B06940aE243284CA214f92Bb71a2b032B8A"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xE3F5a90F9cb311505cd691a46596599aA1A0AD7D"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "SolarBeam"
+      slug: "solarbeam-moonriver"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xAA30eF758139ae4a7f798112902Bf6d65612045f"
+        factory: "0x049581aEB6Fe262727f290165C29BDAB065a1B68"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "SushiSwap V3 Moonriver"
+      slug: "sushiswap-v3-moonriver"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xD045d27c1f7e7f770a807B0a85d8e3F852e0F2BE"
+        factory: "0x2F255d3f3C0A3726c6c99E74566c4b18E36E3ce6"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Moonwell Moonriver"
+      slug: "moonwell-moonriver"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x0b7a0EAA884849c6Af7a129e899536dDDcA4905E"
+        oracle: "0x892bE716Dcf0A6199677F355f45ba8CC123BAF60"
+        mMOVR: "0x6a1A771C7826596652daDC9145fEAaE62b1cd07f"
+        mxcKSM: "0xa0d116513bd0b8f3f14e6ea41556c6ec34688e0f"
+        mETH: "0x6503D905338e2ebB550c9eC39Ced525b612E77aE"
+        mUSDC: "0xd0670AEe3698F66e2D4dAf071EB9c690d978BFA8"
+        mUSDT: "0x36918B66F9A3eC7a59d0007D8458DB17bDffBF21"
+        mFRAX: "0x93Ef8B7c6171BaB1C0A51092B2c9da8dc2ba0e9D"
+        mWBTC: "0x6E745367F4Ad2b3da7339aee65dC85d416614D90"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Moonriver"
+      slug: "beefy-moonriver"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x004fd8d1667D4eE60945d97f91dAb1bbc32A099A"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-moonriver"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

@@ -1,0 +1,11 @@
+[protocol]
+name = "Morpho Blue WorldChain Vault"
+slug = "morpho-blue-worldchain-vault"
+category = "vault"
+interface = "erc4626"
+chain = "worldchain"
+native = false
+description = "Morpho Blue on WorldChain — ERC-4626 MetaMorpho vaults built on the permissionless lending primitive"
+
+[protocol.contracts]
+vault = "0xE741BC7c34758b4caE05062794E8Ae24978AF432"

@@ -1,0 +1,13 @@
+[protocol]
+name = "Stargate V2 Ethereum"
+slug = "stargate-v2-ethereum"
+category = "bridge"
+interface = "bridge"
+chain = "ethereum"
+description = "Stargate V2 (LayerZero) bridge on Ethereum"
+
+[protocol.contracts]
+router = "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+usdc_pool = "0xc026395860Db2d07ee33e05fE50ed7bD583189C7"
+usdt_pool = "0x933597a323Eb81cAe705C5bC29985172fd5A3973"
+eth_pool = "0x77b2043768d28E9C9aB44E1aBfC95944bcE57931"

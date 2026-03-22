@@ -1,0 +1,12 @@
+[protocol]
+name = "DragonSwap V2 Sei"
+slug = "dragonswap-v2-sei"
+category = "dex"
+interface = "uniswap_v3"
+chain = "sei"
+native = true
+description = "DragonSwap V2 — concentrated liquidity DEX on Sei, Uniswap V3 fork with improved capital efficiency"
+
+[protocol.contracts]
+router = "0x11da6463d6cb5a03411dbf5ab6f6bc3997ac7428"
+factory = "0x179d9a5592bc77050796f7be28058c51ca575df4"

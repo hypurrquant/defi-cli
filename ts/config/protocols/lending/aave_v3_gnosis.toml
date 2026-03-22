@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Gnosis"
+slug = "aave-v3-gnosis"
+category = "lending"
+interface = "aave_v3"
+chain = "gnosis"
+native = false
+description = "Aave V3 on Gnosis Chain"
+
+[protocol.contracts]
+pool = "0xb50201558B00496A145fE76f7424749556E326D8"
+pool_addresses_provider = "0x36616cf17557639614c1cdDb356b1B83fc0B2132"
+oracle = "0xeb0a051be10228213BAEb449db63719d6742F7c4"
+pool_data_provider = "0xF1F5acB596568895393cB5E4D0452D6592A2fA70"

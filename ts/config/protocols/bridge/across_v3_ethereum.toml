@@ -1,0 +1,10 @@
+[protocol]
+name = "Across V3 Ethereum"
+slug = "across-v3-ethereum"
+category = "bridge"
+interface = "bridge"
+chain = "ethereum"
+description = "Across Protocol V3 bridge on Ethereum"
+
+[protocol.contracts]
+spoke_pool = "0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5"

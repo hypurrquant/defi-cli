@@ -1,0 +1,19 @@
+[protocol]
+name = "Felix Morpho"
+slug = "felix-morpho"
+category = "lending"
+interface = "morpho_blue"
+chain = "hyperevm"
+native = false
+description = "Felix Morpho Blue fork — MetaMorpho ERC-4626 lending vaults, TVL $103M"
+
+[protocol.contracts]
+morpho_blue = "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"
+# MetaMorpho ERC-4626 vaults (supply-side)
+fehype = "0x2900ABd73631b2f60747e687095537B673c06A76"
+feusdc = "0x8A862fD6c12f9ad34C9c2ff45AB2b6712e8CEa27"
+feusdt0 = "0xFc5126377F0efc0041C0969Ef9BA903Ce67d151e"
+feusde = "0x835FEBF893c6DdDee5CF762B0f8e31C5B06938ab"
+feusdhl = "0x9c59a9389D8f72DE2CdAf1126F36EA4790E2275e"
+feusdt0_frontier = "0x9896a8605763106e57A51aa0a97Fe8099E806bb3"
+feusdhl_frontier = "0x66c71204B70aE27BE6dC3eb41F9aF5868E68fDb6"

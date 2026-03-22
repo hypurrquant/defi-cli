@@ -1,0 +1,84 @@
+# Auto-generated test fixture for mode
+chain:
+  name: "Mode"
+  slug: "mode"
+  chain_id: 34443
+  rpc_url: "https://mainnet.mode.network"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xd988097fb8612cc24eeC14542bC03424c656005f"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Kim Exchange Mode"
+      slug: "kim-mode"
+      interface: "solidly_cl"
+      contracts:
+        router: "0xAc48FcF1049668B285f3dC72483DF5Ae2162f7e8"
+        factory: "0xB5F00c2C5f8821155D8ed27E31932CFD9DB3C5D5"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Velodrome Mode"
+      slug: "velodrome-mode"
+      interface: "solidly_v2"
+      contracts:
+        router: "0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45"
+        factory: "0x31832f2a97Fd20664D76Cc421207669b55CE4BC0"
+        voter: "0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "LayerBank Mode"
+      slug: "layerbank-mode"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x80980869D90A737aff47aBA6FbaA923012C1FF50"
+        oracle: "0xA6B2535b1c10ca5592Be90A01DD1b6018062f7cf"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Mode"
+      slug: "beefy-mode"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x02059598A02E1662215B89da5E668096410c6bdb"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-mode"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Mode"
+      slug: "across-v3-mode"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96"

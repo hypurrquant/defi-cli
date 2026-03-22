@@ -1,0 +1,93 @@
+# Auto-generated test fixture for rootstock
+chain:
+  name: "Rootstock"
+  slug: "rootstock"
+  chain_id: 30
+  rpc_url: "https://public-node.rsk.co"
+  native_token: "RBTC"
+
+tokens:
+  native:
+    symbol: "RBTC"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WRBTC"
+    address: "0x542fDA317318eBF1d3DEAf76E0b632741A7e677d"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "RSKSwap"
+      slug: "rskswap-rootstock"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xf55c496bb1058690db1401c4b9c19f3f44374961"
+        factory: "0xfaa7762f551bba9b0eba34d6443d49d0a577c0e1"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Rootstock"
+      slug: "uniswap-v3-rootstock"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x0B14ff67f0014046b4b99057Aec4509640b3947A"
+        factory: "0xaF37EC98A00FD63689CF3060BF3B6784E00caD82"
+        quoter: "0xb51727c996C68E60F598A923a5006853cd2fEB31"
+        position_manager: "0x9d9386c042F194B460Ec424a1e57ACDE25f5C4b1"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "LayerBank Rootstock"
+      slug: "layerbank-rootstock"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0xc30991623fb2a63E6e1B59A29987E1EEE57447bF"
+        oracle: "0x0000000000000000000000000000000000000000"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Tropykus Rootstock"
+      slug: "tropykus-rootstock"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x962308Fef8EdfAdD705384840e7701f8F39ed0c0"
+        oracle: "0x0000000000000000000000000000000000000000"
+        kRBTC: "0x0aeadb9d4c6a80462a47e87e76e487fa8b9a37d7"
+        kDOC: "0x544eb90e766b405134b3b3f62b6b4c23fcd5fda2"
+        kUSDRIF: "0xDdf3CE45fcf080DF61ee61dac5Ddefef7ED4F46C"
+        kBPRO: "0x405062731d8656af5950ef952be9fa110878036b"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Rootstock"
+      slug: "beefy-rootstock"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x41c8fDc1f2EB272CB51c224D4C68F277c3C7878B"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-rootstock"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

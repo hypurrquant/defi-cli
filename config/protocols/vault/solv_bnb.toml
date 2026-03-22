@@ -1,0 +1,13 @@
+[protocol]
+name = "Solv Protocol BNB"
+slug = "solv-bnb"
+category = "vault"
+interface = "erc4626"
+chain = "bnb"
+native = false
+description = "Solv Protocol — SolvBTC yield vaults on BNB Chain with ~$234M TVL"
+
+[protocol.contracts]
+solvbtc_token = "0x4aae823a6a0b376de6a78e74ecc5b079d38cbcf7"
+solvbtc_bbn_token = "0x1346b618dc92810ec74163e4c27004c921d446a5"
+solvbtc_ena_token = "0x53e63a31fd1077f949204b94f431bcab98f72bce"

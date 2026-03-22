@@ -1,0 +1,11 @@
+[protocol]
+name = "Yearn V3 Base"
+slug = "yearn-base"
+category = "vault"
+interface = "erc4626"
+chain = "base"
+native = false
+description = "Yearn Finance V3 ERC-4626 yield vaults on Base ($8M TVL)"
+
+[protocol.contracts]
+vault = "0xc3bd0a2193c8f027b82dde3611d18589ef3f62a9"

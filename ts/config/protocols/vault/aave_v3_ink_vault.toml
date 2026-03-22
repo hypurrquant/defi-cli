@@ -1,0 +1,11 @@
+[protocol]
+name = "Aave V3 Ink Vault"
+slug = "aave-v3-ink-vault"
+category = "vault"
+interface = "erc4626"
+chain = "ink"
+native = false
+description = "Aave V3 on Ink — aToken deposits are ERC-4626 compatible yield-bearing positions"
+
+[protocol.contracts]
+vault = "0x2816cf15F6d2A220E789aA011D5EE4eB6c47FEbA"

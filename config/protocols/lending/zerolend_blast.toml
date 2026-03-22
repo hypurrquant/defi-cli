@@ -1,0 +1,14 @@
+[protocol]
+name = "ZeroLend Blast"
+slug = "zerolend-blast"
+category = "lending"
+interface = "aave_v3"
+chain = "blast"
+native = false
+description = "ZeroLend — Aave V3 fork and leading lending protocol on Blast"
+
+[protocol.contracts]
+pool = "0xa70B0F3C2470AbBE104BdB3F3aaa9C7C54BEA7A8"
+pool_addresses_provider = "0xb0811a1FC9Fb9972ee683Ba04c32Cb828Bcf587B"
+oracle = "0xBE0ab675a478A759ECA580f0D6c9d399085547D8"
+pool_data_provider = "0xc6DF4ddDBFaCb866e78Dcc01b813A41C15A08C10"

@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Celo"
+slug = "aave-v3-celo"
+category = "lending"
+interface = "aave_v3"
+chain = "celo"
+native = false
+description = "Aave V3 on Celo"
+
+[protocol.contracts]
+pool = "0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402"
+pool_addresses_provider = "0x9F7Cf9417D5251C59fE94fB9147feEe1aAd9Cea5"
+oracle = "0x1e693D088ceFD1E95ba4c4a5F7EeA41a1Ec37e8b"
+pool_data_provider = "0x2e0f8D3B1631296cC7c56538D6Eb6032601E15ED"

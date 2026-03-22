@@ -1,0 +1,10 @@
+[protocol]
+name = "Across V3 Base"
+slug = "across-v3-base"
+category = "bridge"
+interface = "bridge"
+chain = "base"
+description = "Across Protocol V3 bridge on Base"
+
+[protocol.contracts]
+spoke_pool = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64"

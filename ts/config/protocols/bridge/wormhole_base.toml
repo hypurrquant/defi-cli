@@ -1,0 +1,12 @@
+[protocol]
+name = "Wormhole Base"
+slug = "wormhole-base"
+category = "bridge"
+interface = "bridge"
+chain = "base"
+description = "Wormhole Portal bridge on Base"
+
+[protocol.contracts]
+token_bridge = "0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627"
+core = "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6"
+nft_bridge = "0xDA3adC6621B2637BFd516F0B0b3B36D5861045e9"

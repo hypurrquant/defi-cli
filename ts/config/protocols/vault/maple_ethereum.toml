@@ -1,0 +1,11 @@
+[protocol]
+name = "Maple Finance Ethereum"
+slug = "maple-ethereum"
+category = "vault"
+interface = "erc4626"
+chain = "ethereum"
+native = false
+description = "Maple Finance syrupUSDC ERC-4626 lending pool on Ethereum mainnet"
+
+[protocol.contracts]
+vault = "0x80ac24aA929EAF5013f6436CDa2a7ba190f5cC0b"

@@ -1,0 +1,35 @@
+[[token]]
+symbol = "METIS"
+name = "Metis"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WMETIS"
+name = "Wrapped Metis"
+address = "0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0xEA32A96608495e54156Ae48931A7c20f0dcc1a21"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT"
+name = "Tether USD"
+address = "0xbB06DCA3AE6887fAbF931640f67cab3e3a16F4dC"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0x420000000000000000000000000000000000000A"
+decimals = 18
+tags = ["blue_chip"]

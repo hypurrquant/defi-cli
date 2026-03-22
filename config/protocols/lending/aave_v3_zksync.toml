@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 ZkSync"
+slug = "aave-v3-zksync"
+category = "lending"
+interface = "aave_v3"
+chain = "zksync"
+native = false
+description = "Aave V3 on ZkSync Era"
+
+[protocol.contracts]
+pool = "0x78e30497a3c7527d953c6B1E3541b021A98Ac43c"
+pool_addresses_provider = "0x2A3948BB219D6B2Fa83D64100006391a96bE6cb7"
+oracle = "0xC7F58Fca663a8d377B6D0c9703C697f56dC40088"
+pool_data_provider = "0x9057ac7b2D35606F8AD5aE2FCBafcD94E58D9927"

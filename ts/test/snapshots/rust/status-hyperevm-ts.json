@@ -1,0 +1,874 @@
+{
+  "chain": "HyperEVM",
+  "chain_id": 999,
+  "rpc_url": "https://rpc.hyperliquid.xyz/evm",
+  "protocols": [
+    {
+      "slug": "balancer-v3",
+      "name": "Balancer V3",
+      "category": "dex",
+      "interface": "balancer_v3",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0xbA1333333333a1BA1108E8412f11850A5C319bA9"
+        },
+        {
+          "name": "router",
+          "address": "0xA8920455934Da4D853faac1f94Fe7bEf72943eF1"
+        },
+        {
+          "name": "weighted_pool_factory",
+          "address": "0x6eE18fbb1BBcC5CF700cD75ea1aef2bb21e3cB3F"
+        },
+        {
+          "name": "stable_pool_factory",
+          "address": "0xb96524227c4B5Ab908FC3d42005FE3B07abA40E9"
+        }
+      ]
+    },
+    {
+      "slug": "curve",
+      "name": "Curve DEX",
+      "category": "dex",
+      "interface": "curve_stableswap",
+      "contracts": [
+        {
+          "name": "factory",
+          "address": "0x5eeE3091f747E60a045a2E715a4c71e600e31F6E"
+        },
+        {
+          "name": "router",
+          "address": "0x5eeE3091f747E60a045a2E715a4c71e600e31F6E"
+        }
+      ]
+    },
+    {
+      "slug": "hyperswap-v3",
+      "name": "HyperSwap V3",
+      "category": "dex",
+      "interface": "uniswap_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D"
+        },
+        {
+          "name": "factory",
+          "address": "0xB1c0fa0B789320044A6F623cFe5eBda9562602E3"
+        }
+      ]
+    },
+    {
+      "slug": "hyperswap-v2",
+      "name": "HyperSwap V2",
+      "category": "dex",
+      "interface": "uniswap_v2",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0xb4a9C4e6Ea8E2191d2FA5B380452a634Fb21240A"
+        },
+        {
+          "name": "factory",
+          "address": "0x724412c00059bF7d6ee7d4a1D0d5Cd4De3ea1C48"
+        }
+      ]
+    },
+    {
+      "slug": "kittenswap",
+      "name": "KittenSwap Algebra",
+      "category": "dex",
+      "interface": "algebra_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x4e73E421480a7E0C24fB3c11019254edE194f736"
+        },
+        {
+          "name": "factory",
+          "address": "0x5f95E92c338e6453111Fc55ee66D4AafccE661A7"
+        },
+        {
+          "name": "quoter",
+          "address": "0xc58874216AFe47779ADED27B8AAd77E8Bd6eBEBb"
+        },
+        {
+          "name": "position_manager",
+          "address": "0x9ea4459c8DefBF561495d95414b9CF1E2242a3E2"
+        },
+        {
+          "name": "voter",
+          "address": "0xb7F7053F7e6c210e6777D5BA758E4b3ECa6C88A0"
+        },
+        {
+          "name": "ve_token",
+          "address": "0x29d3a21ff35a519e00cf6d272f2ad897b109bd84"
+        },
+        {
+          "name": "minter",
+          "address": "0xac36d3671f21A5056Cd1751E201574d702748C7A"
+        },
+        {
+          "name": "farming_center",
+          "address": "0x211BD8917d433B7cC1F4497AbA906554Ab6ee479"
+        },
+        {
+          "name": "eternal_farming",
+          "address": "0xf3b57fE4d5D0927C3A5e549CB6aF1866687e2D62"
+        }
+      ]
+    },
+    {
+      "slug": "nest-v1",
+      "name": "NEST V1",
+      "category": "dex",
+      "interface": "algebra_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0xaA26B8e5Cadd04430c32787eCC3AA325e99681e9"
+        },
+        {
+          "name": "factory",
+          "address": "0xF77Bd082c627aA54591cF2f2EaA811fd1AB3b1F3"
+        },
+        {
+          "name": "pool_deployer",
+          "address": "0x3842CE04380B8655A3A47Ed87eA0D311ADCa161F"
+        },
+        {
+          "name": "position_manager",
+          "address": "0xEAF58788a405F3253814b4559391a22bE8616250"
+        },
+        {
+          "name": "quoter",
+          "address": "0xBea20609A4772311c5b81F814Cd4f9ECaEF5DFAd"
+        },
+        {
+          "name": "router_v2",
+          "address": "0xfDb34624506e9A0624AF60F85ebd9E44A0FD2a17"
+        },
+        {
+          "name": "pair_factory",
+          "address": "0x889Fd0aDA8453C7619cD7f11E9029a1f0848Fdf5"
+        },
+        {
+          "name": "voter",
+          "address": "0x566bdc5444fd5fe5d93ec379Bd66eC861ddbA901"
+        },
+        {
+          "name": "ve_token",
+          "address": "0x2f2Ae07e3cc3391A2E27825652BA8DcdD5412074"
+        },
+        {
+          "name": "minter",
+          "address": "0x574f6865140e6929bDed24596D78a8D9c07E356d"
+        },
+        {
+          "name": "gauge_factory_v2",
+          "address": "0x15eb3987A7edC464e5A4d3bC3A9b8E84b8ceE2C7"
+        },
+        {
+          "name": "gauge_factory_v3",
+          "address": "0x09D1A533032319557196F87dFf831FF46204c49d"
+        },
+        {
+          "name": "bribe_factory",
+          "address": "0x638e382300Ee2ece790164DAfAF7a9f16045621b"
+        },
+        {
+          "name": "gauge_rewarder",
+          "address": "0xfF0124cf664240e5573282511042d7033C3f22eA"
+        },
+        {
+          "name": "managed_nft_manager",
+          "address": "0x843d31e601b38F7207864457f0fB38E14441E792"
+        }
+      ]
+    },
+    {
+      "slug": "project-x",
+      "name": "Project X",
+      "category": "dex",
+      "interface": "uniswap_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x1EbDFC75FfE3ba3de61E7138a3E8706aC841Af9B"
+        },
+        {
+          "name": "factory",
+          "address": "0xFF7B3E8C00e57ea31477c32A5B52a58Eea47b072"
+        },
+        {
+          "name": "position_manager",
+          "address": "0xeaD19AE861c29bBb2101E834922B2FEee69B9091"
+        }
+      ]
+    },
+    {
+      "slug": "ramses-cl",
+      "name": "Ramses CL",
+      "category": "dex",
+      "interface": "solidly_cl",
+      "contracts": [
+        {
+          "name": "factory",
+          "address": "0x07E60782535752be279929e2DFfDd136Db2e6b45"
+        },
+        {
+          "name": "router",
+          "address": "0x76D91074B46fF76E04FE59a90526a40009943fd2"
+        },
+        {
+          "name": "quoter",
+          "address": "0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd"
+        },
+        {
+          "name": "pool_deployer",
+          "address": "0x301d2E3c7Db5904b3971cf9C36195e37c5a14873"
+        },
+        {
+          "name": "position_manager",
+          "address": "0xB3F77C5134D643483253D22E0Ca24627aE42ED51"
+        },
+        {
+          "name": "fee_collector",
+          "address": "0xA22fc9950bE328D8a32a8c1e2c92eAc4e6bADa00"
+        },
+        {
+          "name": "voter",
+          "address": "0x9aab8C415aF5936b09C595B09B1ff15cbaDCD843"
+        },
+        {
+          "name": "ve_token",
+          "address": "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
+        },
+        {
+          "name": "gauge_factory",
+          "address": "0xE17988013E15d29B655634Da0056ba27BA4D3E27"
+        },
+        {
+          "name": "fee_distributor_factory",
+          "address": "0xE7E05591362a74D3746F828941ec833e102a6E90"
+        },
+        {
+          "name": "vote_module",
+          "address": "0x6736102621f7c0dbB0E2989e3ad7A8793e71930b"
+        }
+      ]
+    },
+    {
+      "slug": "ramses-hl",
+      "name": "Ramses HL",
+      "category": "dex",
+      "interface": "solidly_v2",
+      "contracts": [
+        {
+          "name": "factory",
+          "address": "0xd0a07E160511c40ccD5340e94660E9C9c01b0D27"
+        },
+        {
+          "name": "router",
+          "address": "0xdcC44285fBc236457A5cd91C2f77AD8421B0D8ED"
+        },
+        {
+          "name": "voter",
+          "address": "0x9aab8C415aF5936b09C595B09B1ff15cbaDCD843"
+        },
+        {
+          "name": "ve_token",
+          "address": "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
+        },
+        {
+          "name": "minter",
+          "address": "0x252aCC15430a26748CED7376b317e74e250FcF00"
+        },
+        {
+          "name": "vote_module",
+          "address": "0x6736102621f7c0dbB0E2989e3ad7A8793e71930b"
+        },
+        {
+          "name": "gauge_factory",
+          "address": "0x1AD1DC4430bD55FbD19f151F6f3CDB4Bb473Fa16"
+        },
+        {
+          "name": "fee_distributor_factory",
+          "address": "0xE7E05591362a74D3746F828941ec833e102a6E90"
+        },
+        {
+          "name": "fee_recipient_factory",
+          "address": "0xa0BDd8142568d478D69C0D601D46bfdDa04A7c4a"
+        },
+        {
+          "name": "access_hub",
+          "address": "0x6631a487d59893831b331653225E0bfeBf6Ea1EC"
+        }
+      ]
+    },
+    {
+      "slug": "ring-few",
+      "name": "Ring Few",
+      "category": "dex",
+      "interface": "solidly_v2",
+      "contracts": [
+        {
+          "name": "factory",
+          "address": "0x4AfC2e4cA0844ad153B090dc32e207c1DD74a8E4"
+        },
+        {
+          "name": "router",
+          "address": "0x701D1d675415efA2d2429fB122ccC6dD4FCcA959"
+        },
+        {
+          "name": "few_factory",
+          "address": "0x6B65ed7315274eB9EF06A48132EB04D808700b86"
+        }
+      ]
+    },
+    {
+      "slug": "woofi",
+      "name": "WOOFi Swap",
+      "category": "dex",
+      "interface": "woofi",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x4c4AF8DBc524681930a27b2F1Af5bcC8062E6fB7"
+        },
+        {
+          "name": "pool",
+          "address": "0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4"
+        }
+      ]
+    },
+    {
+      "slug": "euler-v2",
+      "name": "Euler V2",
+      "category": "lending",
+      "interface": "euler_v2",
+      "contracts": [
+        {
+          "name": "evk_vault",
+          "address": "0xac207ffa0bfce194db18d1820902d48a2d948968"
+        },
+        {
+          "name": "evault_factory",
+          "address": "0xcF5552580fD364cdBBFcB5Ae345f75674c59273A"
+        },
+        {
+          "name": "evault_implementation",
+          "address": "0x05de079A28386135E048369cdf0Bc4D326d5EBDF"
+        },
+        {
+          "name": "evc",
+          "address": "0xceAA7cdCD7dDBee8601127a9Abb17A974d613db4"
+        },
+        {
+          "name": "protocol_config",
+          "address": "0x43144f09896F8759DE2ec6D777391B9F05A51128"
+        },
+        {
+          "name": "balance_tracker",
+          "address": "0x05d14f4eDFA7Cbfb90711C2EC5505bcbd49b9cD2"
+        },
+        {
+          "name": "sequence_registry",
+          "address": "0x47618E4CBDcFBf5f21D6594A7e3a4f4683719994"
+        },
+        {
+          "name": "euler_earn_factory",
+          "address": "0x587DD8285c01526769aB4803e4F02433ddbBc00E"
+        },
+        {
+          "name": "eulerswap_factory",
+          "address": "0xFbF2a49CB0cc50F4ccd4eAc826eF1A76D99D29Eb"
+        }
+      ]
+    },
+    {
+      "slug": "felix-morpho",
+      "name": "Felix Morpho",
+      "category": "lending",
+      "interface": "morpho_blue",
+      "contracts": [
+        {
+          "name": "morpho_blue",
+          "address": "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"
+        },
+        {
+          "name": "fehype",
+          "address": "0x2900ABd73631b2f60747e687095537B673c06A76"
+        },
+        {
+          "name": "feusdc",
+          "address": "0x8A862fD6c12f9ad34C9c2ff45AB2b6712e8CEa27"
+        },
+        {
+          "name": "feusdt0",
+          "address": "0xFc5126377F0efc0041C0969Ef9BA903Ce67d151e"
+        },
+        {
+          "name": "feusde",
+          "address": "0x835FEBF893c6DdDee5CF762B0f8e31C5B06938ab"
+        },
+        {
+          "name": "feusdhl",
+          "address": "0x9c59a9389D8f72DE2CdAf1126F36EA4790E2275e"
+        },
+        {
+          "name": "feusdt0_frontier",
+          "address": "0x9896a8605763106e57A51aa0a97Fe8099E806bb3"
+        },
+        {
+          "name": "feusdhl_frontier",
+          "address": "0x66c71204B70aE27BE6dC3eb41F9aF5868E68fDb6"
+        }
+      ]
+    },
+    {
+      "slug": "hyperlend",
+      "name": "HyperLend",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool",
+          "address": "0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b"
+        },
+        {
+          "name": "pool_addresses_provider",
+          "address": "0x72c98246a98bFe64022a3190e7710E157497170C"
+        },
+        {
+          "name": "oracle",
+          "address": "0xC9Fb4fbE842d57EAc1dF3e641a281827493A630e"
+        },
+        {
+          "name": "pool_data_provider",
+          "address": "0x3Bb92CF81E38484183cc96a4Fb8fBd2d73535807"
+        }
+      ]
+    },
+    {
+      "slug": "hyperyield",
+      "name": "HyperYield",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool_addresses_provider",
+          "address": "0xf8b130AaF759C24d91BeC7Dd64e4A82D2CF51194"
+        },
+        {
+          "name": "pool_addresses_provider_2",
+          "address": "0x022F164dDBa35a994ad0f001705e9c187156E244"
+        }
+      ]
+    },
+    {
+      "slug": "hypurrfi",
+      "name": "HypurrFi Pooled",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool",
+          "address": "0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b"
+        },
+        {
+          "name": "pool_addresses_provider",
+          "address": "0xA73ff12D177D8F1Ec938c3ba0e87D33524dD5594"
+        },
+        {
+          "name": "oracle",
+          "address": "0x9BE2ac1ff80950DCeb816842834930887249d9A8"
+        },
+        {
+          "name": "pool_data_provider",
+          "address": "0x7b883191011AEAe40581d3Fa1B112413808C9c00"
+        },
+        {
+          "name": "pool_configurator",
+          "address": "0x532Bb57DE005EdFd12E7d39a3e9BF8E8A8F544af"
+        },
+        {
+          "name": "acl_manager",
+          "address": "0x79CBF4832439554885E4bec9457C1427DFB9D0d3"
+        },
+        {
+          "name": "wrapped_hype_gateway",
+          "address": "0xd1EF87FeFA83154F83541b68BD09185e15463972"
+        },
+        {
+          "name": "treasury",
+          "address": "0xdC6E5b7aA6fCbDECC1Fda2b1E337ED8569730288"
+        }
+      ]
+    },
+    {
+      "slug": "hypurrfi-isolated",
+      "name": "HypurrFi Isolated",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool",
+          "address": "0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b"
+        },
+        {
+          "name": "oracle",
+          "address": "0x9BE2ac1ff80950DCeb816842834930887249d9A8"
+        },
+        {
+          "name": "pool_configurator",
+          "address": "0x532Bb57DE005EdFd12E7d39a3e9BF8E8A8F544af"
+        },
+        {
+          "name": "wrapped_hype_gateway",
+          "address": "0xd1EF87FeFA83154F83541b68BD09185e15463972"
+        },
+        {
+          "name": "ui_pool_data_provider",
+          "address": "0x7b883191011AEAe40581d3Fa1B112413808C9c00"
+        }
+      ]
+    },
+    {
+      "slug": "primefi",
+      "name": "PrimeFi",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool_addresses_provider",
+          "address": "0x69A3c30A85aA1E22791466a08819c1080f0Aab7f"
+        },
+        {
+          "name": "prime_pool",
+          "address": "0xb339448E13E273f6F46e3390e0932Ab7fF9F113F"
+        },
+        {
+          "name": "pool2_staking",
+          "address": "0x33cd734739c6DeD500fD080d476D93135cB813Ef"
+        },
+        {
+          "name": "pool2_token",
+          "address": "0x981F145a71Da6DF4A7cBe892807782c9CC9a5515"
+        }
+      ]
+    },
+    {
+      "slug": "purrlend",
+      "name": "Purrlend",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool_addresses_provider",
+          "address": "0xa8Ca6a4A485485910aA4023b9963Dfd2f3A5aeb0"
+        }
+      ]
+    },
+    {
+      "slug": "felix",
+      "name": "Felix",
+      "category": "cdp",
+      "interface": "liquity_v2",
+      "contracts": [
+        {
+          "name": "feusd_token",
+          "address": "0x02c6a2fa58cc01a18b8d9e00ea48d65e4df26c70"
+        },
+        {
+          "name": "collateral_registry",
+          "address": "0x9de1e57049c475736289cb006212f3e1dce4711b"
+        },
+        {
+          "name": "hint_helpers",
+          "address": "0xa32e89c658f7fdcc0bdb2717f253bacd99f864d4"
+        },
+        {
+          "name": "borrower_operations",
+          "address": "0xadfba621a75beced7dd1727b2067047b7eeedc8b"
+        },
+        {
+          "name": "trove_manager",
+          "address": "0x58446c58caa8a6f6cc8be343f812ebf0b997c001"
+        },
+        {
+          "name": "sorted_troves",
+          "address": "0xa82c325553baee63bd97604e10a7cc40482008a1"
+        },
+        {
+          "name": "stability_pool",
+          "address": "0x576c9c501473e01ae23748de28415a74425efd6b"
+        },
+        {
+          "name": "zapper",
+          "address": "0x999876BC29Bc2251539C900a1bCfC6C934991F49"
+        },
+        {
+          "name": "price_feed",
+          "address": "0x12a1868b89789900e413a6241ca9032dd1873a51"
+        }
+      ]
+    },
+    {
+      "slug": "felix-vaults",
+      "name": "Felix Vaults",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "morpho_blue",
+          "address": "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"
+        },
+        {
+          "name": "vault",
+          "address": "0x2900ABd73631b2f60747e687095537B673c06A76"
+        },
+        {
+          "name": "fehype",
+          "address": "0x2900ABd73631b2f60747e687095537B673c06A76"
+        },
+        {
+          "name": "feusdc",
+          "address": "0x8A862fD6c12f9ad34C9c2ff45AB2b6712e8CEa27"
+        },
+        {
+          "name": "feusdt0",
+          "address": "0xFc5126377F0efc0041C0969Ef9BA903Ce67d151e"
+        },
+        {
+          "name": "feusdt0_frontier",
+          "address": "0x9896a8605763106e57A51aa0a97Fe8099E806bb3"
+        },
+        {
+          "name": "feusde",
+          "address": "0x835febf893c6dddee5cf762b0f8e31c5b06938ab"
+        },
+        {
+          "name": "feusdhl",
+          "address": "0x9c59a9389D8f72DE2CdAf1126F36EA4790E2275e"
+        },
+        {
+          "name": "feusdhl_frontier",
+          "address": "0x66c71204B70aE27BE6dC3eb41F9aF5868E68fDb6"
+        }
+      ]
+    },
+    {
+      "slug": "hyperbeat",
+      "name": "Hyperbeat",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "usde",
+          "address": "0x5eEC795d919FA97688Fb9844eeB0072E6B846F9d"
+        },
+        {
+          "name": "usdt0_hyperithm",
+          "address": "0x53A333e51E96FE288bC9aDd7cdC4B1EAD2CD2FfA"
+        },
+        {
+          "name": "whype_gauntlet",
+          "address": "0x264a06Fd7A7C9E0Bfe75163b475E2A3cc1856578"
+        },
+        {
+          "name": "whype_re7",
+          "address": "0x182b318A8F1c7C92a7884e469442a610B0e69ed2"
+        },
+        {
+          "name": "whype_hyperithm",
+          "address": "0x92B518e1cD76dD70D3E20624AEdd7D107F332Cff"
+        },
+        {
+          "name": "usdc_gauntlet",
+          "address": "0x08C00F8279dFF5B0CB5a04d349E7d79708Ceadf3"
+        },
+        {
+          "name": "usdc_mev",
+          "address": "0x4851D4891321035729713D43bE1F4bb883Dffd34"
+        },
+        {
+          "name": "usdt0_re7",
+          "address": "0x51F64488d03D8B210294dA2BF70D5db0Bc621B0c"
+        },
+        {
+          "name": "rusdc",
+          "address": "0x4346C98E690c17eFbB999aE8e1dA96B089bE320b"
+        },
+        {
+          "name": "usdt0_2",
+          "address": "0xe5ADd96840F0B908ddeB3Bd144C0283Ac5ca7cA0"
+        },
+        {
+          "name": "usdt0_standalone",
+          "address": "0x5e105266db42f78fa814322bce7f388b4c2e61eb"
+        },
+        {
+          "name": "lsthype",
+          "address": "0x81e064d0eB539de7c3170EDF38C1A42CBd752A76"
+        },
+        {
+          "name": "liquidhype",
+          "address": "0x441794D6a8F9A3739F5D4E98a728937b33489D29"
+        },
+        {
+          "name": "hbusdc",
+          "address": "0x057ced81348D57Aad579A672d521d7b4396E8a61"
+        },
+        {
+          "name": "dnhype",
+          "address": "0x949a7250Bb55Eb79BC6bCC97fCd1C473DB3e6F29"
+        }
+      ]
+    },
+    {
+      "slug": "hypersurface",
+      "name": "Hypersurface",
+      "category": "options",
+      "interface": "options",
+      "contracts": [
+        {
+          "name": "margin_pool",
+          "address": "0x7D2e4b4d7ba55C423F5CCe194ae8194eFD1C6e35"
+        },
+        {
+          "name": "hedged_pool",
+          "address": "0x0095aCDD705Cfcc11eAfFb6c19A28C0153ad196F"
+        },
+        {
+          "name": "hedger",
+          "address": "0xa8c9403BDf554C047Ad91a448DDb24208Ab5313c"
+        }
+      ]
+    },
+    {
+      "slug": "looping-collective",
+      "name": "Looping Collective",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0x5748ae796AE46A4F1348a1693de4b50560485562"
+        },
+        {
+          "name": "lhype",
+          "address": "0x5748ae796AE46A4F1348a1693de4b50560485562"
+        },
+        {
+          "name": "whlp",
+          "address": "0x1359b05241cA5076c9F59605214f4F84114c0dE8"
+        },
+        {
+          "name": "whlp_accountant",
+          "address": "0x470bd109A24f608590d85fc1f5a4B6e625E8bDfF"
+        },
+        {
+          "name": "whlp_depositor",
+          "address": "0x340C9f6159ABc2bdfCC0E2b9Fe91D739006b41c1"
+        }
+      ]
+    },
+    {
+      "slug": "upshift",
+      "name": "Upshift",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0x96C6cBB6251Ee1c257b2162ca0f39AA5Fa44B1FB"
+        },
+        {
+          "name": "hbhype",
+          "address": "0x96C6cBB6251Ee1c257b2162ca0f39AA5Fa44B1FB"
+        },
+        {
+          "name": "hbubtc",
+          "address": "0xc061d38903b99aC12713B550C2CB44B221674F94"
+        },
+        {
+          "name": "hlpe",
+          "address": "0x8fFDcd8A96d293f45aA044d10b899F9D71897E8a"
+        }
+      ]
+    },
+    {
+      "slug": "kinetiq",
+      "name": "Kinetiq",
+      "category": "liquid_staking",
+      "interface": "kinetiq_staking",
+      "contracts": [
+        {
+          "name": "staking",
+          "address": "0x393D0B87Ed38fc779FD9611144aE649BA6082109"
+        },
+        {
+          "name": "khype_token",
+          "address": "0xfD739d4e423301CE9385c1fb8850539D657C296D"
+        }
+      ]
+    },
+    {
+      "slug": "sthype",
+      "name": "stHYPE",
+      "category": "liquid_staking",
+      "interface": "sthype_staking",
+      "contracts": [
+        {
+          "name": "staking",
+          "address": "0xB96f07367e69e86d6e9C3F29215885104813eeAE"
+        },
+        {
+          "name": "sthype_token",
+          "address": "0xfFaa4a3D97fE9107Cef8a3F48c069F577Ff76cC1"
+        },
+        {
+          "name": "wsthype",
+          "address": "0x94e8396e0869c9F2200760aF0621aFd240E1CF38"
+        }
+      ]
+    },
+    {
+      "slug": "lazy-summer",
+      "name": "Lazy Summer",
+      "category": "yield_aggregator",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0x252e5aa42c1804b85b2ce6712cd418a0561232ba"
+        },
+        {
+          "name": "usdc_fleet",
+          "address": "0x252e5aa42c1804b85b2ce6712cd418a0561232ba"
+        },
+        {
+          "name": "usdt_fleet",
+          "address": "0x2cc190fb654141dfbeac4c0f718f4d511674d346"
+        }
+      ]
+    },
+    {
+      "slug": "seaport-hyperevm",
+      "name": "OpenSea Seaport",
+      "category": "nft",
+      "interface": "marketplace",
+      "contracts": [
+        {
+          "name": "seaport",
+          "address": "0x0000000000000068F116a894984e2DB1123eB395"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_protocols": 29
+  }
+}

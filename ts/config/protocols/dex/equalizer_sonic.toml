@@ -1,0 +1,12 @@
+[protocol]
+name = "Equalizer Sonic"
+slug = "equalizer-sonic"
+category = "dex"
+interface = "solidly_v2"
+chain = "sonic"
+native = false
+description = "Equalizer — Solidly V2 fork on Sonic"
+
+[protocol.contracts]
+router = "0xED9d262985E18710DDDAC0dfC10a3f900679063B"
+factory = "0xDDD9845Ba0D8f38d3045f804f67A1a8B9A528FcC"

@@ -1,0 +1,35 @@
+[[token]]
+symbol = "ETH"
+name = "Ether"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0x5AEa5775959fBC2557Cc8789bC1bf90A239D9a91"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT"
+name = "Tether USD"
+address = "0x493257fD37EDB34451f62EDf8D2a0C418852bA4C"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WBTC"
+name = "Wrapped Bitcoin"
+address = "0xBBeB516fb02a01611cBBE0453Fe3c580D7281011"
+decimals = 8
+tags = ["blue_chip"]

@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Polygon"
+slug = "aave-v3-polygon"
+category = "lending"
+interface = "aave_v3"
+chain = "polygon"
+native = false
+description = "Aave V3 on Polygon"
+
+[protocol.contracts]
+pool = "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+pool_addresses_provider = "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb"
+oracle = "0xb023e699F5a33916Ea823A16485e259257cA8Bd1"
+pool_data_provider = "0x243Aa95cAC2a25651eda86e80bEe66114413c43b"

@@ -1,0 +1,12 @@
+[protocol]
+name = "Curve Base"
+slug = "curve-base"
+category = "dex"
+interface = "curve_stableswap"
+chain = "base"
+native = false
+description = "Curve StableSwap-NG on Base"
+
+[protocol.contracts]
+factory = "0xd2002373543Ce3527023C75e7518C274A51ce712"
+router = "0x4f37A9d177470499A2dD084621020b023fcffc1F"

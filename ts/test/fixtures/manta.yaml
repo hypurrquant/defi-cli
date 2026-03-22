@@ -1,0 +1,79 @@
+# Auto-generated test fixture for manta
+chain:
+  name: "Manta Pacific"
+  slug: "manta"
+  chain_id: 169
+  rpc_url: "https://pacific-rpc.manta.network/http"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x0Dc808adcE2099A9F62AA87D9670745AbA741746"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xb73603C5d87fA094B7314C74ACE2e64D165016fb"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "ApertureSwap"
+      slug: "apertureswap-manta"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x3488d5A2D0281f546e43435715C436b46Ec1C678"
+        factory: "0x5bd1F6735B80e58aAC88B8A94836854d3068a13a"
+        quoter: "0x1e139877CbB99f1fa94BB8763aFc6161cC1dc303"
+        position_manager: "0xe77e3F98a386a4C8f8c706A2aCfFdf57e70D06c6"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "QuickSwap"
+      slug: "quickswap-manta"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xfdE3eaC61C5Ad5Ed617eB1451cc7C3a0AC197564"
+        factory: "0x56c2162254b0E4417288786eE402c2B41d4e181e"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "LayerBank Manta"
+      slug: "layerbank-manta"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0xB7A23Fc0b066051dE58B922dC1a08f33DF748bbf"
+        oracle: "0x90286f894020950981c9E3196BacB03A223e4cfd"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Manta"
+      slug: "beefy-manta"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x9f841372612E0106Cd540AB976656cDd8F1553C5"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-manta"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

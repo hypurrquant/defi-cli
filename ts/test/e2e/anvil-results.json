@@ -1,0 +1,840 @@
+[
+  {
+    "chain": "hyperevm",
+    "chainId": 999,
+    "protocols": 22,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "22 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "pass",
+        "detail": "apy=0"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "arbitrum",
+    "chainId": 42161,
+    "protocols": 10,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "10 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "Protocol not found: aave-v3-arbitrum"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "base",
+    "chainId": 8453,
+    "protocols": 11,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "11 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Base] getReserveData failed: ContractFun"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "bnb",
+    "chainId": 56,
+    "protocols": 16,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "16 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 BNB] getReserveData failed: ContractFunc"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "ethereum",
+    "chainId": 1,
+    "protocols": 8,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "8 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "Protocol not found: aave-v3-ethereum"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "polygon",
+    "chainId": 137,
+    "protocols": 8,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "8 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "Unsupported operation: Lending interface 'aave_v2' not yet i"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "avalanche",
+    "chainId": 43114,
+    "protocols": 6,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "6 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "Protocol not found: aave-v3-avalanche"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "optimism",
+    "chainId": 10,
+    "protocols": 6,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "6 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "Protocol not found: aave-v3-optimism"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "scroll",
+    "chainId": 534352,
+    "protocols": 5,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "5 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Scroll] getReserveData failed: ContractF"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "linea",
+    "chainId": 59144,
+    "protocols": 8,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "8 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Linea] getReserveData failed: ContractFu"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "mantle",
+    "chainId": 5000,
+    "protocols": 8,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "8 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Mantle] getReserveData failed: ContractF"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "ink",
+    "chainId": 57073,
+    "protocols": 3,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "3 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Ink] getReserveData failed: ContractFunc"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "monad",
+    "chainId": 143,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "cronos",
+    "chainId": 25,
+    "protocols": 2,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "2 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Tectonic Cronos] supplyRatePerBlock failed: Cont"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "rootstock",
+    "chainId": 30,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "gnosis",
+    "chainId": 100,
+    "protocols": 4,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "4 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Gnosis] getReserveData failed: ContractF"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "berachain",
+    "chainId": 80094,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "kava",
+    "chainId": 2222,
+    "protocols": 2,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "2 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "sei",
+    "chainId": 1329,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "unichain",
+    "chainId": 130,
+    "protocols": 3,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "3 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Compound V3 Unichain] getUtilization failed: Con"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "blast",
+    "chainId": 81457,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "sonic",
+    "chainId": 146,
+    "protocols": 3,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "3 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Sonic] getReserveData failed: ContractFu"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "worldchain",
+    "chainId": 480,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "fraxtal",
+    "chainId": 252,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "core",
+    "chainId": 1116,
+    "protocols": 2,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "2 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "celo",
+    "chainId": 42220,
+    "protocols": 2,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "2 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Celo] getReserveData failed: ContractFun"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "zksync",
+    "chainId": 324,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "abstract",
+    "chainId": 2741,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "soneium",
+    "chainId": 1868,
+    "protocols": 3,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "3 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Aave V3 Soneium] getReserveData failed: Contract"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "manta",
+    "chainId": 169,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "taiko",
+    "chainId": 167000,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "metis",
+    "chainId": 1088,
+    "protocols": 2,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "2 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "Protocol not found: aave-v3"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "canto",
+    "chainId": 7700,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "aurora",
+    "chainId": 1313161554,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "boba",
+    "chainId": 288,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "moonbeam",
+    "chainId": 1284,
+    "protocols": 3,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "3 protocols"
+      },
+      {
+        "cmd": "lending rates",
+        "result": "error",
+        "detail": "RPC error: [Moonwell Moonbeam] borrowRatePerBlock failed: Co"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "mode",
+    "chainId": 34443,
+    "protocols": 2,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "2 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "moonriver",
+    "chainId": 1285,
+    "protocols": 1,
+    "anvil": "ok",
+    "status": "pass",
+    "tests": [
+      {
+        "cmd": "status",
+        "result": "pass",
+        "detail": "1 protocols"
+      },
+      {
+        "cmd": "scan",
+        "result": "pass",
+        "detail": "findings=0"
+      }
+    ]
+  },
+  {
+    "chain": "zircuit",
+    "chainId": 48900,
+    "protocols": 0,
+    "anvil": "skipped",
+    "status": "skip",
+    "tests": []
+  },
+  {
+    "chain": "harmony",
+    "chainId": 1666600000,
+    "protocols": 0,
+    "anvil": "skipped",
+    "status": "skip",
+    "tests": []
+  }
+]

@@ -1,0 +1,326 @@
+# Auto-generated test fixture for hyperevm
+chain:
+  name: "HyperEVM"
+  slug: "hyperevm"
+  chain_id: 999
+  rpc_url: "https://rpc.hyperliquid.xyz/evm"
+  native_token: "HYPE"
+
+tokens:
+  native:
+    symbol: "HYPE"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WHYPE"
+    address: "0x5555555555555555555555555555555555555555"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xb88339CB7199b77E23DB6E890353E22632Ba630f"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Balancer V3"
+      slug: "balancer-v3"
+      interface: "balancer_v3"
+      contracts:
+        vault: "0xbA1333333333a1BA1108E8412f11850A5C319bA9"
+        router: "0xA8920455934Da4D853faac1f94Fe7bEf72943eF1"
+        weighted_pool_factory: "0x6eE18fbb1BBcC5CF700cD75ea1aef2bb21e3cB3F"
+        stable_pool_factory: "0xb96524227c4B5Ab908FC3d42005FE3B07abA40E9"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Curve DEX"
+      slug: "curve"
+      interface: "curve_stableswap"
+      contracts:
+        factory: "0x5eeE3091f747E60a045a2E715a4c71e600e31F6E"
+        router: "0x5eeE3091f747E60a045a2E715a4c71e600e31F6E"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "HyperSwap V3"
+      slug: "hyperswap-v3"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D"
+        factory: "0xB1c0fa0B789320044A6F623cFe5eBda9562602E3"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "HyperSwap V2"
+      slug: "hyperswap-v2"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xb4a9C4e6Ea8E2191d2FA5B380452a634Fb21240A"
+        factory: "0x724412c00059bF7d6ee7d4a1D0d5Cd4De3ea1C48"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "KittenSwap Algebra"
+      slug: "kittenswap"
+      interface: "algebra_v3"
+      contracts:
+        router: "0x4e73E421480a7E0C24fB3c11019254edE194f736"
+        factory: "0x5f95E92c338e6453111Fc55ee66D4AafccE661A7"
+        quoter: "0xc58874216AFe47779ADED27B8AAd77E8Bd6eBEBb"
+        position_manager: "0x9ea4459c8DefBF561495d95414b9CF1E2242a3E2"
+        voter: "0xb7F7053F7e6c210e6777D5BA758E4b3ECa6C88A0"
+        ve_token: "0x29d3a21ff35a519e00cf6d272f2ad897b109bd84"
+        minter: "0xac36d3671f21A5056Cd1751E201574d702748C7A"
+        farming_center: "0x211BD8917d433B7cC1F4497AbA906554Ab6ee479"
+        eternal_farming: "0xf3b57fE4d5D0927C3A5e549CB6aF1866687e2D62"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "NEST V1"
+      slug: "nest-v1"
+      interface: "algebra_v3"
+      contracts:
+        router: "0xaA26B8e5Cadd04430c32787eCC3AA325e99681e9"
+        factory: "0xF77Bd082c627aA54591cF2f2EaA811fd1AB3b1F3"
+        pool_deployer: "0x3842CE04380B8655A3A47Ed87eA0D311ADCa161F"
+        position_manager: "0xEAF58788a405F3253814b4559391a22bE8616250"
+        quoter: "0xBea20609A4772311c5b81F814Cd4f9ECaEF5DFAd"
+        router_v2: "0xfDb34624506e9A0624AF60F85ebd9E44A0FD2a17"
+        pair_factory: "0x889Fd0aDA8453C7619cD7f11E9029a1f0848Fdf5"
+        voter: "0x566bdc5444fd5fe5d93ec379Bd66eC861ddbA901"
+        ve_token: "0x2f2Ae07e3cc3391A2E27825652BA8DcdD5412074"
+        minter: "0x574f6865140e6929bDed24596D78a8D9c07E356d"
+        gauge_factory_v2: "0x15eb3987A7edC464e5A4d3bC3A9b8E84b8ceE2C7"
+        gauge_factory_v3: "0x09D1A533032319557196F87dFf831FF46204c49d"
+        bribe_factory: "0x638e382300Ee2ece790164DAfAF7a9f16045621b"
+        gauge_rewarder: "0xfF0124cf664240e5573282511042d7033C3f22eA"
+        managed_nft_manager: "0x843d31e601b38F7207864457f0fB38E14441E792"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Project X"
+      slug: "project-x"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x1EbDFC75FfE3ba3de61E7138a3E8706aC841Af9B"
+        factory: "0xFF7B3E8C00e57ea31477c32A5B52a58Eea47b072"
+        position_manager: "0xeaD19AE861c29bBb2101E834922B2FEee69B9091"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Ramses CL"
+      slug: "ramses-cl"
+      interface: "solidly_cl"
+      contracts:
+        factory: "0x07E60782535752be279929e2DFfDd136Db2e6b45"
+        router: "0x76D91074B46fF76E04FE59a90526a40009943fd2"
+        quoter: "0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd"
+        pool_deployer: "0x301d2E3c7Db5904b3971cf9C36195e37c5a14873"
+        position_manager: "0xB3F77C5134D643483253D22E0Ca24627aE42ED51"
+        fee_collector: "0xA22fc9950bE328D8a32a8c1e2c92eAc4e6bADa00"
+        voter: "0x9aab8C415aF5936b09C595B09B1ff15cbaDCD843"
+        ve_token: "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
+        gauge_factory: "0xE17988013E15d29B655634Da0056ba27BA4D3E27"
+        fee_distributor_factory: "0xE7E05591362a74D3746F828941ec833e102a6E90"
+        vote_module: "0x6736102621f7c0dbB0E2989e3ad7A8793e71930b"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Ramses HL"
+      slug: "ramses-hl"
+      interface: "solidly_v2"
+      contracts:
+        factory: "0xd0a07E160511c40ccD5340e94660E9C9c01b0D27"
+        router: "0xdcC44285fBc236457A5cd91C2f77AD8421B0D8ED"
+        voter: "0x9aab8C415aF5936b09C595B09B1ff15cbaDCD843"
+        ve_token: "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
+        minter: "0x252aCC15430a26748CED7376b317e74e250FcF00"
+        vote_module: "0x6736102621f7c0dbB0E2989e3ad7A8793e71930b"
+        gauge_factory: "0x1AD1DC4430bD55FbD19f151F6f3CDB4Bb473Fa16"
+        fee_distributor_factory: "0xE7E05591362a74D3746F828941ec833e102a6E90"
+        fee_recipient_factory: "0xa0BDd8142568d478D69C0D601D46bfdDa04A7c4a"
+        access_hub: "0x6631a487d59893831b331653225E0bfeBf6Ea1EC"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Ring Few"
+      slug: "ring-few"
+      interface: "solidly_v2"
+      contracts:
+        factory: "0x4AfC2e4cA0844ad153B090dc32e207c1DD74a8E4"
+        router: "0x701D1d675415efA2d2429fB122ccC6dD4FCcA959"
+        few_factory: "0x6B65ed7315274eB9EF06A48132EB04D808700b86"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "WOOFi Swap"
+      slug: "woofi"
+      interface: "woofi"
+      contracts:
+        router: "0x4c4AF8DBc524681930a27b2F1Af5bcC8062E6fB7"
+        pool: "0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Euler V2"
+      slug: "euler-v2"
+      interface: "euler_v2"
+      contracts:
+        evk_vault: "0xac207ffa0bfce194db18d1820902d48a2d948968"
+        evault_factory: "0xcF5552580fD364cdBBFcB5Ae345f75674c59273A"
+        evault_implementation: "0x05de079A28386135E048369cdf0Bc4D326d5EBDF"
+        evc: "0xceAA7cdCD7dDBee8601127a9Abb17A974d613db4"
+        protocol_config: "0x43144f09896F8759DE2ec6D777391B9F05A51128"
+        balance_tracker: "0x05d14f4eDFA7Cbfb90711C2EC5505bcbd49b9cD2"
+        sequence_registry: "0x47618E4CBDcFBf5f21D6594A7e3a4f4683719994"
+        euler_earn_factory: "0x587DD8285c01526769aB4803e4F02433ddbBc00E"
+        eulerswap_factory: "0xFbF2a49CB0cc50F4ccd4eAc826eF1A76D99D29Eb"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Felix Morpho"
+      slug: "felix-morpho"
+      interface: "morpho_blue"
+      contracts:
+        morpho_blue: "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"
+        fehype: "0x2900ABd73631b2f60747e687095537B673c06A76"
+        feusdc: "0x8A862fD6c12f9ad34C9c2ff45AB2b6712e8CEa27"
+        feusdt0: "0xFc5126377F0efc0041C0969Ef9BA903Ce67d151e"
+        feusde: "0x835FEBF893c6DdDee5CF762B0f8e31C5B06938ab"
+        feusdhl: "0x9c59a9389D8f72DE2CdAf1126F36EA4790E2275e"
+        feusdt0_frontier: "0x9896a8605763106e57A51aa0a97Fe8099E806bb3"
+        feusdhl_frontier: "0x66c71204B70aE27BE6dC3eb41F9aF5868E68fDb6"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "HyperLend"
+      slug: "hyperlend"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b"
+        pool_addresses_provider: "0x72c98246a98bFe64022a3190e7710E157497170C"
+        oracle: "0xC9Fb4fbE842d57EAc1dF3e641a281827493A630e"
+        pool_data_provider: "0x3Bb92CF81E38484183cc96a4Fb8fBd2d73535807"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "HypurrFi Pooled"
+      slug: "hypurrfi"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b"
+        pool_addresses_provider: "0xA73ff12D177D8F1Ec938c3ba0e87D33524dD5594"
+        oracle: "0x9BE2ac1ff80950DCeb816842834930887249d9A8"
+        pool_data_provider: "0x7b883191011AEAe40581d3Fa1B112413808C9c00"
+        pool_configurator: "0x532Bb57DE005EdFd12E7d39a3e9BF8E8A8F544af"
+        acl_manager: "0x79CBF4832439554885E4bec9457C1427DFB9D0d3"
+        wrapped_hype_gateway: "0xd1EF87FeFA83154F83541b68BD09185e15463972"
+        treasury: "0xdC6E5b7aA6fCbDECC1Fda2b1E337ED8569730288"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "HypurrFi Isolated"
+      slug: "hypurrfi-isolated"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b"
+        oracle: "0x9BE2ac1ff80950DCeb816842834930887249d9A8"
+        pool_configurator: "0x532Bb57DE005EdFd12E7d39a3e9BF8E8A8F544af"
+        wrapped_hype_gateway: "0xd1EF87FeFA83154F83541b68BD09185e15463972"
+        ui_pool_data_provider: "0x7b883191011AEAe40581d3Fa1B112413808C9c00"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Felix Vaults"
+      slug: "felix-vaults"
+      interface: "erc4626"
+      contracts:
+        morpho_blue: "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"
+        vault: "0x2900ABd73631b2f60747e687095537B673c06A76"
+        fehype: "0x2900ABd73631b2f60747e687095537B673c06A76"
+        feusdc: "0x8A862fD6c12f9ad34C9c2ff45AB2b6712e8CEa27"
+        feusdt0: "0xFc5126377F0efc0041C0969Ef9BA903Ce67d151e"
+        feusdt0_frontier: "0x9896a8605763106e57A51aa0a97Fe8099E806bb3"
+        feusde: "0x835febf893c6dddee5cf762b0f8e31c5b06938ab"
+        feusdhl: "0x9c59a9389D8f72DE2CdAf1126F36EA4790E2275e"
+        feusdhl_frontier: "0x66c71204B70aE27BE6dC3eb41F9aF5868E68fDb6"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+    - name: "Upshift"
+      slug: "upshift"
+      interface: "erc4626"
+      contracts:
+        vault: "0x96C6cBB6251Ee1c257b2162ca0f39AA5Fa44B1FB"
+        hbhype: "0x96C6cBB6251Ee1c257b2162ca0f39AA5Fa44B1FB"
+        hbubtc: "0xc061d38903b99aC12713B550C2CB44B221674F94"
+        hlpe: "0x8fFDcd8A96d293f45aA044d10b899F9D71897E8a"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-hyperevm"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  cdp:
+    - name: "Felix"
+      slug: "felix"
+      interface: "liquity_v2"
+      contracts:
+        feusd_token: "0x02c6a2fa58cc01a18b8d9e00ea48d65e4df26c70"
+        collateral_registry: "0x9de1e57049c475736289cb006212f3e1dce4711b"
+        hint_helpers: "0xa32e89c658f7fdcc0bdb2717f253bacd99f864d4"
+        borrower_operations: "0xadfba621a75beced7dd1727b2067047b7eeedc8b"
+        trove_manager: "0x58446c58caa8a6f6cc8be343f812ebf0b997c001"
+        sorted_troves: "0xa82c325553baee63bd97604e10a7cc40482008a1"
+        stability_pool: "0x576c9c501473e01ae23748de28415a74425efd6b"
+        zapper: "0x999876BC29Bc2251539C900a1bCfC6C934991F49"
+        price_feed: "0x12a1868b89789900e413a6241ca9032dd1873a51"
+  liquid_staking:
+    - name: "Kinetiq"
+      slug: "kinetiq"
+      interface: "kinetiq_staking"
+      contracts:
+        staking: "0x393D0B87Ed38fc779FD9611144aE649BA6082109"
+        khype_token: "0xfD739d4e423301CE9385c1fb8850539D657C296D"
+    - name: "stHYPE"
+      slug: "sthype"
+      interface: "sthype_staking"
+      contracts:
+        staking: "0xB96f07367e69e86d6e9C3F29215885104813eeAE"
+        sthype_token: "0xfFaa4a3D97fE9107Cef8a3F48c069F577Ff76cC1"
+        wsthype: "0x94e8396e0869c9F2200760aF0621aFd240E1CF38"
+  yield_aggregator:
+    - name: "Lazy Summer"
+      slug: "lazy-summer"
+      interface: "erc4626"
+      contracts:
+        vault: "0x252e5aa42c1804b85b2ce6712cd418a0561232ba"
+        usdc_fleet: "0x252e5aa42c1804b85b2ce6712cd418a0561232ba"
+        usdt_fleet: "0x2cc190fb654141dfbeac4c0f718f4d511674d346"

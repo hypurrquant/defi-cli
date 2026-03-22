@@ -1,0 +1,10 @@
+[protocol]
+name = "Across V3 Zircuit"
+slug = "across-v3-zircuit"
+category = "bridge"
+interface = "bridge"
+chain = "zircuit"
+description = "Across Protocol V3 bridge on Zircuit"
+
+[protocol.contracts]
+spoke_pool = "0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96"

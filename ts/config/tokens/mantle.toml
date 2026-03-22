@@ -1,0 +1,84 @@
+[[token]]
+symbol = "MNT"
+name = "Mantle"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WMNT"
+name = "Wrapped Mantle"
+address = "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT"
+name = "Tether USD"
+address = "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+decimals = 18
+tags = ["blue_chip"]
+
+[[token]]
+symbol = "mETH"
+name = "Mantle Staked Ether"
+address = "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+decimals = 18
+tags = ["lst"]
+
+[[token]]
+symbol = "FBTC"
+name = "FunctionBTC"
+address = "0xC96dE26018A54D51c097160568752c4E3BD6C364"
+decimals = 8
+tags = ["blue_chip"]
+
+[[token]]
+symbol = "cmETH"
+name = "Mantle Restaked Ether"
+address = "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+decimals = 18
+tags = ["lst"]
+
+[[token]]
+symbol = "COOK"
+name = "COOK"
+address = "0x9F0C013016E8656bC256f948CD4B79ab25c7b94D"
+decimals = 18
+tags = ["governance"]
+
+[[token]]
+symbol = "USDe"
+name = "USDe"
+address = "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+decimals = 18
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDY"
+name = "Ondo U.S. Dollar Yield"
+address = "0x5bE26527e817998A7206475496fDE1E68957c5A6"
+decimals = 18
+tags = ["rwa", "stablecoin"]
+
+[[token]]
+symbol = "PUFF"
+name = "Puff"
+address = "0x26a6b0dcdCfb981362aFA56D581e4A7dBA3Be140"
+decimals = 18
+tags = ["meme"]

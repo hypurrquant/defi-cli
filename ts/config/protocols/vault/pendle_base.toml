@@ -1,0 +1,12 @@
+[protocol]
+name = "Pendle Base"
+slug = "pendle-base"
+category = "vault"
+interface = "erc4626"
+chain = "base"
+native = false
+description = "Pendle Finance yield tokenization protocol on Base — PT/YT vaults via ERC-4626"
+
+[protocol.contracts]
+router = "0x888888888889758F76e7103c6CbF23ABbF58F946"
+market_factory = "0x81E80A50E56d10C501fF17B5Fe2F662bd9EA4590"

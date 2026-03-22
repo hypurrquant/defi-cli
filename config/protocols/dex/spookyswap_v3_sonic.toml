@@ -1,0 +1,12 @@
+[protocol]
+name = "SpookySwap V3 Sonic"
+slug = "spookyswap-v3-sonic"
+category = "dex"
+interface = "uniswap_v3"
+chain = "sonic"
+native = true
+description = "SpookySwap V3 — Uniswap V3 fork and leading DEX on Sonic"
+
+[protocol.contracts]
+router = "0x0C2BC01d435CfEb2DC6Ad7cEC0E473e2DBaBdd87"
+factory = "0x3D91B700252e0E3eE7805d12e048a988Ab69C8ad"

@@ -1,0 +1,76 @@
+# Auto-generated test fixture for abstract
+chain:
+  name: "Abstract"
+  slug: "abstract"
+  chain_id: 2741
+  rpc_url: "https://api.mainnet.abs.xyz"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x84A71ccD554Cc1b02749b35d22F684CC8ec987e1"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Uniswap V2 Abstract"
+      slug: "uniswap-v2-abstract"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xad1eCa41E6F772bE3cb5A48A6141f9bcc1AF9F7c"
+        factory: "0x566d7510dEE58360a64C9827257cF6D0Dc43985E"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3"
+      slug: "uniswap-v3-abstract"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x7712FA47387542819d4E35A23f8116C90C18767C"
+        factory: "0xA1160e73B63F322ae88cC2d8E700833e71D0b2a1"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Morpho Blue Abstract"
+      slug: "morpho-blue-abstract"
+      interface: "morpho_blue"
+      contracts:
+        morpho_blue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Morpho Blue Abstract"
+      slug: "morpho-blue-abstract"
+      interface: "erc4626"
+      contracts:
+        vault: "0xc85CE8ffdA27b646D269516B8d0Fa6ec2E958B55"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-abstract"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

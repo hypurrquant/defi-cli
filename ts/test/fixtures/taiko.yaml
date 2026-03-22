@@ -1,0 +1,77 @@
+# Auto-generated test fixture for taiko
+chain:
+  name: "Taiko"
+  slug: "taiko"
+  chain_id: 167000
+  rpc_url: "https://rpc.taiko.xyz"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0xA51894664A773981C6C112C43ce576f315d5b1B6"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x07d83526730c7438048D55A4fc0b850e2aaB6f0b"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "iZiSwap"
+      slug: "iziswap-taiko"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x04830cfCED9772b8ACbAF76Cfc7A630Ad82c9148"
+        factory: "0x8c7d3063579BdB0b90997e18A770eaE32E1eBb08"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Ritsu"
+      slug: "ritsu-taiko"
+      interface: "solidly_v2"
+      contracts:
+        router: "0x7160570bb153edd0ea1775ec2b2ac9b65f1ab61b"
+        factory: "0x4cD00E387622C35bDDB9b4c962C136462338BC31"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "LayerBank Taiko"
+      slug: "layerbank-taiko"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x803a61d82BaD2743bE35Be5dC6DEA0CccE82C056"
+        oracle: "0x0000000000000000000000000000000000000000"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "LayerBank Taiko Vault"
+      slug: "layerbank-taiko-vault"
+      interface: "erc4626"
+      contracts:
+        vault: "0x803a61d82BaD2743bE35Be5dC6DEA0CccE82C056"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-taiko"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

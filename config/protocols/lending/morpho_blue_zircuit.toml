@@ -1,0 +1,11 @@
+[protocol]
+name = "Morpho Blue Zircuit"
+slug = "morpho-blue-zircuit"
+category = "lending"
+interface = "morpho_blue"
+chain = "zircuit"
+native = false
+description = "Morpho Blue on Zircuit — permissionless lending primitive"
+
+[protocol.contracts]
+morpho_blue = "0xA902A365Fe10B4a94339B5A2Dc64F60c1486a5c8"

@@ -1,0 +1,80 @@
+# Auto-generated test fixture for soneium
+chain:
+  name: "Soneium"
+  slug: "soneium"
+  chain_id: 1868
+  rpc_url: "https://rpc.soneium.org"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC9B1"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Uniswap V3 Soneium"
+      slug: "uniswap-v3-soneium"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x0dC73Fe1341365929Ed8a89Dd47097A9FDD254D0"
+        factory: "0x137841043180BBA8EF52828F9030D1b7fE065F95"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Velodrome Soneium"
+      slug: "velodrome-soneium"
+      interface: "solidly_v2"
+      contracts:
+        router: "0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45"
+        factory: "0x31832f2a97Fd20664D76Cc421207669b55CE4BC0"
+        voter: "0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Aave V3 Soneium"
+      slug: "aave-v3-soneium"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xDd3d7A7d03D9fD9ef45f3E587287922eF65CA38B"
+        pool_addresses_provider: "0x82405D1a189bd6cE4667809C35B37fBE136A4c5B"
+        oracle: "0x20040a64612555042335926d72B4E5F667a67fA1"
+        pool_data_provider: "0x4a24b44b252db149B5B9BCec4dc3c2752807d626"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Aave V3 Soneium Vault"
+      slug: "aave-v3-soneium-vault"
+      interface: "erc4626"
+      contracts:
+        vault: "0xDd3d7A7d03D9fD9ef45f3E587287922eF65CA38B"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-soneium"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

@@ -1,0 +1,12 @@
+[protocol]
+name = "Pendle Berachain"
+slug = "pendle-berachain"
+category = "vault"
+interface = "erc4626"
+chain = "berachain"
+native = false
+description = "Pendle Finance yield tokenization protocol on Berachain — PT/YT vaults via ERC-4626"
+
+[protocol.contracts]
+router = "0x888888888889758F76e7103c6CbF23ABbF58F946"
+market_factory = "0x6131CA76529250679cF9e2A3b07b135f20aAb01A"

@@ -1,0 +1,21 @@
+[[token]]
+symbol = "ETH"
+name = "Ether"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0x4200000000000000000000000000000000000006"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"
+decimals = 6
+tags = ["stablecoin"]

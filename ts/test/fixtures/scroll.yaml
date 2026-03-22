@@ -1,0 +1,111 @@
+# Auto-generated test fixture for scroll
+chain:
+  name: "Scroll"
+  slug: "scroll"
+  chain_id: 534352
+  rpc_url: "https://rpc.scroll.io"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x5300000000000000000000000000000000000004"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "SushiSwap Scroll"
+      slug: "sushiswap-scroll"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x9B3336186a38E1b6c21955d112dbb0343Ee061eE"
+        factory: "0xB45e53277a7e0F1D35f2a77160e91e25507f1763"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Scroll"
+      slug: "uniswap-v3-scroll"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xfc30937f5cDe93Df8d48aCAF7e6f5D8D8A31F636"
+        factory: "0x70C62C8b8E801124A4Aa81ce07b637A3e83cb919"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3 Scroll"
+      slug: "aave-v3-scroll"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x11fCfe756c05AD438e312a7fd934381537D3cFfe"
+        pool_addresses_provider: "0x69850D0B276776781C063771b161bd8894BCdD04"
+        oracle: "0x04421D8C506E2fA2371a08EfAaBf791F624054F3"
+        pool_data_provider: "0xBEa2B648f05887eCbF1d115da8b7E4A317975A51"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Compound V3 Scroll"
+      slug: "compound-v3-scroll"
+      interface: "compound_v3"
+      contracts:
+        comet_usdc: "0xB2f97c1Bd3bf02f5e74d13f02E3e26F93D77CE44"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "LayerBank Scroll"
+      slug: "layerbank-scroll"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0xec53c830f4444a8A56455c6836b5D2AA794289Aa"
+        lETH: "0x274C3795dadfEbf562932992bF241ae087e0a98C"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Scroll"
+      slug: "beefy-scroll"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x5b66B327Ae1313CFcFe373Eba192A801a85A97D0"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-scroll"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Scroll"
+      slug: "across-v3-scroll"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96"
+    - name: "Stargate V2 Scroll"
+      slug: "stargate-v2-scroll"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdc_pool: "0x3Fc69CC4A842838bCDC9499178740226062b14E4"
+        eth_pool: "0xC2b638Cb5042c1B3c5d5C969361fB50569840583"

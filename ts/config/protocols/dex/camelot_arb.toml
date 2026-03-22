@@ -1,0 +1,13 @@
+[protocol]
+name = "Camelot V3"
+slug = "camelot-v3"
+category = "dex"
+interface = "algebra_v3"
+chain = "arbitrum"
+native = true
+description = "Camelot — Algebra V3 DEX on Arbitrum"
+
+[protocol.contracts]
+router = "0x1F721E2E82F6676FCE4eA07A5958cF098D339e18"
+factory = "0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B"
+quoter = "0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E"

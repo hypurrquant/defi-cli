@@ -1,0 +1,12 @@
+[protocol]
+name = "Pendle BNB Chain"
+slug = "pendle-bnb"
+category = "vault"
+interface = "erc4626"
+chain = "bnb"
+native = false
+description = "Pendle Finance yield tokenization protocol on BNB Chain — PT/YT vaults via ERC-4626"
+
+[protocol.contracts]
+router = "0x888888888889758F76e7103c6CbF23ABbF58F946"
+market_factory = "0x80cE46449DF1c977f6ba60495125ce282F83DdFB"

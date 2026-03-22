@@ -1,0 +1,67 @@
+# Auto-generated test fixture for cronos
+chain:
+  name: "Cronos"
+  slug: "cronos"
+  chain_id: 25
+  rpc_url: "https://evm.cronos.org"
+  native_token: "CRO"
+
+tokens:
+  native:
+    symbol: "CRO"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WCRO"
+    address: "0x5C7F8A570d578ED60E9E0E0a8dcD14C2EFBE5d4e"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "VVS Finance Cronos"
+      slug: "vvs-finance-cronos"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae"
+        factory: "0x3B44B2a187a7b3824131F8db5a74194D0a42Fc15"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Tectonic Cronos"
+      slug: "tectonic-cronos"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0xb3831584acb95ED9cCb0C11f677B5AD01DeaeEc0"
+        oracle: "0x4B377121d968Bf7a62D51B96523d59506e7c2BF0"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Cronos"
+      slug: "beefy-cronos"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x107Dbf9c9C0EF2Df114159e5C7DC2baf7C444cFF"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-cronos"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

@@ -1,0 +1,170 @@
+{
+  "chain": "Ethereum",
+  "chain_id": 1,
+  "protocols": [
+    {
+      "category": "DEX",
+      "contracts": [
+        {
+          "address": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+          "name": "router"
+        },
+        {
+          "address": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+          "name": "factory"
+        }
+      ],
+      "interface": "uniswap_v2",
+      "name": "Uniswap V2 Ethereum"
+    },
+    {
+      "category": "DEX",
+      "contracts": [
+        {
+          "address": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+          "name": "quoter"
+        },
+        {
+          "address": "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+          "name": "router"
+        },
+        {
+          "address": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+          "name": "factory"
+        }
+      ],
+      "interface": "uniswap_v3",
+      "name": "Uniswap V3 Ethereum"
+    },
+    {
+      "category": "DEX",
+      "contracts": [
+        {
+          "address": "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F",
+          "name": "router"
+        },
+        {
+          "address": "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
+          "name": "factory"
+        }
+      ],
+      "interface": "uniswap_v2",
+      "name": "SushiSwap Ethereum"
+    },
+    {
+      "category": "Lending",
+      "contracts": [
+        {
+          "address": "0x0a16f2FCC0D44FaE41cc54e079281D84A363bECD",
+          "name": "pool_data_provider"
+        },
+        {
+          "address": "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e",
+          "name": "pool_addresses_provider"
+        },
+        {
+          "address": "0x54586bE62E3c3580375aE3723C145253060Ca0C2",
+          "name": "oracle"
+        },
+        {
+          "address": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+          "name": "pool"
+        }
+      ],
+      "interface": "aave_v3",
+      "name": "Aave V3 Ethereum"
+    },
+    {
+      "category": "Lending",
+      "contracts": [
+        {
+          "address": "0xc3d688B66703497DAA19211EEdff47f25384cdc3",
+          "name": "comet_usdc"
+        },
+        {
+          "address": "0x316f9708bB98af7dA9c68C1C3b5e79039cD336E3",
+          "name": "configurator"
+        },
+        {
+          "address": "0xA17581A9E3356d9A858b789D68B4d866e593aE94",
+          "name": "comet_weth"
+        },
+        {
+          "address": "0x3Afdc9BCA9213A35503b077a6072F3D0d5AB0840",
+          "name": "comet_usdt"
+        }
+      ],
+      "interface": "compound_v3",
+      "name": "Compound V3 Ethereum"
+    },
+    {
+      "category": "Lending",
+      "contracts": [
+        {
+          "address": "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+          "name": "ceth"
+        },
+        {
+          "address": "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B",
+          "name": "comptroller"
+        },
+        {
+          "address": "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643",
+          "name": "cdai"
+        },
+        {
+          "address": "0x39AA39c021dfbaE8faC545936693aC917d5E7563",
+          "name": "cusdc"
+        },
+        {
+          "address": "0x65c816077C29b557BEE980ae3cC2dCE80204A0C5",
+          "name": "oracle"
+        },
+        {
+          "address": "0xccF4429DB6322D5C611ee964527D42E5d685DD6a",
+          "name": "cwbtc"
+        }
+      ],
+      "interface": "compound_v2",
+      "name": "Compound V2"
+    },
+    {
+      "category": "Lending",
+      "contracts": [
+        {
+          "address": "0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE",
+          "name": "pool_addresses_provider"
+        },
+        {
+          "address": "0x8105f69D9C41644c6A0803fDA7D03Aa70996cFD9",
+          "name": "oracle"
+        },
+        {
+          "address": "0xFc21d6d146E6086B8359705C8b28512a983db0cb",
+          "name": "pool_data_provider"
+        },
+        {
+          "address": "0xC13e21B648A5Ee794902342038FF3aDAB66BE987",
+          "name": "pool"
+        }
+      ],
+      "interface": "aave_v3",
+      "name": "SparkLend Ethereum"
+    },
+    {
+      "category": "Lending",
+      "contracts": [
+        {
+          "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+          "name": "morpho_blue"
+        }
+      ],
+      "interface": "morpho_blue",
+      "name": "Morpho Blue Ethereum"
+    }
+  ],
+  "rpc_url": "https://eth.llamarpc.com",
+  "summary": {
+    "total_protocols": 8
+  }
+}

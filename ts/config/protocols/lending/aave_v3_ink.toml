@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Ink"
+slug = "aave-v3-ink"
+category = "lending"
+interface = "aave_v3"
+chain = "ink"
+native = false
+description = "Aave V3 on Ink"
+
+[protocol.contracts]
+pool = "0x2816cf15F6d2A220E789aA011D5EE4eB6c47FEbA"
+pool_addresses_provider = "0x4172E6aAEC070ACB31aaCE343A58c93E4C70f44D"
+oracle = "0x4758213271BFdC72224A7a8742dC865fC97756e1"
+pool_data_provider = "0x96086C25d13943C80Ff9a19791a40Df6aFC08328"

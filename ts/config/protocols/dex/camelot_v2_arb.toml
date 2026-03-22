@@ -1,0 +1,11 @@
+[protocol]
+name = "Camelot V2"
+slug = "camelot-v2"
+category = "dex"
+interface = "uniswap_v2"
+chain = "arbitrum"
+native = true
+description = "Camelot V2 AMM on Arbitrum ($6M TVL)"
+[protocol.contracts]
+router = "0xc873fEcbd354f5A56E00E710B90EF4201db2448d"
+factory = "0x6EcCab422D763aC031210895C81787E87B43A652"

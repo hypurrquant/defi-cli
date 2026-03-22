@@ -1,0 +1,38 @@
+[[token]]
+symbol = "SEI"
+name = "Sei"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WSEI"
+name = "Wrapped SEI"
+address = "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7"
+decimals = 18
+tags = ["wrapped"]
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT"
+name = "Tether"
+address = "0xB75D0B03c06A926e488e2659DF1A861F860bD3d1"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0x160345fC359604fC6e70E3c5fAcbdE5F7A9342d8"
+decimals = 18
+tags = ["wrapped"]
+[[token]]
+symbol = "WBTC"
+name = "Wrapped Bitcoin"
+address = "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c"
+decimals = 8

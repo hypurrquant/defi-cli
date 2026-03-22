@@ -1,0 +1,15 @@
+[protocol]
+name = "Balancer V3 Base"
+slug = "balancer-base"
+category = "dex"
+interface = "balancer_v3"
+chain = "base"
+native = false
+description = "Balancer V3 on Base ($16M TVL)"
+
+[protocol.contracts]
+vault = "0xbA1333333333a1BA1108E8412f11850A5C319bA9"
+router = "0x3f170631ed9821Ca51A59D996aB095162438DC10"
+batch_router = "0x85a80afee867aDf27B50BdB7b76DA70f1E853062"
+weighted_pool_factory = "0x5cf4928a3205728bd12830e1840f7db85c62a4b9"
+stable_surge_pool_factory = "0x8e3feaab11b7b351e3ea1e01247ab6ccc847dd52"

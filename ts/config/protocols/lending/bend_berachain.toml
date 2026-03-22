@@ -1,0 +1,11 @@
+[protocol]
+name = "Bend Berachain"
+slug = "bend-berachain"
+category = "lending"
+interface = "morpho_blue"
+chain = "berachain"
+native = true
+description = "Bend — Morpho V1 fork and native credit layer on Berachain with Proof-of-Liquidity integration"
+
+[protocol.contracts]
+morpho_blue = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"

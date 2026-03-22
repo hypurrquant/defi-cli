@@ -1,0 +1,32 @@
+{
+  "name": "@hypurrquant/defi-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "defi": "./dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hypurrquant/defi-core": "workspace:*",
+    "@hypurrquant/defi-protocols": "workspace:*",
+    "commander": "^13.0.0",
+    "picocolors": "^1.1.0",
+    "viem": "^2.23.0"
+  }
+}

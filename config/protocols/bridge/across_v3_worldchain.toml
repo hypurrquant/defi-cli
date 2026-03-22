@@ -1,0 +1,10 @@
+[protocol]
+name = "Across V3 World Chain"
+slug = "across-v3-worldchain"
+category = "bridge"
+interface = "bridge"
+chain = "worldchain"
+description = "Across Protocol V3 bridge on World Chain"
+
+[protocol.contracts]
+spoke_pool = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64"

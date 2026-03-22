@@ -1,0 +1,19 @@
+[protocol]
+name = "KittenSwap Algebra"
+slug = "kittenswap"
+category = "dex"
+interface = "algebra_v3"
+chain = "hyperevm"
+native = true
+description = "Algebra V3 ve(3,3) DEX on HyperEVM ($1.3M TVL)"
+
+[protocol.contracts]
+router = "0x4e73E421480a7E0C24fB3c11019254edE194f736"
+factory = "0x5f95E92c338e6453111Fc55ee66D4AafccE661A7"
+quoter = "0xc58874216AFe47779ADED27B8AAd77E8Bd6eBEBb"
+position_manager = "0x9ea4459c8DefBF561495d95414b9CF1E2242a3E2"
+voter = "0xb7F7053F7e6c210e6777D5BA758E4b3ECa6C88A0"
+ve_token = "0x29d3a21ff35a519e00cf6d272f2ad897b109bd84"
+minter = "0xac36d3671f21A5056Cd1751E201574d702748C7A"
+farming_center = "0x211BD8917d433B7cC1F4497AbA906554Ab6ee479"
+eternal_farming = "0xf3b57fE4d5D0927C3A5e549CB6aF1866687e2D62"

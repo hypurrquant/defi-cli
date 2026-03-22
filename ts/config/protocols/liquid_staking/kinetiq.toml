@@ -1,0 +1,12 @@
+[protocol]
+name = "Kinetiq"
+slug = "kinetiq"
+category = "liquid_staking"
+interface = "kinetiq_staking"
+chain = "hyperevm"
+native = true
+description = "kHYPE liquid staking — largest LST on HyperEVM ($791M TVL)"
+
+[protocol.contracts]
+staking = "0x393D0B87Ed38fc779FD9611144aE649BA6082109"
+khype_token = "0xfD739d4e423301CE9385c1fb8850539D657C296D"

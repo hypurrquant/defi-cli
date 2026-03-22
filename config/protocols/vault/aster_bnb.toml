@@ -1,0 +1,13 @@
+[protocol]
+name = "Aster BNB"
+slug = "aster-bnb"
+category = "vault"
+interface = "erc4626"
+chain = "bnb"
+native = true
+description = "Aster (formerly Astherus) — BNB liquid staking and yield vault on BNB Chain with ~$285M TVL"
+
+[protocol.contracts]
+vault = "0x128463A60784c4D3f46c23Af3f65Ed859Ba87974"
+asbnb_minting = "0x2f31ab8950c50080e77999fa456372f276952fd8"
+asbnb_token = "0x77734e70b6E88b4d82fE632a168EDf6e700912b6"

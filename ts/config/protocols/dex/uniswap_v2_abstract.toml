@@ -1,0 +1,12 @@
+[protocol]
+name = "Uniswap V2 Abstract"
+slug = "uniswap-v2-abstract"
+category = "dex"
+interface = "uniswap_v2"
+chain = "abstract"
+native = false
+description = "Uniswap V2 on Abstract chain"
+
+[protocol.contracts]
+router = "0xad1eCa41E6F772bE3cb5A48A6141f9bcc1AF9F7c"
+factory = "0x566d7510dEE58360a64C9827257cF6D0Dc43985E"

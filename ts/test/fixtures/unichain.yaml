@@ -1,0 +1,81 @@
+# Auto-generated test fixture for unichain
+chain:
+  name: "Unichain"
+  slug: "unichain"
+  chain_id: 130
+  rpc_url: "https://mainnet.unichain.org"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x078D888E40faAe0f32594342c85940AF3949E666"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Uniswap V3 Unichain"
+      slug: "uniswap-v3-unichain"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x73855d06de49d0fe4a9c42636ba96c62da12ff9c"
+        factory: "0x1f98400000000000000000000000000000000003"
+        quoter: "0x385a5cf5f83e99f7bb2852b6a19c3538b9fa7658"
+        position_manager: "0x943e6e07a7e8e791dafc44083e54041d743c46e9"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Velodrome Unichain"
+      slug: "velodrome-unichain"
+      interface: "solidly_v2"
+      contracts:
+        router: "0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45"
+        factory: "0x31832f2a97Fd20664D76Cc421207669b55CE4BC0"
+        voter: "0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Compound V3 Unichain"
+      slug: "compound-v3-unichain"
+      interface: "compound_v3"
+      contracts:
+        comet: "0x2c7118c4C88B9841FCF839074c26Ae8f035f2921"
+        configurator: "0x8df378453Ff9dEFFa513367CDF9b3B53726303e9"
+        rewards: "0x6f7D514bbD4aFf3BcD1140B7344b32f063dEe486"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Morpho Blue Unichain"
+      slug: "morpho-blue-unichain"
+      interface: "erc4626"
+      contracts:
+        vault: "0x8f5ae9CddB9f68de460C77730b018Ae7E04a140A"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-unichain"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

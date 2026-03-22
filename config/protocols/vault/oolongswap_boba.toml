@@ -1,0 +1,11 @@
+[protocol]
+name = "OolongSwap Boba"
+slug = "oolongswap-boba"
+category = "vault"
+interface = "erc4626"
+chain = "boba"
+native = true
+description = "OolongSwap on Boba Network — primary DEX and liquidity protocol on Boba, LP positions as yield-bearing vault"
+
+[protocol.contracts]
+vault = "0x17C83E2B96ACfb5190d63F5E46d93c107eC0b514"

@@ -1,0 +1,11 @@
+[protocol]
+name = "Morpho Blue Abstract"
+slug = "morpho-blue-abstract"
+category = "vault"
+interface = "erc4626"
+chain = "abstract"
+native = false
+description = "Morpho Blue on Abstract — permissionless lending primitive with ERC-4626 MetaMorpho vaults"
+
+[protocol.contracts]
+vault = "0xc85CE8ffdA27b646D269516B8d0Fa6ec2E958B55"

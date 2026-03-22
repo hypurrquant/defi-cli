@@ -1,0 +1,13 @@
+[protocol]
+name = "PancakeSwap V3 Arbitrum"
+slug = "pancakeswap-v3-arb"
+category = "dex"
+interface = "uniswap_v3"
+chain = "arbitrum"
+native = false
+description = "PancakeSwap V3 on Arbitrum"
+
+[protocol.contracts]
+router = "0x32226588378236Fd0c7c4053999F88aC0e5cAc77"
+factory = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
+quoter = "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"

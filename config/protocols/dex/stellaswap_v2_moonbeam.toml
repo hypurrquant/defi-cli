@@ -1,0 +1,12 @@
+[protocol]
+name = "StellaSwap V2 Moonbeam"
+slug = "stellaswap-v2-moonbeam"
+category = "dex"
+interface = "uniswap_v2"
+chain = "moonbeam"
+native = true
+description = "StellaSwap — leading Uniswap V2 DEX on Moonbeam"
+
+[protocol.contracts]
+router = "0xd0A01ec574D1fC6652eDF79cb2F880fd47D34Ab1"
+factory = "0x68A384D826D3678f78BB9FB1533c7E9577dACc0E"

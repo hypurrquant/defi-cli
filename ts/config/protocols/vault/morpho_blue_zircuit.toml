@@ -1,0 +1,11 @@
+[protocol]
+name = "Morpho Blue Zircuit"
+slug = "morpho-blue-zircuit"
+category = "vault"
+interface = "erc4626"
+chain = "zircuit"
+native = false
+description = "Morpho Blue on Zircuit — permissionless lending primitive with ERC-4626 MetaMorpho vaults"
+
+[protocol.contracts]
+vault = "0xA902A365Fe10B4a94339B5A2Dc64F60c1486a5c8"

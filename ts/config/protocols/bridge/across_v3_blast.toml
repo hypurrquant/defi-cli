@@ -1,0 +1,10 @@
+[protocol]
+name = "Across V3 Blast"
+slug = "across-v3-blast"
+category = "bridge"
+interface = "bridge"
+chain = "blast"
+description = "Across Protocol V3 bridge on Blast"
+
+[protocol.contracts]
+spoke_pool = "0x2D509190Ed0172ba588407D4c2df918F955Cc6E1"

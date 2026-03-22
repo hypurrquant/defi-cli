@@ -1,0 +1,12 @@
+[protocol]
+name = "WannaSwap"
+slug = "wannaswap-aurora"
+category = "dex"
+interface = "uniswap_v2"
+chain = "aurora"
+native = true
+description = "WannaSwap — leading Uniswap V2 fork DEX on Aurora (NEAR EVM) with yield farming"
+
+[protocol.contracts]
+router = "0xa3a1eF5Ae6561572023363862e238aFA84C72ef5"
+factory = "0x7928D4FeA7b2c90C732c10aFF59cf403f0C38246"

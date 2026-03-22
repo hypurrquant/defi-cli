@@ -1,0 +1,13 @@
+[protocol]
+name = "Fenix Finance"
+slug = "fenix-blast"
+category = "dex"
+interface = "algebra_v3"
+chain = "blast"
+native = true
+description = "Fenix Finance — Algebra-powered concentrated liquidity DEX on Blast with ve(3,3) tokenomics"
+
+[protocol.contracts]
+router = "0x2df37Cb897fdffc6B4b03d8252d85BE7C6dA9d00"
+factory = "0x7a44CD060afC1B6F4c80A2B9b37f4473E74E25Df"
+quoter = "0x94Ca5B835186A37A99776780BF976fAB81D84ED8"

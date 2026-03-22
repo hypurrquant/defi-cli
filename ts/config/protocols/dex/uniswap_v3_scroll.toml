@@ -1,0 +1,12 @@
+[protocol]
+name = "Uniswap V3 Scroll"
+slug = "uniswap-v3-scroll"
+category = "dex"
+interface = "uniswap_v3"
+chain = "scroll"
+native = false
+description = "Uniswap V3 on Scroll"
+
+[protocol.contracts]
+router = "0xfc30937f5cDe93Df8d48aCAF7e6f5D8D8A31F636"
+factory = "0x70C62C8b8E801124A4Aa81ce07b637A3e83cb919"

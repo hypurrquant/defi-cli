@@ -1,0 +1,15 @@
+[protocol]
+name = "Balancer V3 Arbitrum"
+slug = "balancer-arb"
+category = "dex"
+interface = "balancer_v3"
+chain = "arbitrum"
+native = false
+description = "Balancer V3 on Arbitrum One ($15M TVL)"
+
+[protocol.contracts]
+vault = "0xbA1333333333a1BA1108E8412f11850A5C319bA9"
+router = "0xEAedc32a51c510d35ebC11088fD5fF2b47aACF2E"
+batch_router = "0xaD89051bEd8d96f045E8912aE1672c6C0bF8a85E"
+weighted_pool_factory = "0x83bf399FA3DC49Af8fb5c34031a50c7C93F56129"
+stable_pool_factory = "0x1FC7F1F84CFE61a04224AC8D3F87f56214FeC08c"

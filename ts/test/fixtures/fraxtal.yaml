@@ -1,0 +1,77 @@
+# Auto-generated test fixture for fraxtal
+chain:
+  name: "Fraxtal"
+  slug: "fraxtal"
+  chain_id: 252
+  rpc_url: "https://rpc.frax.com"
+  native_token: "FRAX"
+
+tokens:
+  native:
+    symbol: "FRAX"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WFRAX"
+    address: "0xFC00000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xDcc0F2D8F90FDe85b10aC1c8Ab57dc0AE946A543"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Fraxswap Fraxtal"
+      slug: "fraxswap-fraxtal"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x2Dd1B4D4548aCCeA497050619965f91f78b3b532"
+        factory: "0xE30521fe7f3bEB6Ad556887b50739d6C7CA667E6"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Velodrome Fraxtal"
+      slug: "velodrome-fraxtal"
+      interface: "solidly_v2"
+      contracts:
+        router: "0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45"
+        factory: "0x31832f2a97Fd20664D76Cc421207669b55CE4BC0"
+        voter: "0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Morpho Blue Fraxtal"
+      slug: "morpho-blue-fraxtal"
+      interface: "morpho_blue"
+      contracts:
+        morpho_blue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Fraxtal"
+      slug: "beefy-fraxtal"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x693FD5eF73a836fDe25037B56cf18acb661D57Cd"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-fraxtal"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

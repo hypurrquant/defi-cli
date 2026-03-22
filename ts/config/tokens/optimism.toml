@@ -1,0 +1,70 @@
+[[token]]
+symbol = "ETH"
+name = "Ether"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0x4200000000000000000000000000000000000006"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDC.e"
+name = "Bridged USDC"
+address = "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT"
+name = "Tether USD"
+address = "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WBTC"
+name = "Wrapped Bitcoin"
+address = "0x68f180fcCe6836688e9084f035309E29Bf0A2095"
+decimals = 8
+tags = ["blue_chip"]
+
+[[token]]
+symbol = "wstETH"
+name = "Wrapped liquid staked Ether 2.0"
+address = "0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb"
+decimals = 18
+tags = ["lst"]
+
+[[token]]
+symbol = "OP"
+name = "Optimism"
+address = "0x4200000000000000000000000000000000000042"
+decimals = 18
+tags = ["governance"]
+
+[[token]]
+symbol = "VELO"
+name = "Velodrome"
+address = "0x3c8B650257cFb5f272f799F5e2b4e65093a11a05"
+decimals = 18
+tags = ["governance"]
+
+[[token]]
+symbol = "SNX"
+name = "Synthetix"
+address = "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4"
+decimals = 18
+tags = ["governance"]

@@ -1,0 +1,14 @@
+[protocol]
+name = "HyperLend"
+slug = "hyperlend"
+category = "lending"
+interface = "aave_v3"
+chain = "hyperevm"
+native = true
+description = "Aave V3 fork — largest native lending on HyperEVM"
+
+[protocol.contracts]
+pool = "0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b"
+pool_addresses_provider = "0x72c98246a98bFe64022a3190e7710E157497170C"
+oracle = "0xC9Fb4fbE842d57EAc1dF3e641a281827493A630e"
+pool_data_provider = "0x3Bb92CF81E38484183cc96a4Fb8fBd2d73535807"

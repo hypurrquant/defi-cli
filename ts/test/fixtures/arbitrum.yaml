@@ -1,0 +1,177 @@
+# Auto-generated test fixture for arbitrum
+chain:
+  name: "Arbitrum"
+  slug: "arbitrum"
+  chain_id: 42161
+  rpc_url: "https://arb1.arbitrum.io/rpc"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Camelot V3"
+      slug: "camelot-v3"
+      interface: "algebra_v3"
+      contracts:
+        router: "0x1F721E2E82F6676FCE4eA07A5958cF098D339e18"
+        factory: "0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B"
+        quoter: "0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Camelot V2"
+      slug: "camelot-v2"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xc873fEcbd354f5A56E00E710B90EF4201db2448d"
+        factory: "0x6EcCab422D763aC031210895C81787E87B43A652"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "PancakeSwap V3 Arbitrum"
+      slug: "pancakeswap-v3-arb"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x32226588378236Fd0c7c4053999F88aC0e5cAc77"
+        factory: "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
+        quoter: "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "SushiSwap Arbitrum"
+      slug: "sushiswap-arb"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506"
+        factory: "0xc35DADB65012eC5796536bD9864eD8773aBc74C4"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "TraderJoe V2.1"
+      slug: "traderjoe-arb"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30"
+        factory: "0x8e42f2F4101563bF679975178e880FD87d3eFd4e"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V2 Arbitrum"
+      slug: "uniswap-v2-arb"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24"
+        factory: "0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Arbitrum"
+      slug: "uniswap-v3-arb"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
+        factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+        quoter: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3 Arbitrum"
+      slug: "aave-v3-arb"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+        pool_addresses_provider: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb"
+        oracle: "0xb56c2F0B653B2e0b10C9b928C8580Ac5Df02C7C7"
+        pool_data_provider: "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Compound V3 Arbitrum"
+      slug: "compound-v3-arb"
+      interface: "compound_v3"
+      contracts:
+        comet_usdc: "0x9c4ec768c28520B50860ea7a15bd7213a9fF58bf"
+        comet_weth: "0x6f7D514bbD4aFf3BcD1140B7344b32f063dEe486"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Venus Arbitrum"
+      slug: "venus-arb"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x317c1A5739F39046E20b08ac9BeEa3f10fD43326"
+        pool_registry: "0x382238f07Bc4Fe4aA99e561adE8A4164b5f815DA"
+        oracle: "0xd55FaE4769e3240FfFf4c17cd240702F3ed8CF0E"
+        vusdt: "0xB9F9117d4200dC296F9AcD1e8bE1937df834a2fD"
+        vusdc: "0x7D8609f8da70fF9027E9bc5229Af4F6727662707"
+        vwbtc: "0xaDa57840B372D4c28623E87FC175dE8490792811"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Arbitrum"
+      slug: "beefy-arbitrum"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x0165384487d26b3bb71aE2f3e26635071b71CC25"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-arbitrum"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Arbitrum"
+      slug: "across-v3-arbitrum"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A"
+    - name: "Stargate V2 Arbitrum"
+      slug: "stargate-v2-arbitrum"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdc_pool: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3"
+        usdt_pool: "0xcE8CcA271Ebc0533920C83d39F417ED6A0abB7D0"
+        eth_pool: "0xA45B5130f36CDcA45667738e2a258AB09f4A1f74"
+    - name: "Wormhole Arbitrum"
+      slug: "wormhole-arbitrum"
+      interface: "bridge"
+      contracts:
+        token_bridge: "0x0b2402144Bb366A632D14B83F244D2e0e21bD39c"
+        core: "0xa5f208e072434bC67592E4C49C1B991BA79BCA46"
+        nft_bridge: "0x3dD14D553cFD986EAC8e3bddF629d82073e188c8"

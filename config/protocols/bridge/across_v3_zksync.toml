@@ -1,0 +1,10 @@
+[protocol]
+name = "Across V3 zkSync"
+slug = "across-v3-zksync"
+category = "bridge"
+interface = "bridge"
+chain = "zksync"
+description = "Across Protocol V3 bridge on zkSync Era"
+
+[protocol.contracts]
+spoke_pool = "0xE0B015E54d54fc84a6cB9B666099Fb3Ed752465B"

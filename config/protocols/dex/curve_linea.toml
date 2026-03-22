@@ -1,0 +1,11 @@
+[protocol]
+name = "Curve Linea"
+slug = "curve-linea"
+category = "dex"
+interface = "curve_stableswap"
+chain = "linea"
+native = false
+description = "Curve StableSwap-NG on Linea"
+
+[protocol.contracts]
+factory = "0x5eeE3091f747E60a045a2E715a4c71e600e31F6E"

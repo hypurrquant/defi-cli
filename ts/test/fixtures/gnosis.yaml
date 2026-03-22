@@ -1,0 +1,102 @@
+# Auto-generated test fixture for gnosis
+chain:
+  name: "Gnosis"
+  slug: "gnosis"
+  chain_id: 100
+  rpc_url: "https://rpc.gnosischain.com"
+  native_token: "XDAI"
+
+tokens:
+  native:
+    symbol: "XDAI"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WXDAI"
+    address: "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Balancer V2 Gnosis"
+      slug: "balancer-v2-gnosis"
+      interface: "balancer_v3"
+      contracts:
+        vault: "0xBA12222222228d8Ba445958a75a0704d566BF2C8"
+        router: "0x8E9aa87E45e92bad84D5F8DD1bff34Fb92637dE9"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Curve Gnosis"
+      slug: "curve-gnosis"
+      interface: "curve_stableswap"
+      contracts:
+        factory: "0xD19Baeadc667Cf2015e395f2B08668Ef120f41F5"
+        router: "0x0DCDED3545D565bA3B19E683431381007245d983"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "SushiSwap V3 Gnosis"
+      slug: "sushiswap-v3-gnosis"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x4F54dd2F4f30347d841b7783aD08c050d8410a9d"
+        factory: "0xf78031CBCA409F2FB6876BDFDBc1b2df24cF9bEf"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3 Gnosis"
+      slug: "aave-v3-gnosis"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xb50201558B00496A145fE76f7424749556E326D8"
+        pool_addresses_provider: "0x36616cf17557639614c1cdDb356b1B83fc0B2132"
+        oracle: "0xeb0a051be10228213BAEb449db63719d6742F7c4"
+        pool_data_provider: "0xF1F5acB596568895393cB5E4D0452D6592A2fA70"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Gnosis"
+      slug: "beefy-gnosis"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0xEFe7a711e7C794D3C8934C243631720dBec522Eb"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-gnosis"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Stargate V2 Gnosis"
+      slug: "stargate-v2-gnosis"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdc_pool: "0xD74BC59BC7B65E2048b0A569d555e55465cd29bD"
+    - name: "Wormhole Gnosis"
+      slug: "wormhole-gnosis"
+      interface: "bridge"
+      contracts:
+        token_bridge: "0xBa631b6C69b0D382e0893A5C432F56DEbC9Bc7CF"
+        core: "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6"

@@ -1,0 +1,12 @@
+[protocol]
+name = "Bastion Aurora"
+slug = "bastion-aurora"
+category = "lending"
+interface = "compound_v2"
+chain = "aurora"
+native = true
+description = "Bastion Protocol — Compound V2 fork and leading lending protocol on Aurora (NEAR EVM)"
+
+[protocol.contracts]
+comptroller = "0x6De54724e128274520606f038591A00C5E94a1F6"
+oracle = "0x0000000000000000000000000000000000000000"

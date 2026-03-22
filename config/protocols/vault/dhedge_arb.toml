@@ -1,0 +1,13 @@
+[protocol]
+name = "dHEDGE Arbitrum"
+slug = "dhedge-arb"
+category = "vault"
+interface = "erc4626"
+chain = "arbitrum"
+native = false
+description = "dHEDGE V2 managed vaults on Arbitrum ($14M TVL)"
+
+[protocol.contracts]
+pool_factory = "0xffFb5fB14606EB3a548C113026355020dDF27535"
+pool_logic = "0xe27d7aD2E826376b9c6F8f6f86d57107B9AeD5f2"
+pool_manager_logic = "0x96142e2D9CD98F8B9dF8f1d2569956F0bd4f418a"

@@ -1,0 +1,526 @@
+{
+  "chain": "Base",
+  "chain_id": 8453,
+  "rpc_url": "https://mainnet.base.org",
+  "protocols": [
+    {
+      "slug": "aerodrome",
+      "name": "Aerodrome",
+      "category": "dex",
+      "interface": "solidly_v2",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43"
+        },
+        {
+          "name": "factory",
+          "address": "0x420DD381b31aEf6683db6B902084cB0FFECe40Da"
+        },
+        {
+          "name": "voter",
+          "address": "0x16613524e02ad97eDfeF371bC883F2F5d6C480A5"
+        }
+      ]
+    },
+    {
+      "slug": "aerodrome-cl",
+      "name": "Aerodrome Slipstream",
+      "category": "dex",
+      "interface": "uniswap_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0xBe6D8f0d05cC4be24d5167a3eF062215bE6D18a5"
+        },
+        {
+          "name": "factory",
+          "address": "0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831"
+        },
+        {
+          "name": "quoter",
+          "address": "0x254cF9E1E6e233aa1AC962CB9B05b2cfeaae15b0"
+        }
+      ]
+    },
+    {
+      "slug": "alienbase-v3",
+      "name": "Alien Base V3",
+      "category": "dex",
+      "interface": "uniswap_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0xB20C411FC84FBB27e78608C24d0056D974ea9411"
+        },
+        {
+          "name": "factory",
+          "address": "0x0Fd83557b2be93617c9C1C1B6fd549401C74558C"
+        }
+      ]
+    },
+    {
+      "slug": "balancer-base",
+      "name": "Balancer V3 Base",
+      "category": "dex",
+      "interface": "balancer_v3",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0xbA1333333333a1BA1108E8412f11850A5C319bA9"
+        },
+        {
+          "name": "router",
+          "address": "0x3f170631ed9821Ca51A59D996aB095162438DC10"
+        },
+        {
+          "name": "batch_router",
+          "address": "0x85a80afee867aDf27B50BdB7b76DA70f1E853062"
+        },
+        {
+          "name": "weighted_pool_factory",
+          "address": "0x5cf4928a3205728bd12830e1840f7db85c62a4b9"
+        },
+        {
+          "name": "stable_surge_pool_factory",
+          "address": "0x8e3feaab11b7b351e3ea1e01247ab6ccc847dd52"
+        }
+      ]
+    },
+    {
+      "slug": "curve-base",
+      "name": "Curve Base",
+      "category": "dex",
+      "interface": "curve_stableswap",
+      "contracts": [
+        {
+          "name": "factory",
+          "address": "0xd2002373543Ce3527023C75e7518C274A51ce712"
+        },
+        {
+          "name": "router",
+          "address": "0x4f37A9d177470499A2dD084621020b023fcffc1F"
+        }
+      ]
+    },
+    {
+      "slug": "pancakeswap-v3-base",
+      "name": "PancakeSwap V3 Base",
+      "category": "dex",
+      "interface": "uniswap_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86"
+        },
+        {
+          "name": "factory",
+          "address": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
+        },
+        {
+          "name": "quoter",
+          "address": "0x3d146FcE6c1006857750cBe8aF44f76a28041CCc"
+        }
+      ]
+    },
+    {
+      "slug": "quickswap-base",
+      "name": "QuickSwap V4 Base",
+      "category": "dex",
+      "interface": "algebra_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0xe6c9bb24ddB4aE5c6632dbE0DE14e3E474c6Cb04"
+        },
+        {
+          "name": "factory",
+          "address": "0xC5396866754799B9720125B104AE01d935Ab9C7b"
+        },
+        {
+          "name": "quoter",
+          "address": "0x23E0583a3a000d567bB3848115065c1890D87fb5"
+        }
+      ]
+    },
+    {
+      "slug": "sushiswap-base",
+      "name": "SushiSwap Base",
+      "category": "dex",
+      "interface": "uniswap_v2",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891"
+        },
+        {
+          "name": "factory",
+          "address": "0x71524B4f93c58fcbF659783284E38825f0622859"
+        }
+      ]
+    },
+    {
+      "slug": "uniswap-v2-base",
+      "name": "Uniswap V2 Base",
+      "category": "dex",
+      "interface": "uniswap_v2",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24"
+        },
+        {
+          "name": "factory",
+          "address": "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"
+        }
+      ]
+    },
+    {
+      "slug": "uniswap-v3-base",
+      "name": "Uniswap V3 Base",
+      "category": "dex",
+      "interface": "uniswap_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x2626664c2603336E57B271c5C0b26F421741e481"
+        },
+        {
+          "name": "factory",
+          "address": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
+        },
+        {
+          "name": "quoter",
+          "address": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+        }
+      ]
+    },
+    {
+      "slug": "woofi-base",
+      "name": "WOOFi Base",
+      "category": "dex",
+      "interface": "woofi",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x4c4AF8DBc524681930a27b2F1Af5bcC8062E6fB7"
+        },
+        {
+          "name": "pool",
+          "address": "0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4"
+        }
+      ]
+    },
+    {
+      "slug": "aave-v3-base",
+      "name": "Aave V3 Base",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool",
+          "address": "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"
+        },
+        {
+          "name": "pool_addresses_provider",
+          "address": "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D"
+        },
+        {
+          "name": "oracle",
+          "address": "0x2Cc0Fc26eD4563A5ce5e8bdcfe1A2878676Ae156"
+        },
+        {
+          "name": "pool_data_provider",
+          "address": "0x2d8A3C5677189723C4cB8873CfC9C8976FDF38Ac"
+        }
+      ]
+    },
+    {
+      "slug": "compound-v3-base",
+      "name": "Compound V3 Base",
+      "category": "lending",
+      "interface": "compound_v3",
+      "contracts": [
+        {
+          "name": "comet_usdc",
+          "address": "0xb125E6687d4313864e53df431d5425969c15Eb2F"
+        },
+        {
+          "name": "comet_weth",
+          "address": "0x46e6b214b524310239732D51387075E0e70970bf"
+        }
+      ]
+    },
+    {
+      "slug": "euler-v2-base",
+      "name": "Euler V2 Base",
+      "category": "lending",
+      "interface": "euler_v2",
+      "contracts": [
+        {
+          "name": "evc",
+          "address": "0x5301c7dD20bD945D2013b48ed0DEE3A284ca8989"
+        },
+        {
+          "name": "evault_factory",
+          "address": "0x7F321498A801A191a93C840750ed637149dDf8D0"
+        },
+        {
+          "name": "evault_implementation",
+          "address": "0x30a9A9654804F1e5b3291a86E83EdeD7cF281618"
+        },
+        {
+          "name": "euler_earn_factory",
+          "address": "0x75F49a2621b6DeC6a5baB22ce961bF3e676EFAE6"
+        },
+        {
+          "name": "protocol_config",
+          "address": "0x1D4b9e6ACACdc82Dd9E903C3F4431558Af32C4A9"
+        },
+        {
+          "name": "balance_tracker",
+          "address": "0x029fDEe85BEdB0553D6fdc538546586641DD7438"
+        },
+        {
+          "name": "sequence_registry",
+          "address": "0xfE9011FD097cd35866b9e4740BBC88B4ef26E3ba"
+        }
+      ]
+    },
+    {
+      "slug": "extra-finance-base",
+      "name": "Extra Finance Base",
+      "category": "lending",
+      "interface": "compound_v2",
+      "contracts": [
+        {
+          "name": "lending_pool",
+          "address": "0xd9Edc75a3a797Ec92CA370f19051BaBeBFb2eDee"
+        }
+      ]
+    },
+    {
+      "slug": "moonwell-base",
+      "name": "Moonwell Base",
+      "category": "lending",
+      "interface": "compound_v2",
+      "contracts": [
+        {
+          "name": "comptroller",
+          "address": "0xfBb21d0380beE3312B33c4353c8936a0F13EF26C"
+        },
+        {
+          "name": "oracle",
+          "address": "0xEC942bE8A8114bFD0396A5052c36027f2cA6a9d0"
+        },
+        {
+          "name": "musdc",
+          "address": "0xEdc817A28E8B93b03976FBd4a3dDBc9f7D176c22"
+        },
+        {
+          "name": "mweth",
+          "address": "0x628ff693426583D9a7FB391E54366292F509D457"
+        },
+        {
+          "name": "mcbeth",
+          "address": "0x3Bf93770f2d4a794c3d9EbEFBAeBae2a8f09A5E5"
+        },
+        {
+          "name": "mwsteth",
+          "address": "0x627Fe393Bc6edDa28e99AE648fD6fF362514304b"
+        }
+      ]
+    },
+    {
+      "slug": "morpho-blue-base",
+      "name": "Morpho Blue Base",
+      "category": "lending",
+      "interface": "morpho_blue",
+      "contracts": [
+        {
+          "name": "morpho_blue",
+          "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+        }
+      ]
+    },
+    {
+      "slug": "seamless-base",
+      "name": "Seamless Protocol Base",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool_addresses_provider",
+          "address": "0x0E02EB705be325407707662C6f6d3466E939f3a0"
+        }
+      ]
+    },
+    {
+      "slug": "sonne",
+      "name": "Sonne Finance",
+      "category": "lending",
+      "interface": "compound_v2",
+      "contracts": [
+        {
+          "name": "comptroller",
+          "address": "0x1DB2466d9F5e10D7090E7152B68d62703a2245F0"
+        },
+        {
+          "name": "vusdc",
+          "address": "0xfd68F92B45b633bbe0f475294C1A86aecD62985A"
+        },
+        {
+          "name": "vusdt",
+          "address": "0x5F5c479fe590cD4442A05aE4a941dd991A633B8E"
+        }
+      ]
+    },
+    {
+      "slug": "spark-base",
+      "name": "Spark Base",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool",
+          "address": "0xC13e21B648A5Ee794902342038FF3aDAB66BE987"
+        },
+        {
+          "name": "pool_addresses_provider",
+          "address": "0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE"
+        },
+        {
+          "name": "oracle",
+          "address": "0x8105f69D9C41644c6A0803fDA7D03Aa70996cFD9"
+        },
+        {
+          "name": "pool_data_provider",
+          "address": "0xFc21d6d146E6086B8359705C8b28512a983db0cb"
+        }
+      ]
+    },
+    {
+      "slug": "fluid-base",
+      "name": "Fluid Base",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "liquidity",
+          "address": "0x52Aa899454998Be5b000Ad077a46Bbe360F4e497"
+        },
+        {
+          "name": "fusdc",
+          "address": "0xf42f5795D9ac7e9D757dB633D693cD548Cfd9169"
+        },
+        {
+          "name": "fweth",
+          "address": "0x9272D6153133175175Bc276512B2336BE3931CE9"
+        },
+        {
+          "name": "fwsteth",
+          "address": "0x896E39f0E9af61ECA9dD2938E14543506ef2c2b5"
+        },
+        {
+          "name": "lending_factory",
+          "address": "0x54B91A0D94cb471F37f949c60F7Fa7935b551D03"
+        }
+      ]
+    },
+    {
+      "slug": "maple-base",
+      "name": "Maple Finance Base",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0x660975730059246a68521a3e2fbd4740173100f5"
+        }
+      ]
+    },
+    {
+      "slug": "pendle-base",
+      "name": "Pendle Base",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x888888888889758F76e7103c6CbF23ABbF58F946"
+        },
+        {
+          "name": "market_factory",
+          "address": "0x81E80A50E56d10C501fF17B5Fe2F662bd9EA4590"
+        }
+      ]
+    },
+    {
+      "slug": "yearn-base",
+      "name": "Yearn V3 Base",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0xc3bd0a2193c8f027b82dde3611d18589ef3f62a9"
+        }
+      ]
+    },
+    {
+      "slug": "across-v3-base",
+      "name": "Across V3 Base",
+      "category": "bridge",
+      "interface": "bridge",
+      "contracts": [
+        {
+          "name": "spoke_pool",
+          "address": "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64"
+        }
+      ]
+    },
+    {
+      "slug": "stargate-v2-base",
+      "name": "Stargate V2 Base",
+      "category": "bridge",
+      "interface": "bridge",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        },
+        {
+          "name": "usdc_pool",
+          "address": "0x27a16dc786820B16E5c9028b75B99F6f604b5d26"
+        },
+        {
+          "name": "eth_pool",
+          "address": "0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C7"
+        }
+      ]
+    },
+    {
+      "slug": "wormhole-base",
+      "name": "Wormhole Base",
+      "category": "bridge",
+      "interface": "bridge",
+      "contracts": [
+        {
+          "name": "token_bridge",
+          "address": "0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627"
+        },
+        {
+          "name": "core",
+          "address": "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6"
+        },
+        {
+          "name": "nft_bridge",
+          "address": "0xDA3adC6621B2637BFd516F0B0b3B36D5861045e9"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_protocols": 27
+  }
+}

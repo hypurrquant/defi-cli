@@ -1,0 +1,12 @@
+[protocol]
+name = "TraderJoe V2.1"
+slug = "traderjoe-arb"
+category = "dex"
+interface = "uniswap_v2"
+chain = "arbitrum"
+native = false
+description = "TraderJoe V2.1 on Arbitrum ($1.3M TVL)"
+
+[protocol.contracts]
+router = "0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30"
+factory = "0x8e42f2F4101563bF679975178e880FD87d3eFd4e"

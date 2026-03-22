@@ -1,0 +1,194 @@
+{
+  "results": [
+    {
+      "step": "setup.fund",
+      "status": "pass",
+      "detail": "ETH=89.999975991515110694, WETH=10, USDC=0",
+      "duration": 3041
+    },
+    {
+      "step": "approve.weth→uniswap",
+      "status": "pass",
+      "detail": "max approval",
+      "duration": 55
+    },
+    {
+      "step": "approve.usdc→aave",
+      "status": "pass",
+      "detail": "max approval",
+      "duration": 157
+    },
+    {
+      "step": "dex.quote",
+      "status": "fail",
+      "detail": "Command failed: node /Users/hik/Documents/GitHub/defi-cli/ts/packages/defi-cli/dist/main.js dex quote --json --protocol hyperswap-v3 --token-in 0x5555555555555555555555555555555555555555 --token-out 0",
+      "duration": 1030
+    },
+    {
+      "step": "dex.swap.broadcast",
+      "status": "pass",
+      "detail": "USDC balance after swap: 37",
+      "duration": 76
+    },
+    {
+      "step": "lending.supply",
+      "status": "pass",
+      "detail": "20 USDC → HyperLend",
+      "duration": 1835
+    },
+    {
+      "step": "lending.position",
+      "status": "pass",
+      "detail": "supplies=1 borrows=0 hf=∞",
+      "duration": 1042
+    },
+    {
+      "step": "lending.rates",
+      "status": "pass",
+      "detail": "supply=4.38% borrow=7.49%",
+      "duration": 194
+    },
+    {
+      "step": "lending.withdraw",
+      "status": "pass",
+      "detail": "20 USDC withdrawn",
+      "duration": 142
+    },
+    {
+      "step": "nft.info",
+      "status": "fail",
+      "detail": "RPC error: [OpenSea Seaport] name failed: ContractFunctionExecutionError: The contract function \"name\" returned no data (\"0x\").\n\nThis could be due to any of the following:\n  - The contract does not have the function \"name\",\n  - The parameters passed to the contract function may be invalid, or\n  - The address is not a contract.\n \nContract Call:\n  address:   0x0000000000000000000000000000000000000000\n  function:  name()\n\nDocs: https://viem.sh/docs/contract/readContract\nVersion: viem@2.47.5",
+      "duration": 182
+    },
+    {
+      "step": "scan",
+      "status": "pass",
+      "detail": "21285ms, 0 findings",
+      "duration": 21416
+    },
+    {
+      "step": "final.balances",
+      "status": "pass",
+      "detail": "ETH=89.999662439931998586 WETH=9 USDC=37",
+      "duration": 82
+    }
+  ],
+  "lessons": [
+    {
+      "step": "setup",
+      "protocol": "WETH",
+      "function_name": "deposit",
+      "abi_signature": "function deposit() payable",
+      "contract": "0x5555555555555555555555555555555555555555",
+      "params": {
+        "value": "10 ETH"
+      },
+      "result": "success",
+      "detail": "Wrap ETH to WETH",
+      "notes": "WETH uses deposit() with msg.value"
+    },
+    {
+      "step": "setup",
+      "protocol": "USDC",
+      "function_name": "transfer",
+      "abi_signature": "function transfer(address to, uint256 amount) returns (bool)",
+      "contract": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+      "params": {
+        "to": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "amount": "10000 USDC (10000e6)"
+      },
+      "result": "fail",
+      "detail": "Transfer USDC from whale via impersonation",
+      "notes": "USDC has 6 decimals. Use anvil_impersonateAccount for whale transfers."
+    },
+    {
+      "step": "approve",
+      "protocol": "Uniswap V3",
+      "function_name": "approve",
+      "abi_signature": "function approve(address spender, uint256 amount) returns (bool)",
+      "contract": "0x5555555555555555555555555555555555555555",
+      "params": {
+        "spender": "0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D",
+        "amount": "type(uint256).max"
+      },
+      "result": "success",
+      "detail": "Approve WETH for Uniswap V3 Router",
+      "notes": "Max approval (type(uint256).max) common for DEX interactions"
+    },
+    {
+      "step": "approve",
+      "protocol": "Aave V3",
+      "function_name": "approve",
+      "abi_signature": "function approve(address spender, uint256 amount) returns (bool)",
+      "contract": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+      "params": {
+        "spender": "0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b",
+        "amount": "type(uint256).max"
+      },
+      "result": "success",
+      "detail": "Approve USDC for Aave V3 Pool"
+    },
+    {
+      "step": "swap",
+      "protocol": "Uniswap V3",
+      "function_name": "exactInputSingle",
+      "abi_signature": "function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) returns (uint256 amountOut)",
+      "contract": "0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D",
+      "params": {
+        "tokenIn": "WETH",
+        "tokenOut": "USDC",
+        "fee": "3000 (0.3%)",
+        "amountIn": "1 WETH",
+        "amountOutMinimum": "0",
+        "recipient": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "result": "success",
+      "detail": "Real swap: 1 WETH → USDC on Uniswap V3",
+      "notes": "fee=3000 is 0.3% pool. sqrtPriceLimitX96=0 means no price limit. deadline should be future timestamp."
+    },
+    {
+      "step": "supply",
+      "protocol": "Aave V3",
+      "function_name": "supply",
+      "abi_signature": "function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
+      "contract": "0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b",
+      "params": {
+        "asset": "USDC",
+        "amount": "1000 USDC (1000e6)",
+        "onBehalfOf": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "referralCode": "0"
+      },
+      "result": "success",
+      "detail": "Supply 1000 USDC to Aave V3",
+      "notes": "referralCode=0 for no referral. Asset must be approved first. onBehalfOf can be different from msg.sender."
+    },
+    {
+      "step": "rates",
+      "protocol": "Aave V3",
+      "function_name": "getReserveData",
+      "abi_signature": "function getReserveData(address asset) returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, ...)",
+      "contract": "0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b",
+      "params": {
+        "asset": "USDC"
+      },
+      "result": "success",
+      "detail": "supply=4.38% borrow=7.49%",
+      "notes": "Rates are in RAY (1e27). Convert: APY = (rate / 1e27) * 100. liquidityRate=supply, variableBorrowRate=borrow."
+    },
+    {
+      "step": "withdraw",
+      "protocol": "Aave V3",
+      "function_name": "withdraw",
+      "abi_signature": "function withdraw(address asset, uint256 amount, address to) returns (uint256)",
+      "contract": "0x00A89d7a5A02160f20150EbEA7a2b5E4879A1A8b",
+      "params": {
+        "asset": "USDC",
+        "amount": "1000 USDC",
+        "to": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "result": "success",
+      "detail": "Withdraw 20 USDC from HyperLend",
+      "notes": "Use type(uint256).max to withdraw all. Returns actual amount withdrawn."
+    }
+  ]
+}

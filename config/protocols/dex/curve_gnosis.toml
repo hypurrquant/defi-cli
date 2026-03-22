@@ -1,0 +1,12 @@
+[protocol]
+name = "Curve Gnosis"
+slug = "curve-gnosis"
+category = "dex"
+interface = "curve_stableswap"
+chain = "gnosis"
+native = false
+description = "Curve stableswap on Gnosis Chain"
+
+[protocol.contracts]
+factory = "0xD19Baeadc667Cf2015e395f2B08668Ef120f41F5"
+router = "0x0DCDED3545D565bA3B19E683431381007245d983"

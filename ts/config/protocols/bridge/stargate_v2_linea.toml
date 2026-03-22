@@ -1,0 +1,12 @@
+[protocol]
+name = "Stargate V2 Linea"
+slug = "stargate-v2-linea"
+category = "bridge"
+interface = "bridge"
+chain = "linea"
+description = "Stargate V2 (LayerZero) bridge on Linea"
+
+[protocol.contracts]
+router = "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+eth_pool = "0x81F6138153d473E8c5EcebD3DC8Cd4903506B075"
+usdc_pool = "0x2943ac1216979aD8dB76D9147F64E61adc126e96"

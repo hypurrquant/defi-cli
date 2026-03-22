@@ -1,0 +1,12 @@
+[protocol]
+name = "DeFi Kingdoms"
+slug = "defikingdoms-harmony"
+category = "dex"
+interface = "uniswap_v2"
+chain = "harmony"
+native = true
+description = "DeFi Kingdoms — native DEX and game on Harmony ONE with Uniswap V2 AMM"
+
+[protocol.contracts]
+router = "0x24ad62502d1C652Cc7684081169D04896aC20f30"
+factory = "0x9014B937069918bd319f80e8B3BB4A2cf6FAA5F7"

@@ -1,0 +1,21 @@
+[[token]]
+symbol = "MOVR"
+name = "Moonriver"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WMOVR"
+name = "Wrapped MOVR"
+address = "0x98878B06940aE243284CA214f92Bb71a2b032B8A"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0xE3F5a90F9cb311505cd691a46596599aA1A0AD7D"
+decimals = 6
+tags = ["stablecoin"]

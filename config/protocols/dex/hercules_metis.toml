@@ -1,0 +1,12 @@
+[protocol]
+name = "Hercules"
+slug = "hercules-metis"
+category = "dex"
+interface = "uniswap_v3"
+chain = "metis"
+native = true
+description = "Hercules — Algebra-powered concentrated liquidity DEX on Metis Andromeda"
+
+[protocol.contracts]
+router = "0xBde5839EC36Db2aC492b79e9E3B75e15FA8A59ec"
+factory = "0xC5BfA92f27dF36d268422EE314a1387bB5ffB06A"

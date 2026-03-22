@@ -1,0 +1,13 @@
+[protocol]
+name = "Uniswap V3 Mantle"
+slug = "uniswap-v3-mantle"
+category = "dex"
+interface = "uniswap_v3"
+chain = "mantle"
+native = false
+description = "Uniswap V3 on Mantle — DAO-recognized deployment by GFX Labs"
+
+[protocol.contracts]
+router = "0x447B8E40B0CdA8e55F405C86bC635D02d0540aB8"
+factory = "0x0d922Fb1Bc191F64970ac40376643808b4B74Df9"
+quoter = "0xdD489C75be1039ec7d843A6aC2Fd658350B067Cf"

@@ -1,0 +1,76 @@
+# Auto-generated test fixture for berachain
+chain:
+  name: "Berachain"
+  slug: "berachain"
+  chain_id: 80094
+  rpc_url: "https://rpc.berachain.com"
+  native_token: "BERA"
+
+tokens:
+  native:
+    symbol: "BERA"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WBERA"
+    address: "0x6969696969696969696969696969696969696969"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x549943e04f40284185054145c6E4e9568C1D3241"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "BEX"
+      slug: "bex-berachain"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x4Be03f781C497A489E3cB0287833452cA9B9E80B"
+        factory: "0x4Be03f781C497A489E3cB0287833452cA9B9E80B"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Kodiak Berachain"
+      slug: "kodiak-berachain"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xca4A9Ae6712AFF3948c871503FC46cBe6Da3cAE5"
+        factory: "0xD84CBf0B02636E7f53dB9E5e45A616E05d710990"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Bend Berachain"
+      slug: "bend-berachain"
+      interface: "morpho_blue"
+      contracts:
+        morpho_blue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Berachain"
+      slug: "beefy-berachain"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x64606Bee7e4F5f67414765C4290315d3830ae0e2"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-berachain"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"

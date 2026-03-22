@@ -1,0 +1,12 @@
+[protocol]
+name = "Paxo Finance Boba"
+slug = "paxo-finance-boba"
+category = "lending"
+interface = "compound_v2"
+chain = "boba"
+native = false
+description = "Paxo Finance — Compound V2 fork lending protocol deployed on Boba Network"
+
+[protocol.contracts]
+comptroller = "0x301C76e7b60e9824E32991B8F29e1c4a03B4F65b"
+oracle = "0x0000000000000000000000000000000000000000"

@@ -1,0 +1,398 @@
+{
+  "chain": "Ethereum",
+  "chain_id": 1,
+  "rpc_url": "https://eth.llamarpc.com",
+  "protocols": [
+    {
+      "slug": "curve-ethereum",
+      "name": "Curve Ethereum",
+      "category": "dex",
+      "interface": "curve_stableswap",
+      "contracts": [
+        {
+          "name": "factory",
+          "address": "0x6A8cbed756804B16E05E741eDaBd5cB544AE21bf"
+        },
+        {
+          "name": "router",
+          "address": "0x99a58482BD75cbab83b27EC03CA68fF489b5788f"
+        }
+      ]
+    },
+    {
+      "slug": "sushiswap-eth",
+      "name": "SushiSwap Ethereum",
+      "category": "dex",
+      "interface": "uniswap_v2",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F"
+        },
+        {
+          "name": "factory",
+          "address": "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac"
+        }
+      ]
+    },
+    {
+      "slug": "uniswap-v2-eth",
+      "name": "Uniswap V2 Ethereum",
+      "category": "dex",
+      "interface": "uniswap_v2",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+        },
+        {
+          "name": "factory",
+          "address": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"
+        }
+      ]
+    },
+    {
+      "slug": "uniswap-v3-eth",
+      "name": "Uniswap V3 Ethereum",
+      "category": "dex",
+      "interface": "uniswap_v3",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
+        },
+        {
+          "name": "factory",
+          "address": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+        },
+        {
+          "name": "quoter",
+          "address": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
+        }
+      ]
+    },
+    {
+      "slug": "aave-v3-eth",
+      "name": "Aave V3 Ethereum",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool",
+          "address": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+        },
+        {
+          "name": "pool_addresses_provider",
+          "address": "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e"
+        },
+        {
+          "name": "oracle",
+          "address": "0x54586bE62E3c3580375aE3723C145253060Ca0C2"
+        },
+        {
+          "name": "pool_data_provider",
+          "address": "0x0a16f2FCC0D44FaE41cc54e079281D84A363bECD"
+        }
+      ]
+    },
+    {
+      "slug": "compound-v2-eth",
+      "name": "Compound V2",
+      "category": "lending",
+      "interface": "compound_v2",
+      "contracts": [
+        {
+          "name": "comptroller",
+          "address": "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B"
+        },
+        {
+          "name": "oracle",
+          "address": "0x65c816077C29b557BEE980ae3cC2dCE80204A0C5"
+        },
+        {
+          "name": "cusdc",
+          "address": "0x39AA39c021dfbaE8faC545936693aC917d5E7563"
+        },
+        {
+          "name": "ceth",
+          "address": "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5"
+        },
+        {
+          "name": "cdai",
+          "address": "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643"
+        },
+        {
+          "name": "cwbtc",
+          "address": "0xccF4429DB6322D5C611ee964527D42E5d685DD6a"
+        }
+      ]
+    },
+    {
+      "slug": "compound-v3-eth",
+      "name": "Compound V3 Ethereum",
+      "category": "lending",
+      "interface": "compound_v3",
+      "contracts": [
+        {
+          "name": "comet_usdc",
+          "address": "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+        },
+        {
+          "name": "comet_weth",
+          "address": "0xA17581A9E3356d9A858b789D68B4d866e593aE94"
+        },
+        {
+          "name": "comet_usdt",
+          "address": "0x3Afdc9BCA9213A35503b077a6072F3D0d5AB0840"
+        },
+        {
+          "name": "configurator",
+          "address": "0x316f9708bB98af7dA9c68C1C3b5e79039cD336E3"
+        }
+      ]
+    },
+    {
+      "slug": "morpho-blue-eth",
+      "name": "Morpho Blue Ethereum",
+      "category": "lending",
+      "interface": "morpho_blue",
+      "contracts": [
+        {
+          "name": "morpho_blue",
+          "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+        }
+      ]
+    },
+    {
+      "slug": "spark-eth",
+      "name": "SparkLend Ethereum",
+      "category": "lending",
+      "interface": "aave_v3",
+      "contracts": [
+        {
+          "name": "pool",
+          "address": "0xC13e21B648A5Ee794902342038FF3aDAB66BE987"
+        },
+        {
+          "name": "pool_addresses_provider",
+          "address": "0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE"
+        },
+        {
+          "name": "oracle",
+          "address": "0x8105f69D9C41644c6A0803fDA7D03Aa70996cFD9"
+        },
+        {
+          "name": "pool_data_provider",
+          "address": "0xFc21d6d146E6086B8359705C8b28512a983db0cb"
+        }
+      ]
+    },
+    {
+      "slug": "liquity-v2-ethereum",
+      "name": "Liquity V2 Ethereum",
+      "category": "cdp",
+      "interface": "liquity_v2",
+      "contracts": [
+        {
+          "name": "collateral_registry",
+          "address": "0x2d4ef56cb626e9a4c90c156018ba9ce269573c61"
+        },
+        {
+          "name": "borrower_operations",
+          "address": "0x0b995602b5a797823f92027e8b40c0f2d97aff1c"
+        },
+        {
+          "name": "trove_manager",
+          "address": "0x81d78814df42da2cab0e8870c477bc3ed861de66"
+        },
+        {
+          "name": "stability_pool",
+          "address": "0xf69eb8c0d95d4094c16686769460f678727393cf"
+        },
+        {
+          "name": "sorted_troves",
+          "address": "0x879474cfbb980fb6899aaaa9b5d5ee14ffbf85a9"
+        },
+        {
+          "name": "hint_helpers",
+          "address": "0xa39739ef8b0231dbfa0dcda07d7e29faabcf4bb2"
+        },
+        {
+          "name": "price_feed",
+          "address": "0x3279e2b49ff60dafb276fbaff847383b67a7ec2d"
+        }
+      ]
+    },
+    {
+      "slug": "convex-ethereum",
+      "name": "Convex Finance Ethereum",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "booster",
+          "address": "0xF403C135812408BFbE8713b5A23a04b3D48AAE31"
+        },
+        {
+          "name": "vault",
+          "address": "0x3Fe65692bfCD0e6CF84cB1E7d24108E434A7587e"
+        }
+      ]
+    },
+    {
+      "slug": "ethena-ethereum",
+      "name": "Ethena sUSDe",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497"
+        }
+      ]
+    },
+    {
+      "slug": "fluid-ethereum",
+      "name": "Fluid Ethereum",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "fusdc",
+          "address": "0x9d1089802ee608ba84c5c98211afe5f37f96b36c"
+        },
+        {
+          "name": "fusdt",
+          "address": "0xADc234a4e90E2045f353F5d4fCdE66144d23b458"
+        },
+        {
+          "name": "fweth",
+          "address": "0x90551c1795392094fe6d29b758eccd233cfaa260"
+        }
+      ]
+    },
+    {
+      "slug": "maple-ethereum",
+      "name": "Maple Finance Ethereum",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0x80ac24aA929EAF5013f6436CDa2a7ba190f5cC0b"
+        }
+      ]
+    },
+    {
+      "slug": "mellow-ethereum",
+      "name": "Mellow Protocol Ethereum",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0xBEEF69Ac7870777598A04B2BD4771c71212E6aBc"
+        }
+      ]
+    },
+    {
+      "slug": "pendle-ethereum",
+      "name": "Pendle Ethereum",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x888888888889758F76e7103c6CbF23ABbF58F946"
+        },
+        {
+          "name": "market_factory",
+          "address": "0x6d247b1c044fA1E22e6B04fA9F71Baf99EB29A9f"
+        }
+      ]
+    },
+    {
+      "slug": "yearn-ethereum",
+      "name": "Yearn V3 Ethereum",
+      "category": "vault",
+      "interface": "erc4626",
+      "contracts": [
+        {
+          "name": "vault",
+          "address": "0x182863131F9a4630fF9E27830d945B1413e347E8"
+        }
+      ]
+    },
+    {
+      "slug": "bayc-ethereum",
+      "name": "Bored Ape Yacht Club",
+      "category": "nft",
+      "interface": "erc721",
+      "contracts": [
+        {
+          "name": "collection",
+          "address": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D"
+        }
+      ]
+    },
+    {
+      "slug": "across-v3-ethereum",
+      "name": "Across V3 Ethereum",
+      "category": "bridge",
+      "interface": "bridge",
+      "contracts": [
+        {
+          "name": "spoke_pool",
+          "address": "0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5"
+        }
+      ]
+    },
+    {
+      "slug": "stargate-v2-ethereum",
+      "name": "Stargate V2 Ethereum",
+      "category": "bridge",
+      "interface": "bridge",
+      "contracts": [
+        {
+          "name": "router",
+          "address": "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        },
+        {
+          "name": "usdc_pool",
+          "address": "0xc026395860Db2d07ee33e05fE50ed7bD583189C7"
+        },
+        {
+          "name": "usdt_pool",
+          "address": "0x933597a323Eb81cAe705C5bC29985172fd5A3973"
+        },
+        {
+          "name": "eth_pool",
+          "address": "0x77b2043768d28E9C9aB44E1aBfC95944bcE57931"
+        }
+      ]
+    },
+    {
+      "slug": "wormhole-ethereum",
+      "name": "Wormhole Ethereum",
+      "category": "bridge",
+      "interface": "bridge",
+      "contracts": [
+        {
+          "name": "token_bridge",
+          "address": "0x3ee18B2214AFF97000D974cf647E7C347E8fa585"
+        },
+        {
+          "name": "core",
+          "address": "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B"
+        },
+        {
+          "name": "nft_bridge",
+          "address": "0x6FFd7EdE62328b3Af38FCD61461Bbfc52F5651fE"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_protocols": 21
+  }
+}

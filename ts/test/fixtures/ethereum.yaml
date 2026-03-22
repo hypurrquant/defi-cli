@@ -1,0 +1,165 @@
+# Auto-generated test fixture for ethereum
+chain:
+  name: "Ethereum"
+  slug: "ethereum"
+  chain_id: 1
+  rpc_url: "https://eth.llamarpc.com"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "SushiSwap Ethereum"
+      slug: "sushiswap-eth"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F"
+        factory: "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V2 Ethereum"
+      slug: "uniswap-v2-eth"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+        factory: "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Ethereum"
+      slug: "uniswap-v3-eth"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
+        factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+        quoter: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3 Ethereum"
+      slug: "aave-v3-eth"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+        pool_addresses_provider: "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e"
+        oracle: "0x54586bE62E3c3580375aE3723C145253060Ca0C2"
+        pool_data_provider: "0x0a16f2FCC0D44FaE41cc54e079281D84A363bECD"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Compound V2"
+      slug: "compound-v2-eth"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B"
+        oracle: "0x65c816077C29b557BEE980ae3cC2dCE80204A0C5"
+        cusdc: "0x39AA39c021dfbaE8faC545936693aC917d5E7563"
+        ceth: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5"
+        cdai: "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643"
+        cwbtc: "0xccF4429DB6322D5C611ee964527D42E5d685DD6a"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Compound V3 Ethereum"
+      slug: "compound-v3-eth"
+      interface: "compound_v3"
+      contracts:
+        comet_usdc: "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+        comet_weth: "0xA17581A9E3356d9A858b789D68B4d866e593aE94"
+        comet_usdt: "0x3Afdc9BCA9213A35503b077a6072F3D0d5AB0840"
+        configurator: "0x316f9708bB98af7dA9c68C1C3b5e79039cD336E3"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Morpho Blue Ethereum"
+      slug: "morpho-blue-eth"
+      interface: "morpho_blue"
+      contracts:
+        morpho_blue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "SparkLend Ethereum"
+      slug: "spark-eth"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xC13e21B648A5Ee794902342038FF3aDAB66BE987"
+        pool_addresses_provider: "0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE"
+        oracle: "0x8105f69D9C41644c6A0803fDA7D03Aa70996cFD9"
+        pool_data_provider: "0xFc21d6d146E6086B8359705C8b28512a983db0cb"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Ethereum"
+      slug: "beefy-ethereum"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x951E0B2380FcB69403e8Dc3e054E85F4446B352D"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+    - name: "Yearn V3 Ethereum"
+      slug: "yearn-ethereum"
+      interface: "erc4626"
+      contracts:
+        vault: "0x182863131F9a4630fF9E27830d945B1413e347E8"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-ethereum"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Ethereum"
+      slug: "across-v3-ethereum"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5"
+    - name: "Stargate V2 Ethereum"
+      slug: "stargate-v2-ethereum"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdc_pool: "0xc026395860Db2d07ee33e05fE50ed7bD583189C7"
+        usdt_pool: "0x933597a323Eb81cAe705C5bC29985172fd5A3973"
+        eth_pool: "0x77b2043768d28E9C9aB44E1aBfC95944bcE57931"
+    - name: "Wormhole Ethereum"
+      slug: "wormhole-ethereum"
+      interface: "bridge"
+      contracts:
+        token_bridge: "0x3ee18B2214AFF97000D974cf647E7C347E8fa585"
+        core: "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B"
+        nft_bridge: "0x6FFd7EdE62328b3Af38FCD61461Bbfc52F5651fE"

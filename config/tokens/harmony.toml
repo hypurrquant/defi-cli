@@ -1,0 +1,21 @@
+[[token]]
+symbol = "ONE"
+name = "Harmony ONE"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WONE"
+name = "Wrapped ONE"
+address = "0xcF664087a5bB0237a0BAd6742852ec6c8d69A27a"
+decimals = 18
+is_native_wrapper = true
+tags = ["wrapped"]
+
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x985458E523dB3d53125813eD68c274899e9DfAb4"
+decimals = 6
+tags = ["stablecoin"]

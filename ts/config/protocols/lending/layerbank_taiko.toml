@@ -1,0 +1,12 @@
+[protocol]
+name = "LayerBank Taiko"
+slug = "layerbank-taiko"
+category = "lending"
+interface = "compound_v2"
+chain = "taiko"
+native = true
+description = "LayerBank — Compound V2 fork and leading lending protocol on Taiko"
+
+[protocol.contracts]
+comptroller = "0x803a61d82BaD2743bE35Be5dC6DEA0CccE82C056"
+oracle = "0x0000000000000000000000000000000000000000"

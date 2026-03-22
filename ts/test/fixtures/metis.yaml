@@ -1,0 +1,76 @@
+# Auto-generated test fixture for metis
+chain:
+  name: "Metis"
+  slug: "metis"
+  chain_id: 1088
+  rpc_url: "https://andromeda.metis.io/?owner=1088"
+  native_token: "METIS"
+
+tokens:
+  native:
+    symbol: "METIS"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WMETIS"
+    address: "0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xEA32A96608495e54156Ae48931A7c20f0dcc1a21"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Hercules"
+      slug: "hercules-metis"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xBde5839EC36Db2aC492b79e9E3B75e15FA8A59ec"
+        factory: "0xC5BfA92f27dF36d268422EE314a1387bB5ffB06A"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3"
+      slug: "aave-v3-metis"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57"
+        pool_addresses_provider: "0xB9FABd7500B2C6781c35Dd48d54f81fc2299D7AF"
+        oracle: "0x38D36e85E47eA6ff0d18B0adF12E5fC8984A6f8e"
+        pool_data_provider: "0x602BeF1d4c381e5a29f0C562A310416A73D8Be19"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Metis"
+      slug: "beefy-metis"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x18c10E2c181999EEdf855d2F61eC3755aAB96f70"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-metis"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Stargate V2 Metis"
+      slug: "stargate-v2-metis"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdt_pool: "0x4dCBFC0249e8d5032F89D6461218a9D2eFff5125"

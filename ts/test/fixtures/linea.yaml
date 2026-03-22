@@ -1,0 +1,149 @@
+# Auto-generated test fixture for linea
+chain:
+  name: "Linea"
+  slug: "linea"
+  chain_id: 59144
+  rpc_url: "https://rpc.linea.build"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x176211869cA2b568f2A7D4EE941E073a821EE1ff"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Lynex"
+      slug: "lynex-linea"
+      interface: "solidly_v2"
+      contracts:
+        router: "0x610D2f07b7EdC67565160F587F37636194C34E74"
+        factory: "0xBc7695Fd00E3b32D08124b7a4287493aEE99f9ee"
+        voter: "0x0B2c83B6e39E32f694a86633B4d1Fe69d13b63c5"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Nile Exchange"
+      slug: "nile-linea"
+      interface: "solidly_v2"
+      contracts:
+        router: "0xAAA45c8F5ef92a000a121d102F4e89278a711Faa"
+        factory: "0xAAA32926fcE6bE95ea2c51cB4Fcb60836D320C42"
+        voter: "0xAAAf3D9CDD3602d117c67D80eEC37a160C8d9869"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "SushiSwap Linea"
+      slug: "sushiswap-linea"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x2ABf469074dc0b54d793850807E6eb5Faf2625b1"
+        factory: "0xFbc12984689e5f15626Bad03Ad60160Fe98B303C"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Linea"
+      slug: "uniswap-v3-linea"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+        factory: "0x31FAfd4889FA1269F7a13A66eE0fB458f27D72A9"
+        quoter: "0x42bE4D6527829FeFA1493e1fb9F3676d2425C3C1"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3 Linea"
+      slug: "aave-v3-linea"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xc47b8C00b0f69a36fa203Ffeac0334874574a8Ac"
+        oracle: "0xCFDAdA7DCd2e785cF706BaDBC2B8Af5084d595e9"
+        pool_data_provider: "0x47cd4b507B81cB831669c71c7077f4daF6762FF4"
+        pool_addresses_provider: "0x89502c3731F69DDC95B65753708A07F8Cd0373F4"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Compound V3 Linea"
+      slug: "compound-v3-linea"
+      interface: "compound_v3"
+      contracts:
+        comet_usdc: "0x8D38A3d6B3c3B7d96D6536DA7Eef94A9d7dbC991"
+        comet_weth: "0x60F2058379716A64a7A5d29219397e79bC552194"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "LayerBank Linea"
+      slug: "layerbank-linea"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x009a0b7C38B542208936F1179151CD08E2943833"
+        lWETH: "0xc7D8489DaE3D2EbEF075b1dB2257E2c231C9D231"
+        lUSDC: "0x2aD69A0Cf272B9941c7dDcaDa7B0273E9046C4B0"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Mendi Finance"
+      slug: "mendi-linea"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x1b4d3b0421dDc1eB216D230Bc01527422Fb93103"
+        oracle: "0xC23f48e29376566bd0024872fc313B5cd7E24433"
+        meWETH: "0xAd7f33984bed10518012013D4aB0458D37FEE6F3"
+        meUSDC: "0x333D8b480BDB25eA7Be4Dd87EEB359988CE1b30D"
+        meUSDT: "0xf669C3C03D9fdF4339e19214A749E52616300E89"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Linea"
+      slug: "beefy-linea"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x7E95891566d937C49CB64fb272A47419b21098b6"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-linea"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Linea"
+      slug: "across-v3-linea"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x7E63A5f1a8F0B4d0934B2f2327DAED3F6bb2ee75"
+    - name: "Stargate V2 Linea"
+      slug: "stargate-v2-linea"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        eth_pool: "0x81F6138153d473E8c5EcebD3DC8Cd4903506B075"
+        usdc_pool: "0x2943ac1216979aD8dB76D9147F64E61adc126e96"

@@ -1,0 +1,10 @@
+[protocol]
+name = "Across V3 Optimism"
+slug = "across-v3-optimism"
+category = "bridge"
+interface = "bridge"
+chain = "optimism"
+description = "Across Protocol V3 bridge on Optimism"
+
+[protocol.contracts]
+spoke_pool = "0x6f26Bf09B1C792e3228e5467807a900A503c0281"

@@ -1,0 +1,19 @@
+[protocol]
+name = "Alpaca Finance BNB"
+slug = "alpaca-bnb"
+category = "lending"
+interface = "compound_v2"
+chain = "bnb"
+native = true
+description = "Alpaca Finance — Compound V2 style ibToken lending vaults on BNB Chain with ~$43M TVL"
+
+[protocol.contracts]
+fair_launch = "0xA625AB01B08ce023B2a342Dbb12a16f2C8489A8F"
+ib_wbnb = "0xd7D069493685A581d27824Fc46EdA46B7EfC0063"
+ib_busd = "0x7C9e73d4C71dae564d41F78d56439bB4ba87592f"
+ib_eth = "0xbfF4a34A4644a113E8200D7F1D79b3555f723AfE"
+ib_alpaca = "0xf1bE8ecC990cBcb90e166b71E368299f0116d421"
+ib_usdt = "0x158Da805682BdC8ee32d52833aD41E74bb951E59"
+ib_btcb = "0x08FC9Ba2cAc74742177e0afC3dC8Aed6961c24e7"
+ib_usdc = "0x800933D685E7Dc753758cEb77C8bd34aBF1E26d7"
+ib_cake = "0xfF693450dDa65df7DD6F45B4472655A986b147Eb"

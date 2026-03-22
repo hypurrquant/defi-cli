@@ -1,0 +1,13 @@
+[protocol]
+name = "Lista DAO BNB"
+slug = "lista-dao-bnb"
+category = "cdp"
+interface = "liquity_v2"
+chain = "bnb"
+native = true
+description = "Lista DAO — CDP stablecoin protocol (lisUSD) on BNB Chain with ~$1.17B TVL"
+
+[protocol.contracts]
+interaction = "0xB68443Ee3e828baD1526b3e0Bdf2Dfc6b1975ec4"
+lisusd_token = "0x0782b6d8c4551b9760e74c0545a9bcd90bdc41e5"
+auction_proxy = "0x272d6589CEcC19165cfCd0466f73A648cb1Ea700"

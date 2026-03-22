@@ -1,0 +1,93 @@
+# Auto-generated test fixture for zksync
+chain:
+  name: "zkSync Era"
+  slug: "zksync"
+  chain_id: 324
+  rpc_url: "https://mainnet.era.zksync.io"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x5AEa5775959fBC2557Cc8789bC1bf90A239D9a91"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "SyncSwap"
+      slug: "syncswap-zksync"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x1B887a14216Bdeb7F8204Ee6a269Bd9Ff73A084C"
+        factory: "0xA757eD0812092E2a8F78e6642a2A3215995A4131"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 ZkSync"
+      slug: "uniswap-v3-zksync"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x99c56385daBCE3E81d8499d0b8d0257aBC07E8A3"
+        factory: "0x8FdA5a7a8dCA67BBcDd10F02Fa0649A937215422"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3 ZkSync"
+      slug: "aave-v3-zksync"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x78e30497a3c7527d953c6B1E3541b021A98Ac43c"
+        pool_addresses_provider: "0x2A3948BB219D6B2Fa83D64100006391a96bE6cb7"
+        oracle: "0xC7F58Fca663a8d377B6D0c9703C697f56dC40088"
+        pool_data_provider: "0x9057ac7b2D35606F8AD5aE2FCBafcD94E58D9927"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault zkSync"
+      slug: "beefy-zksync"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0xf3C2B394c2015E5394a5f97ab18B73a97976a650"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-zksync"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 zkSync"
+      slug: "across-v3-zksync"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0xE0B015E54d54fc84a6cB9B666099Fb3Ed752465B"
+    - name: "Stargate V2 zkSync"
+      slug: "stargate-v2-zksync"
+      interface: "bridge"
+      contracts:
+        router: "0xE578b436a3D7e35c0aC0539c70880caC26E8Fa27"
+        usdc_pool: "0xD5F2b00e4618ac6a21e38E23BacE2Ff4Db08A0CF"
+        usdt_pool: "0xCB5B4E0E5B7a851a76D71c04CbEEa62D25fFff12"
+        eth_pool: "0x7AEd66B47fdFD4E2fF84BFe82B68d4f06c8Db8A0"

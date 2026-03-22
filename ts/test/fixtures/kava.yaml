@@ -1,0 +1,84 @@
+# Auto-generated test fixture for kava
+chain:
+  name: "Kava"
+  slug: "kava"
+  chain_id: 2222
+  rpc_url: "https://evm.kava.io"
+  native_token: "KAVA"
+
+tokens:
+  native:
+    symbol: "KAVA"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WKAVA"
+    address: "0xc86c7C0eFbd6A49B35E8714C5f59D99De09A225b"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xfA9343C3897324496A05fC75abeD6bAC29f8A40f"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Curve Kava"
+      slug: "curve-kava"
+      interface: "curve_stableswap"
+      contracts:
+        factory: "0x40bc62805471eF53DdD5C5cF99ed3d9e5aa81b48"
+        router: "0x0DCDED3545D565bA3B19E683431381007245d983"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "SushiSwap V3 Kava"
+      slug: "sushiswap-v3-kava"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xFF51a7C624Eb866917102707F3dA8bFb99Db8692"
+        factory: "0x1e9B24073183d5c6B7aE5FB4b8f0b1dd83FDC77a"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Mare Finance Kava"
+      slug: "mare-finance-kava"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x4804357AcE69330524ceb18F2A647c3c162E1F95"
+        oracle: "0x0000000000000000000000000000000000000000"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Kava"
+      slug: "beefy-kava"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x00d7364BF070959F6564351FAE03C65773DB40f1"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-kava"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Stargate V2 Kava"
+      slug: "stargate-v2-kava"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdt_pool: "0x41A5b0470D96656Fb3e8f68A218b39AdBca3420b"

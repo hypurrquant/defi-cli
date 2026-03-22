@@ -1,0 +1,38 @@
+[[token]]
+symbol = "BERA"
+name = "Berachain"
+address = "0x0000000000000000000000000000000000000000"
+decimals = 18
+tags = ["native"]
+
+[[token]]
+symbol = "WBERA"
+name = "Wrapped BERA"
+address = "0x6969696969696969696969696969696969696969"
+decimals = 18
+tags = ["wrapped"]
+[[token]]
+symbol = "USDC"
+name = "USD Coin"
+address = "0x549943e04f40284185054145c6E4e9568C1D3241"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "USDT"
+name = "Tether"
+address = "0x05D0dD5135086a1C6903B9B7D4DAAFA5df932819"
+decimals = 6
+tags = ["stablecoin"]
+
+[[token]]
+symbol = "WETH"
+name = "Wrapped Ether"
+address = "0x2F6F07CDcf3588944Bf4C42aC74ff24bF56e7590"
+decimals = 18
+tags = ["wrapped"]
+[[token]]
+symbol = "WBTC"
+name = "Wrapped Bitcoin"
+address = "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c"
+decimals = 8

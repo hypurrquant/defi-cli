@@ -1,0 +1,98 @@
+# Auto-generated test fixture for blast
+chain:
+  name: "Blast"
+  slug: "blast"
+  chain_id: 81457
+  rpc_url: "https://rpc.blast.io"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4300000000000000000000000000000000000004"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xb1a5700fA2358173Fe465e6eA4Ff52E36e88E2ad"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Fenix Finance"
+      slug: "fenix-blast"
+      interface: "algebra_v3"
+      contracts:
+        router: "0x2df37Cb897fdffc6B4b03d8252d85BE7C6dA9d00"
+        factory: "0x7a44CD060afC1B6F4c80A2B9b37f4473E74E25Df"
+        quoter: "0x94Ca5B835186A37A99776780BF976fAB81D84ED8"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Thruster V2"
+      slug: "thruster-v2-blast"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x98994a9A7a2570367554589189dC9772241650f6"
+        factory: "0xb4A7D971D0ADea1c73198C97d7ab3f9CE4aaFA13"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Blast"
+      slug: "uniswap-v3-blast"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x549FEB8c9bd4c12Ad2AB27022dA12492aC452B66"
+        factory: "0x792edAdE80af5fC680d96a2eD80A44247D2Cf6Fd"
+        quoter: "0x6Cdcd65e03c1CEc3730AeeCd45bc140D57A25C77"
+        position_manager: "0xB218e4f7cF0533d4696fDfC419A0023D33345F28"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "ZeroLend Blast"
+      slug: "zerolend-blast"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xa70B0F3C2470AbBE104BdB3F3aaa9C7C54BEA7A8"
+        pool_addresses_provider: "0xb0811a1FC9Fb9972ee683Ba04c32Cb828Bcf587B"
+        oracle: "0xBE0ab675a478A759ECA580f0D6c9d399085547D8"
+        pool_data_provider: "0xc6DF4ddDBFaCb866e78Dcc01b813A41C15A08C10"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "ZeroLend Vault Blast"
+      slug: "zerolend-blast"
+      interface: "erc4626"
+      contracts:
+        vault: "0xa70B0F3C2470AbBE104BdB3F3aaa9C7C54BEA7A8"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-blast"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Blast"
+      slug: "across-v3-blast"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x2D509190Ed0172ba588407D4c2df918F955Cc6E1"

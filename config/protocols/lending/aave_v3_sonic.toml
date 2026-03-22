@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Sonic"
+slug = "aave-v3-sonic"
+category = "lending"
+interface = "aave_v3"
+chain = "sonic"
+native = false
+description = "Aave V3 on Sonic"
+
+[protocol.contracts]
+pool = "0x5362dBb1e601abF3a4c14c22ffEdA64042E5eAA3"
+pool_addresses_provider = "0x5C2e738F6E27bCE0F7558051Bf90605dD6176900"
+oracle = "0xD63f7658C66B2934Bd234D79D06aEF5290734B30"
+pool_data_provider = "0xc0a344397cfa89dF1e1d3e4fb330834D789cF2CD"

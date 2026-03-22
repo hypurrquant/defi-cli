@@ -1,0 +1,11 @@
+[protocol]
+name = "Stargate V2 Metis"
+slug = "stargate-v2-metis"
+category = "bridge"
+interface = "bridge"
+chain = "metis"
+description = "Stargate V2 (LayerZero) bridge on Metis Andromeda"
+
+[protocol.contracts]
+router = "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+usdt_pool = "0x4dCBFC0249e8d5032F89D6461218a9D2eFff5125"

@@ -1,0 +1,12 @@
+[protocol]
+name = "LayerBank Manta"
+slug = "layerbank-manta"
+category = "lending"
+interface = "compound_v2"
+chain = "manta"
+native = true
+description = "LayerBank — Compound V2 fork and leading lending protocol on Manta Pacific"
+
+[protocol.contracts]
+comptroller = "0xB7A23Fc0b066051dE58B922dC1a08f33DF748bbf"
+oracle = "0x90286f894020950981c9E3196BacB03A223e4cfd"

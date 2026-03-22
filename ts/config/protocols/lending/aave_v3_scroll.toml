@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Scroll"
+slug = "aave-v3-scroll"
+category = "lending"
+interface = "aave_v3"
+chain = "scroll"
+native = false
+description = "Aave V3 on Scroll"
+
+[protocol.contracts]
+pool = "0x11fCfe756c05AD438e312a7fd934381537D3cFfe"
+pool_addresses_provider = "0x69850D0B276776781C063771b161bd8894BCdD04"
+oracle = "0x04421D8C506E2fA2371a08EfAaBf791F624054F3"
+pool_data_provider = "0xBEa2B648f05887eCbF1d115da8b7E4A317975A51"

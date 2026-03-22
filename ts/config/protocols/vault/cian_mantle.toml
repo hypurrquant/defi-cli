@@ -1,0 +1,12 @@
+[protocol]
+name = "CIAN Yield Layer"
+slug = "cian-mantle"
+category = "vault"
+interface = "erc4626"
+chain = "mantle"
+native = false
+description = "CIAN Yield Layer — ERC4626 yield vault on Mantle"
+
+[protocol.contracts]
+vault = "0xff6771a9565F18638faB2972BA7Fc798ad8bCad0"
+manager = "0xA85c89C546FeFEf876CDd7d8030914F138593a57"

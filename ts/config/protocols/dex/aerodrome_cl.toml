@@ -1,0 +1,12 @@
+[protocol]
+name = "Aerodrome Slipstream"
+slug = "aerodrome-cl"
+category = "dex"
+interface = "uniswap_v3"
+chain = "base"
+native = true
+description = "Aerodrome Slipstream — concentrated liquidity on Base ($203M TVL)"
+[protocol.contracts]
+router = "0xBe6D8f0d05cC4be24d5167a3eF062215bE6D18a5"
+factory = "0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831"
+quoter = "0x254cF9E1E6e233aa1AC962CB9B05b2cfeaae15b0"

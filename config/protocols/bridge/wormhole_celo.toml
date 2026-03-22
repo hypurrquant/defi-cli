@@ -1,0 +1,12 @@
+[protocol]
+name = "Wormhole Celo"
+slug = "wormhole-celo"
+category = "bridge"
+interface = "bridge"
+chain = "celo"
+description = "Wormhole Portal bridge on Celo"
+
+[protocol.contracts]
+token_bridge = "0x796Dff6D74F3E27060B71255Fe517BFb23C93eed"
+core = "0xa321448d90d4e5b0A732867c18eA198e75CAC48c"
+nft_bridge = "0xA6A377d75ca5c9052c9a77ED1e865Cc25Bd97bf3"

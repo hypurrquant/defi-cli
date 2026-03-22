@@ -1,0 +1,85 @@
+# Auto-generated test fixture for moonbeam
+chain:
+  name: "Moonbeam"
+  slug: "moonbeam"
+  chain_id: 1284
+  rpc_url: "https://rpc.api.moonbeam.network"
+  native_token: "GLMR"
+
+tokens:
+  native:
+    symbol: "GLMR"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WGLMR"
+    address: "0xAcc15dC74880C9944775448304B263D191c6077F"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x931715FEE2d06333043d11F658C8CE934aC61D0c"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "StellaSwap V2 Moonbeam"
+      slug: "stellaswap-v2-moonbeam"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xd0A01ec574D1fC6652eDF79cb2F880fd47D34Ab1"
+        factory: "0x68A384D826D3678f78BB9FB1533c7E9577dACc0E"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "SushiSwap V3 Moonbeam"
+      slug: "sushiswap-v3-moonbeam"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xD045d27c1f7e7f770a807B0a85d8e3F852e0F2BE"
+        factory: "0x2ecd58F51819E8F8BA08A650BEA04Fc0DEa1d523"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Moonwell Moonbeam"
+      slug: "moonwell-moonbeam"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x8E00D5e02E65A19337Cdba98bbA9F84d4186a180"
+        oracle: "0xED301cd3EB27217BDB05C4E9B820a8A3c8B665f9"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Moonbeam"
+      slug: "beefy-moonbeam"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x66e5662411cc6e3a62387354fa3F80dEa097fceD"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-moonbeam"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Wormhole Moonbeam"
+      slug: "wormhole-moonbeam"
+      interface: "bridge"
+      contracts:
+        token_bridge: "0xb1731c586ca89a23809861c6103f0b96b3f57d92"
+        core: "0xC8e2b0cD52Cf01b0Ce87d389Daa3d414d4cE29f3"
+        nft_bridge: "0x453cfBe096C0f8D763E8C5F24B441097d577bdE2"

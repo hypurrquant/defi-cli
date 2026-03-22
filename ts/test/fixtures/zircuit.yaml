@@ -1,0 +1,73 @@
+# Auto-generated test fixture for zircuit
+chain:
+  name: "Zircuit"
+  slug: "zircuit"
+  chain_id: 48900
+  rpc_url: "https://mainnet.zircuit.com"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Ocelex"
+      slug: "ocelex-zircuit"
+      interface: "algebra_v3"
+      contracts:
+        router: "0x5D6d033B4FbD2190D99D930719fAbAcB64d2439a"
+        factory: "0x2DC370c77F9E375e3CE1d0acB64d709a6eFd56CF"
+        quoter: "0x8F69B54D9Fe4f4568893A5eE5E8aa1F4be4B8893"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Morpho Blue Zircuit"
+      slug: "morpho-blue-zircuit"
+      interface: "morpho_blue"
+      contracts:
+        morpho_blue: "0xA902A365Fe10B4a94339B5A2Dc64F60c1486a5c8"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Morpho Blue Zircuit"
+      slug: "morpho-blue-zircuit"
+      interface: "erc4626"
+      contracts:
+        vault: "0xA902A365Fe10B4a94339B5A2Dc64F60c1486a5c8"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-zircuit"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Zircuit"
+      slug: "across-v3-zircuit"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96"

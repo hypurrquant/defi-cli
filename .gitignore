@@ -26,3 +26,10 @@ results.tsv
 run.log
 /src/
 /tests/
+
+# OMC / Playwright state
+.omc/
+.playwright-mcp/
+
+# Node
+node_modules/

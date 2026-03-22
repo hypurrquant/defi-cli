@@ -1,0 +1,12 @@
+[protocol]
+name = "Ritsu"
+slug = "ritsu-taiko"
+category = "dex"
+interface = "solidly_v2"
+chain = "taiko"
+native = true
+description = "Ritsu — native Solidly-based DEX on Taiko mainnet with ve(3,3) tokenomics"
+
+[protocol.contracts]
+router = "0x7160570bb153edd0ea1775ec2b2ac9b65f1ab61b"
+factory = "0x4cD00E387622C35bDDB9b4c962C136462338BC31"

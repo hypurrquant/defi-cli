@@ -1,0 +1,12 @@
+[protocol]
+name = "LayerBank Rootstock"
+slug = "layerbank-rootstock"
+category = "lending"
+interface = "compound_v2"
+chain = "rootstock"
+native = false
+description = "LayerBank — Compound V2 fork on Rootstock (Bitcoin sidechain)"
+
+[protocol.contracts]
+comptroller = "0xc30991623fb2a63E6e1B59A29987E1EEE57447bF"
+oracle = "0x0000000000000000000000000000000000000000"

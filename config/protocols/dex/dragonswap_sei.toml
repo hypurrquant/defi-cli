@@ -1,0 +1,12 @@
+[protocol]
+name = "DragonSwap Sei"
+slug = "dragonswap-sei"
+category = "dex"
+interface = "uniswap_v2"
+chain = "sei"
+native = true
+description = "DragonSwap — leading Uniswap V2 DEX on Sei"
+
+[protocol.contracts]
+router = "0x4178ee437d3a07f4287e36870e9c63db6e68a1a0"
+factory = "0x71f6b49ae1558357bBb5A6074f1143c46cBcA03d"

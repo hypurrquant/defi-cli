@@ -1,0 +1,137 @@
+# Auto-generated test fixture for optimism
+chain:
+  name: "Optimism"
+  slug: "optimism"
+  chain_id: 10
+  rpc_url: "https://mainnet.optimism.io"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Uniswap V2 Optimism"
+      slug: "uniswap-v2-op"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2"
+        factory: "0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Optimism"
+      slug: "uniswap-v3-op"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
+        factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+        quoter: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Velodrome V2"
+      slug: "velodrome-v2-op"
+      interface: "solidly_v2"
+      contracts:
+        router: "0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858"
+        factory: "0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a"
+        voter: "0x41C914ee0c7E1A5edCD0295623e6dC557B5aBf3C"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Aave V3 Optimism"
+      slug: "aave-v3-op"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+        pool_addresses_provider: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb"
+        oracle: "0xD81eb3728a631871a7eBBaD631b5f424909f0c77"
+        pool_data_provider: "0x243Aa95cAC2a25651eda86e80bEe66114413c43b"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Compound V3 Optimism"
+      slug: "compound-v3-op"
+      interface: "compound_v3"
+      contracts:
+        comet_usdc: "0x2e44e174f7D53F0212823acC11C01A11d58c5bCB"
+        comet_usdt: "0x995E394b8B2437aC8Ce61Ee0bC610D617962B214"
+        comet_weth: "0xE36A30D249f7761327fd973001A32010b521b6Fd"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Sonne Finance Optimism"
+      slug: "sonne-op"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x60CF091cD3f50420d50fD7f707414d0DF4751C58"
+        oracle: "0xEFc0495DA3E48c5A55F73706b249FD49d711A502"
+        soWETH: "0xf7B5965f5C117Eb1B5450187c9DcFccc3C317e8E"
+        soUSDC: "0xEC8FEa79026FfEd168cCf5C627c7f486D77b765F"
+        soUSDT: "0x5Ff29E4470799b982408130EFAaBdeeAE7f66a10"
+        soOP: "0x8cD6b19A07d754bF36AdEEE79EDF4F2134a8F571"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Optimism"
+      slug: "beefy-optimism"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x00557e194B717dCfEbaE6222091C5F806DF99698"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-optimism"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Optimism"
+      slug: "across-v3-optimism"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x6f26Bf09B1C792e3228e5467807a900A503c0281"
+    - name: "Stargate V2 Optimism"
+      slug: "stargate-v2-optimism"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdc_pool: "0xcE8CcA271Ebc0533920C83d39F417ED6A0abB7D0"
+        usdt_pool: "0x19cFCE47eD54a88614648DC3f19A5980097007dD"
+        eth_pool: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3"
+    - name: "Wormhole Optimism"
+      slug: "wormhole-optimism"
+      interface: "bridge"
+      contracts:
+        token_bridge: "0x1D68124e65faFC907325e3EDbF8c4d84499DAa8b"
+        core: "0xEe91C335eab126dF5fDB3797EA9d6aD93aeC9722"
+        nft_bridge: "0xfE8cD454b4A1CA468B57D79c0cc77Ef5B6f64585"

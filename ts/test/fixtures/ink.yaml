@@ -1,0 +1,87 @@
+# Auto-generated test fixture for ink
+chain:
+  name: "Ink"
+  slug: "ink"
+  chain_id: 57073
+  rpc_url: "https://rpc-gel.inkonchain.com"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Uniswap V3 Ink"
+      slug: "uniswap-v3-ink"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x177778F19E89dD1012BdBe603F144088A95C4B53"
+        factory: "0x640887A9ba3A9C53Ed27D0F7e8246A4F933f3424"
+        position_manager: "0xC0836E5B058BBE22ae2266e1AC488A1A0fD8DCE8"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Velodrome Ink"
+      slug: "velodrome-ink"
+      interface: "solidly_v2"
+      contracts:
+        router: "0x3a63171DD9BebF4D07BC782FECC7eb0b890C2A45"
+        factory: "0x31832f2a97Fd20664D76Cc421207669b55CE4BC0"
+        voter: "0x97cDBCe21B6fd0585d29E539B1B99dAd328a1123"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Aave V3 Ink"
+      slug: "aave-v3-ink"
+      interface: "aave_v3"
+      contracts:
+        pool: "0x2816cf15F6d2A220E789aA011D5EE4eB6c47FEbA"
+        pool_addresses_provider: "0x4172E6aAEC070ACB31aaCE343A58c93E4C70f44D"
+        oracle: "0x4758213271BFdC72224A7a8742dC865fC97756e1"
+        pool_data_provider: "0x96086C25d13943C80Ff9a19791a40Df6aFC08328"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Aave V3 Ink Vault"
+      slug: "aave-v3-ink-vault"
+      interface: "erc4626"
+      contracts:
+        vault: "0x2816cf15F6d2A220E789aA011D5EE4eB6c47FEbA"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-ink"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Ink"
+      slug: "across-v3-ink"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64"

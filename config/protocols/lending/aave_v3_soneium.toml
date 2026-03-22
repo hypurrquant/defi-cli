@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 Soneium"
+slug = "aave-v3-soneium"
+category = "lending"
+interface = "aave_v3"
+chain = "soneium"
+native = false
+description = "Aave V3 on Soneium"
+
+[protocol.contracts]
+pool = "0xDd3d7A7d03D9fD9ef45f3E587287922eF65CA38B"
+pool_addresses_provider = "0x82405D1a189bd6cE4667809C35B37fBE136A4c5B"
+oracle = "0x20040a64612555042335926d72B4E5F667a67fA1"
+pool_data_provider = "0x4a24b44b252db149B5B9BCec4dc3c2752807d626"

@@ -1,0 +1,13 @@
+[protocol]
+name = "Uniswap V3 Polygon"
+slug = "uniswap-v3-polygon"
+category = "dex"
+interface = "uniswap_v3"
+chain = "polygon"
+native = false
+description = "Uniswap V3 on Polygon"
+
+[protocol.contracts]
+router = "0xE592427A0AEce92De3Edee1F18E0157C05861564"
+factory = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+quoter = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"

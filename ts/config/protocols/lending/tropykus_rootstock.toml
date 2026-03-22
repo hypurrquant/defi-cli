@@ -1,0 +1,16 @@
+[protocol]
+name = "Tropykus Rootstock"
+slug = "tropykus-rootstock"
+category = "lending"
+interface = "compound_v2"
+chain = "rootstock"
+native = true
+description = "Tropykus Finance — Compound V2 fork native to Rootstock, focused on Bitcoin-backed lending"
+
+[protocol.contracts]
+comptroller = "0x962308Fef8EdfAdD705384840e7701f8F39ed0c0"
+oracle = "0x0000000000000000000000000000000000000000"
+kRBTC = "0x0aeadb9d4c6a80462a47e87e76e487fa8b9a37d7"
+kDOC = "0x544eb90e766b405134b3b3f62b6b4c23fcd5fda2"
+kUSDRIF = "0xDdf3CE45fcf080DF61ee61dac5Ddefef7ED4F46C"
+kBPRO = "0x405062731d8656af5950ef952be9fa110878036b"

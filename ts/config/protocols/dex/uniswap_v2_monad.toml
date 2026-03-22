@@ -1,0 +1,12 @@
+[protocol]
+name = "Uniswap V2 Monad"
+slug = "uniswap-v2-monad"
+category = "dex"
+interface = "uniswap_v2"
+chain = "monad"
+native = false
+description = "Uniswap V2 on Monad"
+
+[protocol.contracts]
+router = "0x4B2ab38DBF28D31D467aA8993f6c2585981D6804"
+factory = "0x182a927119D56008d921126764bF884221b10f59"

@@ -1,0 +1,15 @@
+[protocol]
+name = "HypurrFi Isolated"
+slug = "hypurrfi-isolated"
+category = "lending"
+interface = "aave_v3"
+chain = "hyperevm"
+native = true
+description = "HypurrFi Isolated — Fraxlend-forked isolated lending markets"
+
+[protocol.contracts]
+pool = "0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b"
+oracle = "0x9BE2ac1ff80950DCeb816842834930887249d9A8"
+pool_configurator = "0x532Bb57DE005EdFd12E7d39a3e9BF8E8A8F544af"
+wrapped_hype_gateway = "0xd1EF87FeFA83154F83541b68BD09185e15463972"
+ui_pool_data_provider = "0x7b883191011AEAe40581d3Fa1B112413808C9c00"

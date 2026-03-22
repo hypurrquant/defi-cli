@@ -1,0 +1,185 @@
+# Auto-generated test fixture for base
+chain:
+  name: "Base"
+  slug: "base"
+  chain_id: 8453
+  rpc_url: "https://mainnet.base.org"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0x4200000000000000000000000000000000000006"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Aerodrome"
+      slug: "aerodrome"
+      interface: "solidly_v2"
+      contracts:
+        router: "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43"
+        factory: "0x420DD381b31aEf6683db6B902084cB0FFECe40Da"
+        voter: "0x16613524e02ad97eDfeF371bC883F2F5d6C480A5"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Aerodrome Slipstream"
+      slug: "aerodrome-cl"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xBe6D8f0d05cC4be24d5167a3eF062215bE6D18a5"
+        factory: "0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831"
+        quoter: "0x254cF9E1E6e233aa1AC962CB9B05b2cfeaae15b0"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "Alien Base V3"
+      slug: "alienbase-v3"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0xB20C411FC84FBB27e78608C24d0056D974ea9411"
+        factory: "0x0Fd83557b2be93617c9C1C1B6fd549401C74558C"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "PancakeSwap V3 Base"
+      slug: "pancakeswap-v3-base"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86"
+        factory: "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
+        quoter: "0x3d146FcE6c1006857750cBe8aF44f76a28041CCc"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "QuickSwap V4 Base"
+      slug: "quickswap-base"
+      interface: "algebra_v3"
+      contracts:
+        router: "0xe6c9bb24ddB4aE5c6632dbE0DE14e3E474c6Cb04"
+        factory: "0xC5396866754799B9720125B104AE01d935Ab9C7b"
+        quoter: "0x23E0583a3a000d567bB3848115065c1890D87fb5"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+    - name: "SushiSwap Base"
+      slug: "sushiswap-base"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891"
+        factory: "0x71524B4f93c58fcbF659783284E38825f0622859"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V2 Base"
+      slug: "uniswap-v2-base"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24"
+        factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "Uniswap V3 Base"
+      slug: "uniswap-v3-base"
+      interface: "uniswap_v3"
+      contracts:
+        router: "0x2626664c2603336E57B271c5C0b26F421741e481"
+        factory: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
+        quoter: "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: 3000  # 0.3% for V3
+  lending:
+    - name: "Aave V3 Base"
+      slug: "aave-v3-base"
+      interface: "aave_v3"
+      contracts:
+        pool: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"
+        pool_addresses_provider: "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D"
+        oracle: "0x2Cc0Fc26eD4563A5ce5e8bdcfe1A2878676Ae156"
+        pool_data_provider: "0x2d8A3C5677189723C4cB8873CfC9C8976FDF38Ac"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Compound V3 Base"
+      slug: "compound-v3-base"
+      interface: "compound_v3"
+      contracts:
+        comet_usdc: "0xb125E6687d4313864e53df431d5425969c15Eb2F"
+        comet_weth: "0x46e6b214b524310239732D51387075E0e70970bf"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+    - name: "Sonne Finance"
+      slug: "sonne"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x1DB2466d9F5e10D7090E7152B68d62703a2245F0"
+        vusdc: "0xfd68F92B45b633bbe0f475294C1A86aecD62985A"
+        vusdt: "0x5F5c479fe590cD4442A05aE4a941dd991A633B8E"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Base"
+      slug: "beefy-base"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0x01793ef258B053E86e3dF3D6A6786867De12c1B1"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-base"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Across V3 Base"
+      slug: "across-v3-base"
+      interface: "bridge"
+      contracts:
+        spoke_pool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64"
+    - name: "Stargate V2 Base"
+      slug: "stargate-v2-base"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdc_pool: "0x27a16dc786820B16E5c9028b75B99F6f604b5d26"
+        eth_pool: "0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C7"
+    - name: "Wormhole Base"
+      slug: "wormhole-base"
+      interface: "bridge"
+      contracts:
+        token_bridge: "0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627"
+        core: "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6"
+        nft_bridge: "0xDA3adC6621B2637BFd516F0B0b3B36D5861045e9"

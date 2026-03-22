@@ -1,0 +1,14 @@
+[protocol]
+name = "Aave V3 BNB"
+slug = "aave-v3-bnb"
+category = "lending"
+interface = "aave_v3"
+chain = "bnb"
+native = false
+description = "Aave V3 on BNB Chain"
+
+[protocol.contracts]
+pool = "0x6807dc923806fE8Fd134338EABCA509979a7e0cB"
+pool_addresses_provider = "0xff75B6da14FfbbfD355Daf7a2731456b3562Ba6D"
+oracle = "0x39bc1bfDa2130d6Bb6DBEfd366939b4c7aa7C697"
+pool_data_provider = "0xc90Df74A7c16245c5F5C5870327Ceb38Fe5d5328"

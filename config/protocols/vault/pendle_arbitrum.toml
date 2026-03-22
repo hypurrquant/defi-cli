@@ -1,0 +1,12 @@
+[protocol]
+name = "Pendle Arbitrum"
+slug = "pendle-arbitrum"
+category = "vault"
+interface = "erc4626"
+chain = "arbitrum"
+native = false
+description = "Pendle Finance yield tokenization protocol on Arbitrum — PT/YT vaults via ERC-4626"
+
+[protocol.contracts]
+router = "0x888888888889758F76e7103c6CbF23ABbF58F946"
+market_factory = "0x49F2f7002669E0e4425Fa0203975625Ab4af3143"

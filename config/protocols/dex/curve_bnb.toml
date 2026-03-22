@@ -1,0 +1,12 @@
+[protocol]
+name = "Curve BNB Chain"
+slug = "curve-bnb"
+category = "dex"
+interface = "curve_stableswap"
+chain = "bnb"
+native = false
+description = "Curve StableSwap-NG on BNB Chain"
+
+[protocol.contracts]
+factory = "0xd7E72f3615aa65b92A4DBdC211E296a35512988B"
+router = "0xA72C85C258A81761433B4e8da60505Fe3Dd551CC"

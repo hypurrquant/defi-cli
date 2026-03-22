@@ -1,0 +1,12 @@
+[protocol]
+name = "Curve Avalanche"
+slug = "curve-avalanche"
+category = "dex"
+interface = "curve_stableswap"
+chain = "avalanche"
+native = false
+description = "Curve StableSwap-NG on Avalanche"
+
+[protocol.contracts]
+factory = "0x1764ee18e8B3ccA4787249Ceb249356192594585"
+router = "0x0DCDED3545D565bA3B19E683431381007245d983"

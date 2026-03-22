@@ -1,0 +1,84 @@
+# Auto-generated test fixture for aurora
+chain:
+  name: "Aurora"
+  slug: "aurora"
+  chain_id: 1313161554
+  rpc_url: "https://mainnet.aurora.dev"
+  native_token: "ETH"
+
+tokens:
+  native:
+    symbol: "ETH"
+    address: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+  wrapped:
+    symbol: "WETH"
+    address: "0xC9BdeEd33CD01541e1eeD10f90519d2C06Fe3feB"
+    decimals: 18
+    # ERC20 storage slot for balanceOf mapping (for deal)
+    balance_slot: 0  # Default slot 0, may need adjustment per token
+  stablecoin:
+    symbol: "USDC"
+    address: "0xB12BFcA5A55806AaF64E99521918A4bf0fC40802"
+    decimals: 6
+    balance_slot: 9  # USDC typical slot
+
+funding:
+  native_amount: "0x56BC75E2D63100000"  # 100 tokens
+  wrapped_amount: "10000000000000000000"  # 10 tokens
+  stablecoin_amount: "10000000000"  # 10000 USDC (6 decimals)
+
+protocols:
+  dex:
+    - name: "Trisolaris"
+      slug: "trisolaris-aurora"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0x2CB45Edb4517d5947aFdE3BEAbF95A582506858B"
+        factory: "0xc66F594268041dB60507F00703b152492fb176E7"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+    - name: "WannaSwap"
+      slug: "wannaswap-aurora"
+      interface: "uniswap_v2"
+      contracts:
+        router: "0xa3a1eF5Ae6561572023363862e238aFA84C72ef5"
+        factory: "0x7928D4FeA7b2c90C732c10aFF59cf403f0C38246"
+      test:
+        swap_pair: ["wrapped","stablecoin"]
+        swap_amount: "1000000000000000000"  # 1 token
+        fee: null  # null for V2
+  lending:
+    - name: "Bastion Aurora"
+      slug: "bastion-aurora"
+      interface: "compound_v2"
+      contracts:
+        comptroller: "0x6De54724e128274520606f038591A00C5E94a1F6"
+        oracle: "0x0000000000000000000000000000000000000000"
+      test:
+        supply_asset: "stablecoin"
+        supply_amount: "1000000000"  # 1000 USDC (6 decimals)
+        borrow_asset: "stablecoin"
+  vault:
+    - name: "Beefy Vault Aurora"
+      slug: "beefy-aurora"
+      interface: "beefy_vault"
+      contracts:
+        vault: "0xE6ab45f5e93FA377D0c4cC097187Ab7256c2AEBf"
+      test:
+        deposit_amount: "1000000000"  # 1000 USDC
+  nft:
+    - name: "OpenSea Seaport"
+      slug: "seaport-aurora"
+      interface: "erc721"
+      contracts:
+        seaport: "0x0000000000000068F116a894984e2DB1123eB395"
+  bridge:
+    - name: "Stargate V2 Aurora"
+      slug: "stargate-v2-aurora"
+      interface: "bridge"
+      contracts:
+        router: "0x45f1A95A4D3f3836523F5c83673c797f4d4d263B"
+        usdc_pool: "0xc2Bf8D9DcFd98C5a2Dd51B9cAaC5a7f8C60F4eE0"

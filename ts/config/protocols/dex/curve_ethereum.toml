@@ -1,0 +1,12 @@
+[protocol]
+name = "Curve Ethereum"
+slug = "curve-ethereum"
+category = "dex"
+interface = "curve_stableswap"
+chain = "ethereum"
+native = false
+description = "Curve StableSwap-NG on Ethereum mainnet"
+
+[protocol.contracts]
+factory = "0x6A8cbed756804B16E05E741eDaBd5cB544AE21bf"
+router = "0x99a58482BD75cbab83b27EC03CA68fF489b5788f"

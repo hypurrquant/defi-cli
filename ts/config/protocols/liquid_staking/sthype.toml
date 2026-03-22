@@ -1,0 +1,13 @@
+[protocol]
+name = "stHYPE"
+slug = "sthype"
+category = "liquid_staking"
+interface = "sthype_staking"
+chain = "hyperevm"
+native = true
+description = "stHYPE liquid staking ($156M TVL)"
+
+[protocol.contracts]
+staking = "0xB96f07367e69e86d6e9C3F29215885104813eeAE"
+sthype_token = "0xfFaa4a3D97fE9107Cef8a3F48c069F577Ff76cC1"
+wsthype = "0x94e8396e0869c9F2200760aF0621aFd240E1CF38"

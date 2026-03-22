@@ -1,0 +1,13 @@
+[protocol]
+name = "Ocelex"
+slug = "ocelex-zircuit"
+category = "dex"
+interface = "algebra_v3"
+chain = "zircuit"
+native = true
+description = "Ocelex — Algebra-powered concentrated liquidity MetaDEX on Zircuit, franchise expansion of Lynex from Linea"
+
+[protocol.contracts]
+router = "0x5D6d033B4FbD2190D99D930719fAbAcB64d2439a"
+factory = "0x2DC370c77F9E375e3CE1d0acB64d709a6eFd56CF"
+quoter = "0x8F69B54D9Fe4f4568893A5eE5E8aa1F4be4B8893"

@@ -1,0 +1,11 @@
+[protocol]
+name = "Extra Finance Base"
+slug = "extra-finance-base"
+category = "lending"
+interface = "compound_v2"
+chain = "base"
+native = false
+description = "Extra Finance — leveraged yield farming and lending on Base ($35M TVL)"
+
+[protocol.contracts]
+lending_pool = "0xd9Edc75a3a797Ec92CA370f19051BaBeBFb2eDee"

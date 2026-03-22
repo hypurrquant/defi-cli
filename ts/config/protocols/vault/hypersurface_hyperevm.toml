@@ -1,0 +1,13 @@
+[protocol]
+name = "Hypersurface"
+slug = "hypersurface"
+category = "options"
+interface = "options"
+chain = "hyperevm"
+native = true
+description = "Hypersurface — structured products (covered calls & cash-secured puts) on HyperEVM ($1.8M TVL)"
+
+[protocol.contracts]
+margin_pool = "0x7D2e4b4d7ba55C423F5CCe194ae8194eFD1C6e35"
+hedged_pool = "0x0095aCDD705Cfcc11eAfFb6c19A28C0153ad196F"
+hedger = "0xa8c9403BDf554C047Ad91a448DDb24208Ab5313c"

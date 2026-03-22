@@ -1,0 +1,11 @@
+[protocol]
+name = "Yearn V3 Ethereum"
+slug = "yearn-ethereum"
+category = "vault"
+interface = "erc4626"
+chain = "ethereum"
+native = false
+description = "Yearn Finance V3 ERC-4626 yield vault on Ethereum mainnet (yvUSDS)"
+
+[protocol.contracts]
+vault = "0x182863131F9a4630fF9E27830d945B1413e347E8"

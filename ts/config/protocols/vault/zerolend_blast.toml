@@ -1,0 +1,11 @@
+[protocol]
+name = "ZeroLend Vault Blast"
+slug = "zerolend-blast"
+category = "vault"
+interface = "erc4626"
+chain = "blast"
+native = false
+description = "ZeroLend Aave V3 fork on Blast — aToken deposits are ERC-4626 compatible yield-bearing positions"
+
+[protocol.contracts]
+vault = "0xa70B0F3C2470AbBE104BdB3F3aaa9C7C54BEA7A8"
