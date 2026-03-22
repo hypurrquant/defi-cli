@@ -1,8 +1,0 @@
-target/
-.omc/state/
-npm/.github/
-npm/.omc/
-npm/node_modules/
-npm/bin/
-*.swp
-.DS_Store

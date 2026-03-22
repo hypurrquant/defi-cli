@@ -8,7 +8,7 @@
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  11 chains · 108 protocols · 22 commands
+  40 chains · 344 protocols · 23 commands
 ```
 
 Multi-chain DeFi toolkit. Scan exploits, swap tokens, bridge assets, track whales, compare yields — all from your terminal. Built for humans and AI agents.
@@ -17,14 +17,17 @@ Multi-chain DeFi toolkit. Scan exploits, swap tokens, bridge assets, track whale
 
 ```bash
 git clone https://github.com/hypurrquant/defi-cli.git
-cd defi-cli
-cargo build --release
+cd defi-cli/ts
+pnpm install
+pnpm build
 
-# Binaries
-./target/release/defi        # Multi-chain DeFi CLI
-./target/release/mantle      # Mantle-only CLI
-./target/release/defi-mcp    # MCP server for AI agents
+# Run CLI
+node packages/defi-cli/dist/main.js
+# or link globally
+pnpm -C packages/defi-cli link --global
 ```
+
+Requires Node.js >= 18 and pnpm.
 
 ## What Can It Do?
 
@@ -132,12 +135,12 @@ $ defi positions --address 0xd374a62aa68d01cdb420e17b9840706e86bc840b
 |---------|-------------|
 | **Monitoring** | |
 | `scan` | Exploit detection: oracle divergence, depeg, exchange rate anomalies |
-| `scan --all-chains` | Scan all 11 chains in parallel (~1s) |
+| `scan --all-chains` | Scan all 40 chains in parallel |
 | `alert` | Single-asset oracle vs DEX price deviation monitor |
 | `monitor` | Health factor monitoring with alerts |
 | **Trading** | |
-| `swap` | Best-price swap via ODOS aggregator (9 chains) |
-| `bridge` | Cross-chain transfer via LI.FI (10 chains) |
+| `swap` | Best-price swap via ODOS aggregator |
+| `bridge` | Cross-chain transfer via LI.FI |
 | `dex` | Direct DEX swap, quote, compare |
 | `token` | Approve, allowance, transfer |
 | **Lending** | |
@@ -146,7 +149,7 @@ $ defi positions --address 0xd374a62aa68d01cdb420e17b9840706e86bc840b
 | `yield scan` | Compare rates across ALL chains with arb detection |
 | **Research** | |
 | `whales` | Top token holders + lending positions |
-| `positions` | Cross-chain wallet scanner (11 chains, 1.5s) |
+| `positions` | Cross-chain wallet scanner |
 | `portfolio` | Single-chain portfolio overview |
 | `price` | Oracle price queries |
 | `status` | Chain and protocol info |
@@ -155,89 +158,42 @@ $ defi positions --address 0xd374a62aa68d01cdb420e17b9840706e86bc840b
 | `staking` | Liquid staking: stake, unstake, info |
 | `vault` | ERC-4626 vault deposit, withdraw, info |
 | `gauge` | ve(3,3) gauge deposit, withdraw, claim, lock, vote |
+| `nft` | NFT operations |
 | **Agent** | |
-| `agent` | JSON stdin batch mode for AI agents |
 | `schema` | JSON schema for any command |
-
-## Supported Chains
-
-| Chain | Protocols | Key Lending | Key DEX |
-|-------|-----------|-------------|---------|
-| HyperEVM | 22 | HyperLend, HypurrFi, Euler V2 | HyperSwap, Curve, Balancer |
-| BNB | 16 | Aave V3, Venus, Kinza | PancakeSwap, Thena |
-| Base | 11 | Aave V3, Compound V3, Sonne | Aerodrome, Uniswap |
-| Arbitrum | 10 | Aave V3, Compound V3 | Camelot, Uniswap, SushiSwap |
-| Mantle | 8 | Aave V3, Lendle, Compound V3 | Merchant Moe, Agni, FusionX |
-| Ethereum | 8 | Aave V3, Compound V2/V3, Spark, Morpho | Uniswap V2/V3, SushiSwap |
-| Polygon | 8 | Aave V3, Compound V3 | QuickSwap, Uniswap, SushiSwap |
-| Linea | 8 | Aave V3, Mendi, LayerBank | Lynex, Nile, SushiSwap |
-| Avalanche | 6 | Aave V3, Benqi | TraderJoe, Pangolin |
-| Optimism | 6 | Aave V3, Sonne, Compound V3 | Velodrome, Uniswap |
-| Scroll | 5 | Aave V3, Compound V3, LayerBank | SushiSwap, Uniswap |
-
-## MCP Server (AI Agent Integration)
-
-18 tools for Claude Code, Cursor, and other AI agents:
-
-```bash
-# Start MCP server
-./target/release/defi-mcp
-
-# Add to Claude Code config (~/.claude/settings.json)
-{
-  "mcpServers": {
-    "defi": {
-      "command": "/path/to/defi-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-Then ask Claude: *"Mantle WETH 고래 찾아줘"* or *"Scan all chains for exploits"*
-
-## Mantle CLI
-
-Standalone Mantle-only binary with 8 commands:
-
-```bash
-mantle status              # Ecosystem overview
-mantle scan --once         # Exploit detection
-mantle swap --from USDC --to WMNT --amount 100
-mantle bridge --to ethereum --token USDC --amount 1000
-mantle whales --token WETH --top 10
-mantle positions --address 0x...
-mantle lending rates --asset USDC
-mantle yield compare --asset WETH
-```
-
-See [crates/mantle-cli/README.md](crates/mantle-cli/README.md) for details.
 
 ## Architecture
 
 ```
 defi-cli/
-├── crates/
-│   ├── defi-core/        # Registry, multicall, types, traits
-│   ├── defi-protocols/   # Protocol adapters (Aave, Uniswap, Compound, etc.)
-│   ├── defi-cli/         # Multi-chain CLI (22 commands)
-│   ├── mantle-cli/       # Mantle-only CLI (8 commands)
-│   └── defi-mcp/         # MCP server (18 tools)
+├── ts/                         # TypeScript monorepo (pnpm)
+│   ├── packages/
+│   │   ├── defi-core/          # Registry, multicall, types, traits
+│   │   ├── defi-protocols/     # Protocol adapters (Aave, Uniswap, Compound, etc.)
+│   │   └── defi-cli/           # Multi-chain CLI (23 commands)
+│   ├── test/                   # E2E and snapshot tests
+│   └── vitest.config.ts
 ├── config/
-│   ├── chains.toml       # 11 chain configs
-│   ├── tokens/           # Per-chain token registries
-│   └── protocols/        # 108 protocol configs (TOML)
+│   ├── chains.toml             # 40 chain configs
+│   ├── tokens/                 # Per-chain token registries (40 chains)
+│   └── protocols/              # 344 protocol configs (TOML)
+│       ├── dex/                # DEX protocols
+│       ├── lending/            # Lending protocols
+│       ├── vault/              # Vault/yield protocols
+│       ├── bridge/             # Bridge protocols
+│       ├── cdp/                # CDP protocols
+│       └── nft/                # NFT protocols
 ├── skills/
-│   └── defi-cli/         # Claude Code skill
-├── npm/                  # npm wrapper package
-└── docs/                 # DeFi category taxonomy
+│   └── defi-cli/               # Claude Code skill
+├── npm/                        # npm wrapper package
+└── docs/                       # DeFi category taxonomy
 ```
 
 **Key design decisions:**
 - **Single multicall per scan** — all oracle + DEX + stablecoin queries in one RPC call (~200ms)
-- **Parallel chain scanning** — 11 chains in ~1.5 seconds via tokio::JoinSet
-- **Config-driven** — all protocol/chain/token data in TOML, compiled into binary
-- **Agent-first** — every command supports `--json`, MCP server with 18 tools
+- **Parallel chain scanning** — 40 chains in parallel via Promise.all
+- **Config-driven** — all protocol/chain/token data in TOML
+- **Agent-first** — every command supports `--json`, designed for AI agent integration
 - **Dry-run by default** — all transactions simulated unless `--broadcast` is set
 
 ## Global Options
@@ -257,7 +213,7 @@ defi-cli/
 | `{CHAIN}_RPC_URL` | Override RPC URL (e.g., `MANTLE_RPC_URL`) |
 | `DEFI_PRIVATE_KEY` | Private key for `--broadcast` mode |
 | `DEFI_WALLET_ADDRESS` | Default wallet address |
-| `ETHERSCAN_API_KEY` | For whale tracking on BNB, Arbitrum, Base, Polygon, Scroll, Linea |
+| `ETHERSCAN_API_KEY` | For whale tracking |
 
 ## License
 
