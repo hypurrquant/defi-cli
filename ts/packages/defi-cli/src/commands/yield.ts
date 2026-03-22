@@ -5,6 +5,7 @@ import type { LendingRates } from "@hypurrquant/defi-core";
 import { createLending, createVault } from "@hypurrquant/defi-protocols";
 import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
+import type { Executor } from "../executor.js";
 
 function resolveAsset(registry: Registry, chain: string, asset: string): Address {
   // Try parsing as address first
@@ -233,10 +234,68 @@ async function runYieldScan(registry: Registry, asset: string, output: OutputMod
   );
 }
 
-export function registerYield(parent: Command, getOpts: () => OutputMode): void {
+/** Scan rate entry with slug for execute subcommand */
+interface ScanRate {
+  chain: string;
+  protocol: string;
+  slug: string;
+  supply_apy: number;
+  borrow_variable_apy: number;
+}
+
+/** Run a cross-chain yield scan and return typed rate entries */
+async function scanRatesForExecute(registry: Registry, asset: string): Promise<ScanRate[]> {
+  const chainKeys = Array.from(registry.chains.keys());
+
+  const tasks = chainKeys.map(async (ck): Promise<ScanRate[]> => {
+    try {
+      const chain = registry.getChain(ck);
+      const chainName = chain.name.toLowerCase();
+      let assetAddr: Address;
+      try {
+        assetAddr = registry.resolveToken(chainName, asset).address;
+      } catch {
+        return [];
+      }
+      const protos = registry
+        .getProtocolsForChain(chainName)
+        .filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+      if (protos.length === 0) return [];
+      const rpc = chain.effectiveRpcUrl();
+      const rates: ScanRate[] = [];
+      for (const proto of protos) {
+        try {
+          const lending = createLending(proto, rpc);
+          const r = await lending.getRates(assetAddr);
+          if (r.supply_apy > 0) {
+            rates.push({
+              chain: chain.name,
+              protocol: r.protocol,
+              slug: proto.slug,
+              supply_apy: r.supply_apy,
+              borrow_variable_apy: r.borrow_variable_apy,
+            });
+          }
+        } catch {
+          // skip unreachable
+        }
+      }
+      return rates;
+    } catch {
+      return [];
+    }
+  });
+
+  const nested = await Promise.all(tasks);
+  const all = nested.flat();
+  all.sort((a, b) => b.supply_apy - a.supply_apy);
+  return all;
+}
+
+export function registerYield(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
   const yieldCmd = parent
     .command("yield")
-    .description("Yield operations: compare, scan, optimize");
+    .description("Yield operations: compare, scan, optimize, execute");
 
   // yield compare
   yieldCmd
@@ -296,6 +355,248 @@ export function registerYield(parent: Command, getOpts: () => OutputMode): void 
       try {
         const registry = Registry.loadEmbedded();
         await runYieldScan(registry, opts.asset as string, getOpts());
+      } catch (err) {
+        printOutput({ error: String(err) }, getOpts());
+        process.exit(1);
+      }
+    });
+
+  // yield execute
+  yieldCmd
+    .command("execute")
+    .description("Find the best yield opportunity and execute supply (or show cross-chain plan)")
+    .requiredOption("--asset <token>", "Token symbol or address (e.g. USDC)")
+    .requiredOption("--amount <amount>", "Human-readable amount to supply (e.g. 1000)")
+    .option("--min-spread <percent>", "Minimum spread % required to execute cross-chain arb", "1.0")
+    .option("--target-chain <chain>", "Override auto-detected best chain")
+    .option("--target-protocol <protocol>", "Override auto-detected best protocol slug")
+    .action(async (opts) => {
+      try {
+        const registry = Registry.loadEmbedded();
+        const asset = opts.asset as string;
+        const humanAmount = parseFloat(opts.amount as string);
+        if (isNaN(humanAmount) || humanAmount <= 0) {
+          printOutput({ error: `Invalid amount: ${opts.amount}` }, getOpts());
+          process.exit(1);
+          return;
+        }
+        const minSpread = parseFloat((opts.minSpread as string) ?? "1.0");
+
+        let targetChainName: string;
+        let targetProtocolSlug: string | undefined = opts.targetProtocol as string | undefined;
+
+        if (opts.targetChain) {
+          // Manual chain override — skip scan
+          targetChainName = (opts.targetChain as string).toLowerCase();
+        } else {
+          // Run cross-chain scan to find best supply opportunity
+          process.stderr.write(`Scanning all chains for best ${asset} yield...\n`);
+          const t0 = Date.now();
+          const allRates = await scanRatesForExecute(registry, asset);
+          process.stderr.write(`Scan done in ${Date.now() - t0}ms — ${allRates.length} rates found\n`);
+
+          if (allRates.length === 0) {
+            printOutput({ error: `No yield opportunities found for ${asset}` }, getOpts());
+            process.exit(1);
+            return;
+          }
+
+          // Find best cross-chain arb (highest spread)
+          let bestArb: {
+            spread_pct: number;
+            supply_chain: string;
+            supply_protocol: string;
+            supply_slug: string;
+            supply_apy: number;
+            borrow_chain: string;
+            borrow_protocol: string;
+            borrow_apy: number;
+            strategy: string;
+          } | null = null;
+
+          for (const s of allRates) {
+            for (const b of allRates) {
+              const spread = s.supply_apy - b.borrow_variable_apy;
+              if (spread > 0 && b.borrow_variable_apy > 0 && (s.chain !== b.chain || s.slug !== b.slug)) {
+                if (!bestArb || spread > bestArb.spread_pct) {
+                  bestArb = {
+                    spread_pct: Math.round(spread * 10000) / 10000,
+                    supply_chain: s.chain,
+                    supply_protocol: s.protocol,
+                    supply_slug: s.slug,
+                    supply_apy: s.supply_apy,
+                    borrow_chain: b.chain,
+                    borrow_protocol: b.protocol,
+                    borrow_apy: b.borrow_variable_apy,
+                    strategy: s.chain === b.chain ? "same-chain" : "cross-chain",
+                  };
+                }
+              }
+            }
+          }
+
+          // If best arb is cross-chain and meets min-spread: output plan only (no execution)
+          if (bestArb && bestArb.strategy === "cross-chain" && bestArb.spread_pct >= minSpread) {
+            const supplyChainLower = bestArb.supply_chain.toLowerCase();
+            let supplyAssetAddr: Address | undefined;
+            let supplyDecimals = 18;
+            try {
+              const tok = registry.resolveToken(supplyChainLower, asset);
+              supplyAssetAddr = tok.address;
+              supplyDecimals = tok.decimals;
+            } catch {
+              // leave as undefined
+            }
+            const amountWei = BigInt(Math.round(humanAmount * 10 ** supplyDecimals));
+
+            printOutput(
+              {
+                mode: "plan_only",
+                reason: "cross-chain arb requires manual bridge execution",
+                asset,
+                amount_human: humanAmount,
+                amount_wei: amountWei.toString(),
+                best_arb: bestArb,
+                steps: [
+                  {
+                    step: 1,
+                    action: "bridge",
+                    description: `Bridge ${humanAmount} ${asset} from current chain to ${bestArb.supply_chain}`,
+                    from_chain: "current",
+                    to_chain: bestArb.supply_chain,
+                    token: asset,
+                    amount_wei: amountWei.toString(),
+                  },
+                  {
+                    step: 2,
+                    action: "supply",
+                    description: `Supply ${humanAmount} ${asset} on ${bestArb.supply_protocol}`,
+                    chain: bestArb.supply_chain,
+                    protocol: bestArb.supply_protocol,
+                    protocol_slug: bestArb.supply_slug,
+                    asset_address: supplyAssetAddr,
+                    amount_wei: amountWei.toString(),
+                    expected_apy: bestArb.supply_apy,
+                  },
+                ],
+                expected_spread_pct: bestArb.spread_pct,
+                supply_apy: bestArb.supply_apy,
+                borrow_apy: bestArb.borrow_apy,
+              },
+              getOpts(),
+            );
+            return;
+          }
+
+          // Fall through to same-chain supply on the best rate
+          targetChainName = allRates[0].chain.toLowerCase();
+          if (!targetProtocolSlug) {
+            targetProtocolSlug = allRates[0].slug;
+          }
+        }
+
+        // Same-chain supply execution path
+        const chain = registry.getChain(targetChainName);
+        const chainName = chain.name.toLowerCase();
+        const rpc = chain.effectiveRpcUrl();
+
+        // Resolve asset address + decimals on target chain
+        let assetAddr: Address;
+        let decimals = 18;
+        try {
+          const tok = registry.resolveToken(chainName, asset);
+          assetAddr = tok.address;
+          decimals = tok.decimals;
+        } catch {
+          if (/^0x[0-9a-fA-F]{40}$/.test(asset)) {
+            assetAddr = asset as Address;
+          } else {
+            printOutput({ error: `Cannot resolve ${asset} on chain ${chainName}` }, getOpts());
+            process.exit(1);
+            return;
+          }
+        }
+
+        const amountWei = BigInt(Math.round(humanAmount * 10 ** decimals));
+
+        // Resolve protocol
+        let proto: ReturnType<typeof registry.getProtocol>;
+        if (targetProtocolSlug) {
+          try {
+            proto = registry.getProtocol(targetProtocolSlug);
+          } catch {
+            printOutput({ error: `Protocol not found: ${targetProtocolSlug}` }, getOpts());
+            process.exit(1);
+            return;
+          }
+        } else {
+          // Pick the aave_v3 protocol on the target chain with highest supply APY
+          const candidates = registry
+            .getProtocolsForChain(chainName)
+            .filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+          if (candidates.length === 0) {
+            printOutput({ error: `No aave_v3 lending protocol found on ${chainName}` }, getOpts());
+            process.exit(1);
+            return;
+          }
+          let bestRate: LendingRates | null = null;
+          let bestProto = candidates[0];
+          for (const c of candidates) {
+            try {
+              const lending = createLending(c, rpc);
+              const r = await lending.getRates(assetAddr);
+              if (!bestRate || r.supply_apy > bestRate.supply_apy) {
+                bestRate = r;
+                bestProto = c;
+              }
+            } catch {
+              // skip
+            }
+          }
+          proto = bestProto;
+        }
+
+        const onBehalfOf = (
+          process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001"
+        ) as Address;
+        const adapter = createLending(proto, rpc);
+
+        // Fetch current rate for display (non-fatal)
+        let currentApy: number | undefined;
+        try {
+          const r = await adapter.getRates(assetAddr);
+          currentApy = r.supply_apy;
+        } catch {
+          // non-fatal
+        }
+
+        process.stderr.write(
+          `Supplying ${humanAmount} ${asset} (${amountWei} wei) on ${proto.name} (${chain.name})...\n`,
+        );
+
+        const tx = await adapter.buildSupply({
+          protocol: proto.name,
+          asset: assetAddr,
+          amount: amountWei,
+          on_behalf_of: onBehalfOf,
+        });
+
+        const result = await executor.execute(tx);
+
+        printOutput(
+          {
+            action: "yield_execute",
+            asset,
+            amount_human: humanAmount,
+            amount_wei: amountWei.toString(),
+            chain: chain.name,
+            protocol: proto.name,
+            protocol_slug: proto.slug,
+            supply_apy: currentApy,
+            result,
+          },
+          getOpts(),
+        );
       } catch (err) {
         printOutput({ error: String(err) }, getOpts());
         process.exit(1);

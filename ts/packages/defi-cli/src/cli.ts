@@ -27,6 +27,7 @@ import { registerCompare } from "./commands/compare.js";
 import { registerSwap } from "./commands/swap.js";
 import { registerBridge } from "./commands/bridge.js";
 import { registerNft } from "./commands/nft.js";
+import { registerFarm } from "./commands/farm.js";
 
 const BANNER = `
   ██████╗ ███████╗███████╗██╗     ██████╗██╗     ██╗
@@ -80,7 +81,7 @@ registerLending(program, getOutputMode, makeExecutor());
 registerCdp(program, getOutputMode, makeExecutor());
 registerStaking(program, getOutputMode, makeExecutor());
 registerVault(program, getOutputMode, makeExecutor());
-registerYield(program, getOutputMode);
+registerYield(program, getOutputMode, makeExecutor());
 registerPortfolio(program, getOutputMode);
 registerMonitor(program, getOutputMode);
 registerAlert(program, getOutputMode);
@@ -95,6 +96,7 @@ registerCompare(program, getOutputMode);
 registerSwap(program, getOutputMode, makeExecutor());
 registerBridge(program, getOutputMode);
 registerNft(program, getOutputMode);
+registerFarm(program, getOutputMode, makeExecutor());
 
 // Agent mode command
 program
