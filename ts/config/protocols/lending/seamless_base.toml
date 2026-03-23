@@ -9,3 +9,5 @@ description = "Seamless Protocol — native Aave V3 fork and lending protocol on
 
 [protocol.contracts]
 pool_addresses_provider = "0x0E02EB705be325407707662C6f6d3466E939f3a0"
+# Legacy Aave V3 fork pool (Seamless migrated core lending to Morpho in late 2024)
+pool = "0x8F44Fd754285aa6A2b8B9B97739B79746e0475a7"

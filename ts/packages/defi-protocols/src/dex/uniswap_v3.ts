@@ -92,40 +92,51 @@ export class UniswapV3Adapter implements IDex {
 
     if (this.quoter) {
       const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const feeTiers = [500, 3000, 10000, 100];
 
-      const result = await client.call({
-        to: this.quoter,
-        data: encodeFunctionData({
-          abi: quoterAbi,
-          functionName: "quoteExactInputSingle",
-          args: [
-            {
-              tokenIn: params.token_in,
-              tokenOut: params.token_out,
-              amountIn: params.amount_in,
-              fee: this.fee,
-              sqrtPriceLimitX96: 0n,
-            },
-          ],
+      const results = await Promise.allSettled(
+        feeTiers.map(async (fee) => {
+          const result = await client.call({
+            to: this.quoter!,
+            data: encodeFunctionData({
+              abi: quoterAbi,
+              functionName: "quoteExactInputSingle",
+              args: [
+                {
+                  tokenIn: params.token_in,
+                  tokenOut: params.token_out,
+                  amountIn: params.amount_in,
+                  fee,
+                  sqrtPriceLimitX96: 0n,
+                },
+              ],
+            }),
+          });
+          if (!result.data) return { amountOut: 0n, fee };
+          const [amountOut] = decodeAbiParameters(
+            [{ name: "amountOut", type: "uint256" }],
+            result.data,
+          );
+          return { amountOut, fee };
         }),
-      });
-
-      if (!result.data) {
-        throw DefiError.rpcError(`[${this.protocolName}] quoteExactInputSingle returned no data`);
-      }
-
-      const [amountOut] = decodeAbiParameters(
-        [{ name: "amountOut", type: "uint256" }],
-        result.data,
       );
 
-      return {
-        protocol: this.protocolName,
-        amount_out: amountOut,
-        price_impact_bps: undefined,
-        fee_bps: Math.floor(this.fee / 10),
-        route: [`${params.token_in} -> ${params.token_out}`],
-      };
+      let best = { amountOut: 0n, fee: 3000 };
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value.amountOut > best.amountOut) {
+          best = r.value;
+        }
+      }
+
+      if (best.amountOut > 0n) {
+        return {
+          protocol: this.protocolName,
+          amount_out: best.amountOut,
+          price_impact_bps: undefined,
+          fee_bps: Math.floor(best.fee / 10),
+          route: [`${params.token_in} -> ${params.token_out} (fee: ${best.fee})`],
+        };
+      }
     }
 
     // Fallback: simulate swap via eth_call on the router

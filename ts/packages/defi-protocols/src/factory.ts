@@ -29,6 +29,7 @@ import type { INft } from "@hypurrquant/defi-core";
 
 // Lending adapters
 import { AaveV3Adapter } from "./lending/aave_v3.js";
+import { AaveV2Adapter } from "./lending/aave_v2.js";
 import { AaveOracleAdapter } from "./lending/aave_oracle.js";
 import { CompoundV2Adapter } from "./lending/compound_v2.js";
 import { CompoundV3Adapter } from "./lending/compound_v3.js";
@@ -99,6 +100,8 @@ export function createLending(entry: ProtocolEntry, rpcUrl?: string): ILending {
     case "aave_v3":
     case "aave_v3_isolated":
       return new AaveV3Adapter(entry, rpcUrl);
+    case "aave_v2":
+      return new AaveV2Adapter(entry, rpcUrl);
     case "morpho_blue":
       return new MorphoBlueAdapter(entry, rpcUrl);
     case "euler_v2":

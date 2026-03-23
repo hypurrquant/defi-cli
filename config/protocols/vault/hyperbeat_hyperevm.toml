@@ -8,6 +8,8 @@ native = true
 description = "Hyperbeat — Morpho-powered ERC4626 vaults on HyperEVM ($64M TVL)"
 
 [protocol.contracts]
+# Primary vault for ERC4626 adapter (USDC Gauntlet vault)
+vault = "0x08C00F8279dFF5B0CB5a04d349E7d79708Ceadf3"
 # Morpho MetaMorpho vaults
 usde = "0x5eEC795d919FA97688Fb9844eeB0072E6B846F9d"
 usdt0_hyperithm = "0x53A333e51E96FE288bC9aDd7cdC4B1EAD2CD2FfA"

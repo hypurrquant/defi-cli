@@ -8,7 +8,7 @@ native = true
 description = "Cleopatra Exchange — Solidly V2 ve(3,3) DEX on Mantle"
 
 [protocol.contracts]
-router = "0xAAA45c8F5Ef92a000a121d102F4e89278a711Faa"
+router = "0xAAA45c8F5ef92a000a121d102F4e89278a711Faa"
 factory = "0xAAA16c016BF556fcD620328f0759252E29b1AB57"
 voter = "0xAAaF3D9CDd3602D117C67d80EeC37a160C8D9869"
 ve_token = "0xAAAEa1fB9f3DE3F70E89f37B69Ab11B47eb9Ce6F"

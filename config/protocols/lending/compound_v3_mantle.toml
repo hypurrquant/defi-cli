@@ -8,6 +8,9 @@ native = false
 description = "Compound V3 (Comet) on Mantle — USDe market with mETH/WETH/FBTC collateral"
 
 [protocol.contracts]
+# Mantle only has the USDe market — no USDC comet exists
+# The adapter resolves comet_usdc → comet → comet_weth; alias comet here so it can instantiate
+comet = "0x606174f62cd968d8e684c645080fa694c1D7786E"
 comet_usde = "0x606174f62cd968d8e684c645080fa694c1D7786E"
 configurator = "0xb77Cd4cD000957283D8BAf53cD782ECf029cF7DB"
 rewards = "0xCd83CbBFCE149d141A5171C3D6a0F0fCCeE225Ab"

@@ -32,14 +32,23 @@ export function registerCdp(parent: Command, getOpts: () => OutputMode, executor
     });
 
   cdp.command("info")
-    .description("Show CDP position info")
+    .description("Show CDP position info, or protocol overview if --position is omitted")
     .requiredOption("--protocol <protocol>", "Protocol slug")
-    .requiredOption("--position <id>", "CDP/trove ID")
+    .option("--position <id>", "CDP/trove ID (omit for protocol overview)")
     .action(async (opts) => {
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const protocol = registry.getProtocol(opts.protocol);
+      if (opts.position === undefined) {
+        printOutput({
+          name: protocol.name,
+          slug: protocol.slug,
+          chain: chainName,
+          contracts: (protocol as unknown as Record<string, unknown>).contracts ?? {},
+        }, getOpts());
+        return;
+      }
       const adapter = createCdp(protocol, chain.effectiveRpcUrl());
       const info = await adapter.getCdpInfo(BigInt(opts.position));
       printOutput(info, getOpts());

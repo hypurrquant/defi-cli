@@ -924,11 +924,20 @@ function registerCdp(parent, getOpts, executor) {
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  cdp.command("info").description("Show CDP position info").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--position <id>", "CDP/trove ID").action(async (opts) => {
+  cdp.command("info").description("Show CDP position info, or protocol overview if --position is omitted").requiredOption("--protocol <protocol>", "Protocol slug").option("--position <id>", "CDP/trove ID (omit for protocol overview)").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry5.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
+    if (opts.position === void 0) {
+      printOutput({
+        name: protocol.name,
+        slug: protocol.slug,
+        chain: chainName,
+        contracts: protocol.contracts ?? {}
+      }, getOpts());
+      return;
+    }
     const adapter = createCdp(protocol, chain.effectiveRpcUrl());
     const info = await adapter.getCdpInfo(BigInt(opts.position));
     printOutput(info, getOpts());
@@ -3816,4 +3825,4 @@ program.command("agent").description("Agent mode: read JSON commands from stdin 
 export {
   program
 };
-//# sourceMappingURL=chunk-AY6YDYJM.js.map
+//# sourceMappingURL=chunk-PZVWF6EB.js.map

@@ -1,4 +1,5 @@
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParameters } from "viem";
+import type { Address, PublicClient } from "viem";
 
 import { DefiError } from "@hypurrquant/defi-core";
 import type {
@@ -15,8 +16,14 @@ import type {
 const abi = parseAbi([
   "struct Route { address from; address to; bool stable; }",
   "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, (address from, address to, bool stable)[] calldata routes, address to, uint256 deadline) external returns (uint256[] memory amounts)",
+  "function getAmountsOut(uint256 amountIn, (address from, address to, bool stable)[] calldata routes) external view returns (uint256[] memory amounts)",
   "function addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256 amountA, uint256 amountB, uint256 liquidity)",
   "function removeLiquidity(address tokenA, address tokenB, bool stable, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256 amountA, uint256 amountB)",
+]);
+
+// Velodrome V2 / Aerodrome style: Route includes factory address
+const abiV2 = parseAbi([
+  "function getAmountsOut(uint256 amountIn, (address from, address to, bool stable, address factory)[] calldata routes) external view returns (uint256[] memory amounts)",
 ]);
 
 export class SolidlyAdapter implements IDex {
@@ -24,8 +31,11 @@ export class SolidlyAdapter implements IDex {
   private readonly router: `0x${string}`;
   /** Default to volatile (false). True for stablecoin pairs. */
   private readonly defaultStable: boolean;
+  private readonly rpcUrl: string | undefined;
+  /** Factory address — present on Velodrome V2 / Aerodrome forks */
+  private readonly factory: Address | undefined;
 
-  constructor(entry: ProtocolEntry, _rpcUrl?: string) {
+  constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
     const router = entry.contracts?.["router"];
     if (!router) {
@@ -33,6 +43,8 @@ export class SolidlyAdapter implements IDex {
     }
     this.router = router;
     this.defaultStable = false;
+    this.rpcUrl = rpcUrl;
+    this.factory = entry.contracts?.["factory"];
   }
 
   name(): string {
@@ -62,8 +74,78 @@ export class SolidlyAdapter implements IDex {
     };
   }
 
-  async quote(_params: QuoteParams): Promise<QuoteResult> {
-    throw DefiError.unsupported(`[${this.protocolName}] quote requires RPC connection`);
+  private async callGetAmountsOut(
+    client: PublicClient,
+    callData: `0x${string}`,
+  ): Promise<bigint> {
+    const result = await client.call({ to: this.router, data: callData });
+    if (!result.data) return 0n;
+    const [amounts] = decodeAbiParameters(
+      [{ name: "amounts", type: "uint256[]" }],
+      result.data,
+    );
+    return amounts.length >= 2 ? amounts[amounts.length - 1] : 0n;
+  }
+
+  private encodeV1(params: QuoteParams, stable: boolean): `0x${string}` {
+    return encodeFunctionData({
+      abi,
+      functionName: "getAmountsOut",
+      args: [params.amount_in, [{ from: params.token_in, to: params.token_out, stable }]],
+    });
+  }
+
+  private encodeV2(params: QuoteParams, stable: boolean): `0x${string}` {
+    return encodeFunctionData({
+      abi: abiV2,
+      functionName: "getAmountsOut",
+      args: [params.amount_in, [{ from: params.token_in, to: params.token_out, stable, factory: this.factory! }]],
+    });
+  }
+
+  async quote(params: QuoteParams): Promise<QuoteResult> {
+    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
+
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+
+    // Try all combinations: [volatile, stable] x [V1 ABI, V2 ABI (if factory present)]
+    // Pick the best (highest amountOut)
+    const candidates: Array<{ callData: `0x${string}`; stable: boolean }> = [
+      { callData: this.encodeV1(params, false), stable: false },
+      { callData: this.encodeV1(params, true), stable: true },
+    ];
+    if (this.factory) {
+      candidates.unshift(
+        { callData: this.encodeV2(params, false), stable: false },
+        { callData: this.encodeV2(params, true), stable: true },
+      );
+    }
+
+    const results = await Promise.allSettled(
+      candidates.map((c) => this.callGetAmountsOut(client, c.callData)),
+    );
+
+    let bestOut = 0n;
+    let bestStable = false;
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === "fulfilled" && r.value > bestOut) {
+        bestOut = r.value;
+        bestStable = candidates[i].stable;
+      }
+    }
+
+    if (bestOut === 0n) {
+      throw DefiError.rpcError(`[${this.protocolName}] getAmountsOut returned zero for all routes`);
+    }
+
+    return {
+      protocol: this.protocolName,
+      amount_out: bestOut,
+      price_impact_bps: undefined,
+      fee_bps: bestStable ? 4 : 20,
+      route: [`${params.token_in} -> ${params.token_out} (stable: ${bestStable})`],
+    };
   }
 
   async buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx> {

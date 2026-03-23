@@ -96,10 +96,16 @@ declare class SolidlyAdapter implements IDex {
     private readonly router;
     /** Default to volatile (false). True for stablecoin pairs. */
     private readonly defaultStable;
-    constructor(entry: ProtocolEntry, _rpcUrl?: string);
+    private readonly rpcUrl;
+    /** Factory address — present on Velodrome V2 / Aerodrome forks */
+    private readonly factory;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
-    quote(_params: QuoteParams): Promise<QuoteResult>;
+    private callGetAmountsOut;
+    private encodeV1;
+    private encodeV2;
+    quote(params: QuoteParams): Promise<QuoteResult>;
     buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx>;
     buildRemoveLiquidity(params: RemoveLiquidityParams): Promise<DeFiTx>;
 }
@@ -178,6 +184,20 @@ declare class DexSpotPrice {
 }
 
 declare class AaveV3Adapter implements ILending {
+    private readonly protocolName;
+    private readonly pool;
+    private readonly rpcUrl?;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
+    name(): string;
+    buildSupply(params: SupplyParams): Promise<DeFiTx>;
+    buildBorrow(params: BorrowParams): Promise<DeFiTx>;
+    buildRepay(params: RepayParams): Promise<DeFiTx>;
+    buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
+    getRates(asset: Address): Promise<LendingRates>;
+    getUserPosition(user: Address): Promise<UserPosition>;
+}
+
+declare class AaveV2Adapter implements ILending {
     private readonly protocolName;
     private readonly pool;
     private readonly rpcUrl?;
@@ -398,4 +418,4 @@ declare class ERC721Adapter implements INft {
     getBalance(owner: Address, collection: Address): Promise<bigint>;
 }
 
-export { AaveOracleAdapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, KinetiqAdapter, MasterChefAdapter, MorphoBlueAdapter, PendleAdapter, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createLending, createLiquidStaking, createMasterChef, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };
+export { AaveOracleAdapter, AaveV2Adapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, KinetiqAdapter, MasterChefAdapter, MorphoBlueAdapter, PendleAdapter, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createLending, createLiquidStaking, createMasterChef, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };

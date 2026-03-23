@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   program
-} from "./chunk-AY6YDYJM.js";
+} from "./chunk-PZVWF6EB.js";
 
 // src/main.ts
 async function main() {
