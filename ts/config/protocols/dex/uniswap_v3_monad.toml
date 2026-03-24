@@ -8,7 +8,7 @@ native = false
 description = "Uniswap V3 on Monad — concentrated liquidity DEX leveraging Monad's high-performance EVM"
 
 [protocol.contracts]
-router = "0xfe31f71C1b106eAc32F1a19239c9a9a72DDfb900"
-factory = "0x204FaCa1764b154221e35C0D20AbB3C525710498"
-quoter = "0x661E93cca42AFAcB172121ef892830cA3b70f08D"
-position_manager = "0x7197e214c0b767cfb76fb734ab638e2c192f4e53"
+router = "0xfE31F71C1b106EAc32F1A19239c9a9A72ddfb900"
+factory = "0x204faCa1764b154221e35c0D20abb3C525710498"
+quoter = "0x661E93cca42AfacB172121EF892830cA3b70F08d"
+position_manager = "0x7197E214C0b767cFB76fB734ab638E2c192F4e53"

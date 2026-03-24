@@ -7,32 +7,42 @@ tags = ["native"]
 
 [[token]]
 symbol = "WMON"
-name = "Wrapped Monad"
-address = "0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701"
+name = "Wrapped MON"
+address = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"
 decimals = 18
 tags = ["wrapped"]
+
 [[token]]
 symbol = "USDC"
 name = "USD Coin"
-address = "0xf817257fed379853cDe0fa4F97AB987181B1E5Ea"
+address = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603"
 decimals = 6
 tags = ["stablecoin"]
 
 [[token]]
-symbol = "USDT"
-name = "Tether"
-address = "0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D"
+symbol = "USDT0"
+name = "USDT0"
+address = "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"
 decimals = 6
 tags = ["stablecoin"]
 
 [[token]]
 symbol = "WETH"
 name = "Wrapped Ether"
-address = "0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37"
+address = "0xEE8c0E9f1BFFb4Eb878d8f15f368A02a35481242"
 decimals = 18
 tags = ["wrapped"]
+
 [[token]]
 symbol = "WBTC"
-name = "Wrapped Bitcoin"
-address = "0xcf5a6076cfa32686c0Df13aBaDa2b40dec133F1d"
+name = "Wrapped BTC"
+address = "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c"
 decimals = 8
+tags = ["wrapped"]
+
+[[token]]
+symbol = "wstETH"
+name = "Wrapped stETH"
+address = "0x10Aeaf63194db8d453d4D85a06E5eFE1dd0b5417"
+decimals = 18
+tags = ["wrapped"]
