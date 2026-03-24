@@ -2,7 +2,7 @@
 name = "Ramses CL"
 slug = "ramses-cl"
 category = "dex"
-interface = "solidly_cl"
+interface = "uniswap_v3"
 chain = "hyperevm"
 native = false
 description = "Ramses V3 concentrated liquidity (x(3,3) model) on HyperEVM ($2.8M TVL)"
