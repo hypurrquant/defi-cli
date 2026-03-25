@@ -1017,7 +1017,8 @@ var Registry = class _Registry {
 
 // src/executor.ts
 var GAS_BUFFER_BPS = 12000n;
-var DEFAULT_PRIORITY_FEE_WEI = 100000000n;
+var DEFAULT_PRIORITY_FEE_WEI = 20000000000n;
+var MAX_GAS_LIMIT = 5000000000n;
 var Executor = class _Executor {
   dryRun;
   rpcUrl;
@@ -1057,7 +1058,10 @@ var Executor = class _Executor {
         value: tx.value,
         account: from
       });
-      if (estimated > 0n) return _Executor.applyGasBuffer(estimated);
+      if (estimated > 0n) {
+        const buffered = _Executor.applyGasBuffer(estimated);
+        return buffered > MAX_GAS_LIMIT ? MAX_GAS_LIMIT : buffered;
+      }
     } catch {
     }
     return tx.gas_estimate ? BigInt(tx.gas_estimate) : 0n;

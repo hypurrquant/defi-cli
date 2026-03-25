@@ -6,8 +6,11 @@ import type { ActionResult, DeFiTx, TxStatus } from "@hypurrquant/defi-core";
 /** Gas buffer multiplier: 120% over estimated gas (20% headroom) */
 const GAS_BUFFER_BPS = 12000n;
 
-/** Default max priority fee (tip) in wei — 0.1 gwei */
-const DEFAULT_PRIORITY_FEE_WEI = 100_000_000n;
+/** Default max priority fee (tip) in wei — 20 gwei (safe for Mantle + EVM chains) */
+const DEFAULT_PRIORITY_FEE_WEI = 20_000_000_000n;
+
+/** Max gas limit cap — Mantle uses high gas units (up to 5B for complex txs) */
+const MAX_GAS_LIMIT = 5_000_000_000n; // 5B
 
 export class Executor {
   readonly dryRun: boolean;
@@ -57,7 +60,10 @@ export class Executor {
         value: tx.value,
         account: from,
       });
-      if (estimated > 0n) return Executor.applyGasBuffer(estimated);
+      if (estimated > 0n) {
+        const buffered = Executor.applyGasBuffer(estimated);
+        return buffered > MAX_GAS_LIMIT ? MAX_GAS_LIMIT : buffered;
+      }
     } catch {
       // fallback
     }
