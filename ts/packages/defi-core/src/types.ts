@@ -9,6 +9,12 @@ export interface DeFiTx {
   data: Hex;
   value: bigint;
   gas_estimate?: number;
+  /** ERC20 approvals to check and send before broadcasting this tx */
+  approvals?: Array<{
+    token: Address;
+    spender: Address;
+    amount: bigint;
+  }>;
 }
 
 /** Result of executing or simulating a transaction */

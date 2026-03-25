@@ -66,7 +66,7 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
 
   // IGauge
 
-  async buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx> {
+  async buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx> {
     if (tokenId !== undefined) {
       const data = encodeFunctionData({
         abi: gaugeAbi,
@@ -79,6 +79,7 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
         data,
         value: 0n,
         gas_estimate: 200_000,
+        approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : undefined,
       };
     }
 
@@ -93,6 +94,7 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
       data,
       value: 0n,
       gas_estimate: 200_000,
+      approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : undefined,
     };
   }
 

@@ -88,6 +88,7 @@ export class AaveV3Adapter implements ILending {
       data,
       value: 0n,
       gas_estimate: 300_000,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }],
     };
   }
 
@@ -120,6 +121,7 @@ export class AaveV3Adapter implements ILending {
       data,
       value: 0n,
       gas_estimate: 300_000,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }],
     };
   }
 

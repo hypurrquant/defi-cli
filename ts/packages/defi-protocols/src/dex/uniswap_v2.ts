@@ -73,6 +73,7 @@ export class UniswapV2Adapter implements IDex {
       data,
       value: 0n,
       gas_estimate: 150_000,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }],
     };
   }
 
@@ -213,6 +214,10 @@ export class UniswapV2Adapter implements IDex {
       data,
       value: 0n,
       gas_estimate: 300_000,
+      approvals: [
+        { token: params.token_a, spender: this.router, amount: params.amount_a },
+        { token: params.token_b, spender: this.router, amount: params.amount_b },
+      ],
     };
   }
 

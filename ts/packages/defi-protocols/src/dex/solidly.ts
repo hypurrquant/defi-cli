@@ -71,6 +71,7 @@ export class SolidlyAdapter implements IDex {
       data,
       value: 0n,
       gas_estimate: 200_000,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }],
     };
   }
 
@@ -171,6 +172,10 @@ export class SolidlyAdapter implements IDex {
       data,
       value: 0n,
       gas_estimate: 350_000,
+      approvals: [
+        { token: params.token_a, spender: this.router, amount: params.amount_a },
+        { token: params.token_b, spender: this.router, amount: params.amount_b },
+      ],
     };
   }
 

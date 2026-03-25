@@ -1,7 +1,13 @@
-import { createPublicClient, createWalletClient, http } from "viem";
+import { createPublicClient, createWalletClient, http, parseAbi, encodeFunctionData } from "viem";
+import type { Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { DefiError } from "@hypurrquant/defi-core";
 import type { ActionResult, DeFiTx, TxStatus } from "@hypurrquant/defi-core";
+
+const ERC20_ABI = parseAbi([
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function approve(address spender, uint256 amount) external returns (bool)",
+]);
 
 /** Gas buffer multiplier: 120% over estimated gas (20% headroom) */
 const GAS_BUFFER_BPS = 12000n;
@@ -26,6 +32,75 @@ export class Executor {
   /** Apply 20% buffer to a gas estimate */
   private static applyGasBuffer(gas: bigint): bigint {
     return (gas * GAS_BUFFER_BPS) / 10000n;
+  }
+
+  /**
+   * Check allowance for a single token/spender pair and send an approve tx if needed.
+   * Only called in broadcast mode (not dry-run).
+   */
+  private async checkAndApprove(
+    token: Address,
+    spender: Address,
+    amount: bigint,
+    owner: Address,
+    publicClient: ReturnType<typeof createPublicClient>,
+    walletClient: ReturnType<typeof createWalletClient>,
+  ): Promise<void> {
+    const allowance = await publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "allowance",
+      args: [owner, spender],
+    });
+
+    if (allowance >= amount) return;
+
+    process.stderr.write(
+      `  Approving ${amount} of ${token} for ${spender}...\n`,
+    );
+
+    const approveData = encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [spender, amount],
+    });
+
+    const rpcUrl = this.rpcUrl!;
+    const gasLimit = await (async () => {
+      try {
+        const estimated = await publicClient.estimateGas({
+          to: token,
+          data: approveData,
+          account: owner,
+        });
+        const buffered = Executor.applyGasBuffer(estimated);
+        return buffered > MAX_GAS_LIMIT ? MAX_GAS_LIMIT : buffered;
+      } catch {
+        return 80_000n;
+      }
+    })();
+
+    const [maxFeePerGas, maxPriorityFeePerGas] = await this.fetchEip1559Fees(rpcUrl);
+
+    const approveTxHash = await walletClient.sendTransaction({
+      chain: null,
+      to: token,
+      data: approveData,
+      gas: gasLimit > 0n ? gasLimit : undefined,
+      maxFeePerGas: maxFeePerGas > 0n ? maxFeePerGas : undefined,
+      maxPriorityFeePerGas: maxPriorityFeePerGas > 0n ? maxPriorityFeePerGas : undefined,
+    });
+
+    const approveTxUrl = this.explorerUrl
+      ? `${this.explorerUrl}/tx/${approveTxHash}`
+      : undefined;
+    process.stderr.write(`  Approve tx: ${approveTxHash}\n`);
+    if (approveTxUrl) process.stderr.write(`  Explorer: ${approveTxUrl}\n`);
+
+    await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+    process.stderr.write(
+      `  Approved ${amount} of ${token} for ${spender}\n`,
+    );
   }
 
   /** Fetch EIP-1559 fee params from the network. Returns [maxFeePerGas, maxPriorityFeePerGas]. */
@@ -166,6 +241,20 @@ export class Executor {
 
     const publicClient = createPublicClient({ transport: http(rpcUrl) });
     const walletClient = createWalletClient({ account, transport: http(rpcUrl) });
+
+    // Auto-approve ERC20 tokens if needed
+    if (tx.approvals && tx.approvals.length > 0) {
+      for (const approval of tx.approvals) {
+        await this.checkAndApprove(
+          approval.token,
+          approval.spender,
+          approval.amount,
+          account.address,
+          publicClient,
+          walletClient,
+        );
+      }
+    }
 
     // Dynamic gas estimation with buffer
     const gasLimit = await this.estimateGasWithBuffer(rpcUrl, tx, account.address);

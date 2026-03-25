@@ -134,7 +134,7 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
     private readonly rpcUrl;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
-    buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
+    buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx>;
     buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
     buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
     getPendingRewards(_gauge: Address, _user: Address): Promise<RewardInfo[]>;

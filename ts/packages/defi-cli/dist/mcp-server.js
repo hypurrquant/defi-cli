@@ -1542,7 +1542,8 @@ var init_dist3 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 2e5
+          gas_estimate: 2e5,
+          approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
         };
       }
       async quote(params) {
@@ -1712,7 +1713,11 @@ var init_dist3 = __esm({
           to: pm,
           data,
           value: 0n,
-          gas_estimate: 5e5
+          gas_estimate: 5e5,
+          approvals: [
+            { token: token0, spender: pm, amount: amount0 },
+            { token: token1, spender: pm, amount: amount1 }
+          ]
         };
       }
       async buildRemoveLiquidity(_params) {
@@ -1771,7 +1776,8 @@ var init_dist3 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 15e4
+          gas_estimate: 15e4,
+          approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
         };
       }
       async quote(params) {
@@ -1890,7 +1896,11 @@ var init_dist3 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [
+            { token: params.token_a, spender: this.router, amount: params.amount_a },
+            { token: params.token_b, spender: this.router, amount: params.amount_b }
+          ]
         };
       }
       async buildRemoveLiquidity(params) {
@@ -1977,7 +1987,8 @@ var init_dist3 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 25e4
+          gas_estimate: 25e4,
+          approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
         };
       }
       async quote(params) {
@@ -2095,7 +2106,11 @@ var init_dist3 = __esm({
           to: pm,
           data,
           value: 0n,
-          gas_estimate: 5e5
+          gas_estimate: 5e5,
+          approvals: [
+            { token: token0, spender: pm, amount: amount0 },
+            { token: token1, spender: pm, amount: amount1 }
+          ]
         };
       }
       async buildRemoveLiquidity(_params) {
@@ -2272,7 +2287,8 @@ var init_dist3 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 2e5
+          gas_estimate: 2e5,
+          approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
         };
       }
       async callGetAmountsOut(client, callData) {
@@ -2355,7 +2371,11 @@ var init_dist3 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 35e4
+          gas_estimate: 35e4,
+          approvals: [
+            { token: params.token_a, spender: this.router, amount: params.amount_a },
+            { token: params.token_b, spender: this.router, amount: params.amount_b }
+          ]
         };
       }
       async buildRemoveLiquidity(params) {
@@ -2481,7 +2501,7 @@ var init_dist3 = __esm({
         return this.protocolName;
       }
       // IGauge
-      async buildDeposit(gauge, amount, tokenId) {
+      async buildDeposit(gauge, amount, tokenId, lpToken) {
         if (tokenId !== void 0) {
           const data2 = encodeFunctionData8({
             abi: gaugeAbi,
@@ -2493,7 +2513,8 @@ var init_dist3 = __esm({
             to: gauge,
             data: data2,
             value: 0n,
-            gas_estimate: 2e5
+            gas_estimate: 2e5,
+            approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
           };
         }
         const data = encodeFunctionData8({
@@ -2506,7 +2527,8 @@ var init_dist3 = __esm({
           to: gauge,
           data,
           value: 0n,
-          gas_estimate: 2e5
+          gas_estimate: 2e5,
+          approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
         };
       }
       async buildWithdraw(gauge, amount) {
@@ -2854,7 +2876,8 @@ var init_dist3 = __esm({
           to: this.pool,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
         };
       }
       async buildBorrow(params) {
@@ -2884,7 +2907,8 @@ var init_dist3 = __esm({
           to: this.pool,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
         };
       }
       async buildWithdraw(params) {
@@ -3183,7 +3207,8 @@ var init_dist3 = __esm({
           to: this.pool,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
         };
       }
       async buildBorrow(params) {
@@ -3213,7 +3238,8 @@ var init_dist3 = __esm({
           to: this.pool,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
         };
       }
       async buildWithdraw(params) {
@@ -4747,8 +4773,12 @@ import { z } from "zod";
 
 // src/executor.ts
 init_dist2();
-import { createPublicClient as createPublicClient20, createWalletClient, http as http20 } from "viem";
+import { createPublicClient as createPublicClient20, createWalletClient, http as http20, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData23 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+var ERC20_ABI4 = parseAbi26([
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function approve(address spender, uint256 amount) external returns (bool)"
+]);
 var GAS_BUFFER_BPS = 12000n;
 var DEFAULT_PRIORITY_FEE_WEI = 20000000000n;
 var MAX_GAS_LIMIT = 5000000000n;
@@ -4764,6 +4794,61 @@ var Executor = class _Executor {
   /** Apply 20% buffer to a gas estimate */
   static applyGasBuffer(gas) {
     return gas * GAS_BUFFER_BPS / 10000n;
+  }
+  /**
+   * Check allowance for a single token/spender pair and send an approve tx if needed.
+   * Only called in broadcast mode (not dry-run).
+   */
+  async checkAndApprove(token, spender, amount, owner, publicClient, walletClient) {
+    const allowance = await publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI4,
+      functionName: "allowance",
+      args: [owner, spender]
+    });
+    if (allowance >= amount) return;
+    process.stderr.write(
+      `  Approving ${amount} of ${token} for ${spender}...
+`
+    );
+    const approveData = encodeFunctionData23({
+      abi: ERC20_ABI4,
+      functionName: "approve",
+      args: [spender, amount]
+    });
+    const rpcUrl = this.rpcUrl;
+    const gasLimit = await (async () => {
+      try {
+        const estimated = await publicClient.estimateGas({
+          to: token,
+          data: approveData,
+          account: owner
+        });
+        const buffered = _Executor.applyGasBuffer(estimated);
+        return buffered > MAX_GAS_LIMIT ? MAX_GAS_LIMIT : buffered;
+      } catch {
+        return 80000n;
+      }
+    })();
+    const [maxFeePerGas, maxPriorityFeePerGas] = await this.fetchEip1559Fees(rpcUrl);
+    const approveTxHash = await walletClient.sendTransaction({
+      chain: null,
+      to: token,
+      data: approveData,
+      gas: gasLimit > 0n ? gasLimit : void 0,
+      maxFeePerGas: maxFeePerGas > 0n ? maxFeePerGas : void 0,
+      maxPriorityFeePerGas: maxPriorityFeePerGas > 0n ? maxPriorityFeePerGas : void 0
+    });
+    const approveTxUrl = this.explorerUrl ? `${this.explorerUrl}/tx/${approveTxHash}` : void 0;
+    process.stderr.write(`  Approve tx: ${approveTxHash}
+`);
+    if (approveTxUrl) process.stderr.write(`  Explorer: ${approveTxUrl}
+`);
+    await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+    process.stderr.write(
+      `  Approved ${amount} of ${token} for ${spender}
+`
+    );
   }
   /** Fetch EIP-1559 fee params from the network. Returns [maxFeePerGas, maxPriorityFeePerGas]. */
   async fetchEip1559Fees(rpcUrl) {
@@ -4880,6 +4965,18 @@ var Executor = class _Executor {
     }
     const publicClient = createPublicClient20({ transport: http20(rpcUrl) });
     const walletClient = createWalletClient({ account, transport: http20(rpcUrl) });
+    if (tx.approvals && tx.approvals.length > 0) {
+      for (const approval of tx.approvals) {
+        await this.checkAndApprove(
+          approval.token,
+          approval.spender,
+          approval.amount,
+          account.address,
+          publicClient,
+          walletClient
+        );
+      }
+    }
     const gasLimit = await this.estimateGasWithBuffer(rpcUrl, tx, account.address);
     const [maxFeePerGas, maxPriorityFeePerGas] = await this.fetchEip1559Fees(rpcUrl);
     process.stderr.write(`Broadcasting transaction to ${rpcUrl}...
@@ -5506,8 +5603,8 @@ server.tool(
       const user = address;
       const { ProtocolCategory: ProtocolCategory2, multicallRead: multicallRead2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
       const { createLending: _createLending } = await Promise.resolve().then(() => (init_dist3(), dist_exports2));
-      const { encodeFunctionData: encodeFunctionData23, parseAbi: parseAbi26 } = await import("viem");
-      const POOL_ABI3 = parseAbi26([
+      const { encodeFunctionData: encodeFunctionData24, parseAbi: parseAbi27 } = await import("viem");
+      const POOL_ABI3 = parseAbi27([
         "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)"
       ]);
       const lendingProtos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory2.Lending);
@@ -5516,7 +5613,7 @@ server.tool(
         const poolAddr = p.contracts?.pool;
         if (!poolAddr) continue;
         try {
-          const callData = encodeFunctionData23({ abi: POOL_ABI3, functionName: "getUserAccountData", args: [user] });
+          const callData = encodeFunctionData24({ abi: POOL_ABI3, functionName: "getUserAccountData", args: [user] });
           const results = await multicallRead2(rpcUrl, [[poolAddr, callData]]);
           const raw = results[0];
           if (!raw || raw.length < 2 + 6 * 64) continue;

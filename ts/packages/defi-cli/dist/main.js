@@ -9,7 +9,7 @@ import { Command } from "commander";
 import { createRequire } from "module";
 
 // src/executor.ts
-import { createPublicClient as createPublicClient2, createWalletClient, http as http2 } from "viem";
+import { createPublicClient as createPublicClient2, createWalletClient, http as http2, parseAbi as parseAbi3, encodeFunctionData as encodeFunctionData3 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 // ../defi-core/dist/index.js
@@ -1016,6 +1016,10 @@ var Registry = class _Registry {
 };
 
 // src/executor.ts
+var ERC20_ABI = parseAbi3([
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function approve(address spender, uint256 amount) external returns (bool)"
+]);
 var GAS_BUFFER_BPS = 12000n;
 var DEFAULT_PRIORITY_FEE_WEI = 20000000000n;
 var MAX_GAS_LIMIT = 5000000000n;
@@ -1031,6 +1035,61 @@ var Executor = class _Executor {
   /** Apply 20% buffer to a gas estimate */
   static applyGasBuffer(gas) {
     return gas * GAS_BUFFER_BPS / 10000n;
+  }
+  /**
+   * Check allowance for a single token/spender pair and send an approve tx if needed.
+   * Only called in broadcast mode (not dry-run).
+   */
+  async checkAndApprove(token, spender, amount, owner, publicClient, walletClient) {
+    const allowance = await publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "allowance",
+      args: [owner, spender]
+    });
+    if (allowance >= amount) return;
+    process.stderr.write(
+      `  Approving ${amount} of ${token} for ${spender}...
+`
+    );
+    const approveData = encodeFunctionData3({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [spender, amount]
+    });
+    const rpcUrl = this.rpcUrl;
+    const gasLimit = await (async () => {
+      try {
+        const estimated = await publicClient.estimateGas({
+          to: token,
+          data: approveData,
+          account: owner
+        });
+        const buffered = _Executor.applyGasBuffer(estimated);
+        return buffered > MAX_GAS_LIMIT ? MAX_GAS_LIMIT : buffered;
+      } catch {
+        return 80000n;
+      }
+    })();
+    const [maxFeePerGas, maxPriorityFeePerGas] = await this.fetchEip1559Fees(rpcUrl);
+    const approveTxHash = await walletClient.sendTransaction({
+      chain: null,
+      to: token,
+      data: approveData,
+      gas: gasLimit > 0n ? gasLimit : void 0,
+      maxFeePerGas: maxFeePerGas > 0n ? maxFeePerGas : void 0,
+      maxPriorityFeePerGas: maxPriorityFeePerGas > 0n ? maxPriorityFeePerGas : void 0
+    });
+    const approveTxUrl = this.explorerUrl ? `${this.explorerUrl}/tx/${approveTxHash}` : void 0;
+    process.stderr.write(`  Approve tx: ${approveTxHash}
+`);
+    if (approveTxUrl) process.stderr.write(`  Explorer: ${approveTxUrl}
+`);
+    await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+    process.stderr.write(
+      `  Approved ${amount} of ${token} for ${spender}
+`
+    );
   }
   /** Fetch EIP-1559 fee params from the network. Returns [maxFeePerGas, maxPriorityFeePerGas]. */
   async fetchEip1559Fees(rpcUrl) {
@@ -1147,6 +1206,18 @@ var Executor = class _Executor {
     }
     const publicClient = createPublicClient2({ transport: http2(rpcUrl) });
     const walletClient = createWalletClient({ account, transport: http2(rpcUrl) });
+    if (tx.approvals && tx.approvals.length > 0) {
+      for (const approval of tx.approvals) {
+        await this.checkAndApprove(
+          approval.token,
+          approval.spender,
+          approval.amount,
+          account.address,
+          publicClient,
+          walletClient
+        );
+      }
+    }
     const gasLimit = await this.estimateGasWithBuffer(rpcUrl, tx, account.address);
     const [maxFeePerGas, maxPriorityFeePerGas] = await this.fetchEip1559Fees(rpcUrl);
     process.stderr.write(`Broadcasting transaction to ${rpcUrl}...
@@ -1723,10 +1794,10 @@ function registerSchema(parent, getOpts) {
 }
 
 // ../defi-protocols/dist/index.js
-import { encodeFunctionData as encodeFunctionData3, parseAbi as parseAbi3, createPublicClient as createPublicClient4, http as http4, decodeAbiParameters } from "viem";
+import { encodeFunctionData as encodeFunctionData4, parseAbi as parseAbi4, createPublicClient as createPublicClient4, http as http4, decodeAbiParameters } from "viem";
 import { encodeFunctionData as encodeFunctionData22, parseAbi as parseAbi22, createPublicClient as createPublicClient22, http as http22, decodeFunctionResult as decodeFunctionResult2, decodeAbiParameters as decodeAbiParameters2 } from "viem";
 import { encodeFunctionData as encodeFunctionData32, parseAbi as parseAbi32, createPublicClient as createPublicClient32, http as http32, decodeAbiParameters as decodeAbiParameters3, concatHex, zeroAddress } from "viem";
-import { encodeFunctionData as encodeFunctionData4, parseAbi as parseAbi4, zeroAddress as zeroAddress2 } from "viem";
+import { encodeFunctionData as encodeFunctionData42, parseAbi as parseAbi42, zeroAddress as zeroAddress2 } from "viem";
 import { encodeFunctionData as encodeFunctionData5, parseAbi as parseAbi5 } from "viem";
 import { encodeFunctionData as encodeFunctionData6, parseAbi as parseAbi6, createPublicClient as createPublicClient42, http as http42, decodeAbiParameters as decodeAbiParameters4 } from "viem";
 import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, zeroAddress as zeroAddress3 } from "viem";
@@ -1749,19 +1820,19 @@ import { parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } fr
 import { parseAbi as parseAbi24, encodeFunctionData as encodeFunctionData222 } from "viem";
 import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi25 } from "viem";
 var DEFAULT_FEE = 3e3;
-var swapRouterAbi = parseAbi3([
+var swapRouterAbi = parseAbi4([
   "struct ExactInputSingleParams { address tokenIn; address tokenOut; uint24 fee; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96; }",
   "function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut)"
 ]);
-var quoterAbi = parseAbi3([
+var quoterAbi = parseAbi4([
   "struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }",
   "function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)"
 ]);
-var ramsesQuoterAbi = parseAbi3([
+var ramsesQuoterAbi = parseAbi4([
   "struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; int24 tickSpacing; uint160 sqrtPriceLimitX96; }",
   "function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)"
 ]);
-var positionManagerAbi = parseAbi3([
+var positionManagerAbi = parseAbi4([
   "struct MintParams { address token0; address token1; uint24 fee; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
   "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
 ]);
@@ -1794,7 +1865,7 @@ var UniswapV3Adapter = class {
   async buildSwap(params) {
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
     const amountOutMinimum = 0n;
-    const data = encodeFunctionData3({
+    const data = encodeFunctionData4({
       abi: swapRouterAbi,
       functionName: "exactInputSingle",
       args: [
@@ -1815,7 +1886,8 @@ var UniswapV3Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 2e5
+      gas_estimate: 2e5,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async quote(params) {
@@ -1830,7 +1902,7 @@ var UniswapV3Adapter = class {
           tickSpacings.map(async (ts) => {
             const result = await client2.call({
               to: this.quoter,
-              data: encodeFunctionData3({
+              data: encodeFunctionData4({
                 abi: ramsesQuoterAbi,
                 functionName: "quoteExactInputSingle",
                 args: [
@@ -1876,7 +1948,7 @@ var UniswapV3Adapter = class {
         feeTiers.map(async (fee) => {
           const result = await client2.call({
             to: this.quoter,
-            data: encodeFunctionData3({
+            data: encodeFunctionData4({
               abi: quoterAbi,
               functionName: "quoteExactInputSingle",
               args: [
@@ -1915,7 +1987,7 @@ var UniswapV3Adapter = class {
       }
     }
     const client = createPublicClient4({ transport: http4(this.rpcUrl) });
-    const callData = encodeFunctionData3({
+    const callData = encodeFunctionData4({
       abi: swapRouterAbi,
       functionName: "exactInputSingle",
       args: [
@@ -1961,7 +2033,7 @@ var UniswapV3Adapter = class {
     const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
     const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
     const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
-    const data = encodeFunctionData3({
+    const data = encodeFunctionData4({
       abi: positionManagerAbi,
       functionName: "mint",
       args: [
@@ -1985,7 +2057,11 @@ var UniswapV3Adapter = class {
       to: pm,
       data,
       value: 0n,
-      gas_estimate: 5e5
+      gas_estimate: 5e5,
+      approvals: [
+        { token: token0, spender: pm, amount: amount0 },
+        { token: token1, spender: pm, amount: amount1 }
+      ]
     };
   }
   async buildRemoveLiquidity(_params) {
@@ -2044,7 +2120,8 @@ var UniswapV2Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 15e4
+      gas_estimate: 15e4,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async quote(params) {
@@ -2163,7 +2240,11 @@ var UniswapV2Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [
+        { token: params.token_a, spender: this.router, amount: params.amount_a },
+        { token: params.token_b, spender: this.router, amount: params.amount_b }
+      ]
     };
   }
   async buildRemoveLiquidity(params) {
@@ -2250,7 +2331,8 @@ var AlgebraV3Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 25e4
+      gas_estimate: 25e4,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async quote(params) {
@@ -2368,7 +2450,11 @@ var AlgebraV3Adapter = class {
       to: pm,
       data,
       value: 0n,
-      gas_estimate: 5e5
+      gas_estimate: 5e5,
+      approvals: [
+        { token: token0, spender: pm, amount: amount0 },
+        { token: token1, spender: pm, amount: amount1 }
+      ]
     };
   }
   async buildRemoveLiquidity(_params) {
@@ -2377,7 +2463,7 @@ var AlgebraV3Adapter = class {
     );
   }
 };
-var abi3 = parseAbi4([
+var abi3 = parseAbi42([
   "function swapSingleTokenExactIn(address pool, address tokenIn, address tokenOut, uint256 exactAmountIn, uint256 minAmountOut, uint256 deadline, bool wethIsEth, bytes calldata userData) external returns (uint256 amountOut)"
 ]);
 var BalancerV3Adapter = class {
@@ -2397,7 +2483,7 @@ var BalancerV3Adapter = class {
   async buildSwap(params) {
     const minAmountOut = 0n;
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-    const data = encodeFunctionData4({
+    const data = encodeFunctionData42({
       abi: abi3,
       functionName: "swapSingleTokenExactIn",
       args: [
@@ -2545,7 +2631,8 @@ var SolidlyAdapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 2e5
+      gas_estimate: 2e5,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async callGetAmountsOut(client, callData) {
@@ -2628,7 +2715,11 @@ var SolidlyAdapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 35e4
+      gas_estimate: 35e4,
+      approvals: [
+        { token: params.token_a, spender: this.router, amount: params.amount_a },
+        { token: params.token_b, spender: this.router, amount: params.amount_b }
+      ]
     };
   }
   async buildRemoveLiquidity(params) {
@@ -2754,7 +2845,7 @@ var SolidlyGaugeAdapter = class {
     return this.protocolName;
   }
   // IGauge
-  async buildDeposit(gauge, amount, tokenId) {
+  async buildDeposit(gauge, amount, tokenId, lpToken) {
     if (tokenId !== void 0) {
       const data2 = encodeFunctionData8({
         abi: gaugeAbi,
@@ -2766,7 +2857,8 @@ var SolidlyGaugeAdapter = class {
         to: gauge,
         data: data2,
         value: 0n,
-        gas_estimate: 2e5
+        gas_estimate: 2e5,
+        approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
       };
     }
     const data = encodeFunctionData8({
@@ -2779,7 +2871,8 @@ var SolidlyGaugeAdapter = class {
       to: gauge,
       data,
       value: 0n,
-      gas_estimate: 2e5
+      gas_estimate: 2e5,
+      approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
     };
   }
   async buildWithdraw(gauge, amount) {
@@ -3079,7 +3172,7 @@ var POOL_ABI = parseAbi10([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)"
 ]);
-var ERC20_ABI = parseAbi10([
+var ERC20_ABI2 = parseAbi10([
   "function totalSupply() external view returns (uint256)"
 ]);
 var INCENTIVES_ABI = parseAbi10([
@@ -3132,7 +3225,8 @@ var AaveV3Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildBorrow(params) {
@@ -3162,7 +3256,8 @@ var AaveV3Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildWithdraw(params) {
@@ -3204,12 +3299,12 @@ var AaveV3Adapter = class {
     const [totalSupply, totalBorrow] = await Promise.all([
       client.readContract({
         address: aTokenAddress,
-        abi: ERC20_ABI,
+        abi: ERC20_ABI2,
         functionName: "totalSupply"
       }).catch(() => 0n),
       client.readContract({
         address: variableDebtTokenAddress,
-        abi: ERC20_ABI,
+        abi: ERC20_ABI2,
         functionName: "totalSupply"
       }).catch(() => 0n)
     ]);
@@ -3433,7 +3528,7 @@ var POOL_ABI2 = parseAbi11([
   //            [9]=variableDebtTokenAddress, [10]=interestRateStrategyAddress, [11]=id
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 variableBorrowIndex, uint128 currentLiquidityRate, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint8 id)"
 ]);
-var ERC20_ABI2 = parseAbi11([
+var ERC20_ABI22 = parseAbi11([
   "function totalSupply() external view returns (uint256)"
 ]);
 function u256ToF642(v) {
@@ -3466,7 +3561,8 @@ var AaveV2Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildBorrow(params) {
@@ -3496,7 +3592,8 @@ var AaveV2Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildWithdraw(params) {
@@ -3538,12 +3635,12 @@ var AaveV2Adapter = class {
     const [totalSupply, totalBorrow] = await Promise.all([
       client.readContract({
         address: aTokenAddress,
-        abi: ERC20_ABI2,
+        abi: ERC20_ABI22,
         functionName: "totalSupply"
       }).catch(() => 0n),
       client.readContract({
         address: variableDebtTokenAddress,
-        abi: ERC20_ABI2,
+        abi: ERC20_ABI22,
         functionName: "totalSupply"
       }).catch(() => 0n)
     ]);

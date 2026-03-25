@@ -71,7 +71,8 @@ var UniswapV3Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 2e5
+      gas_estimate: 2e5,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async quote(params) {
@@ -241,7 +242,11 @@ var UniswapV3Adapter = class {
       to: pm,
       data,
       value: 0n,
-      gas_estimate: 5e5
+      gas_estimate: 5e5,
+      approvals: [
+        { token: token0, spender: pm, amount: amount0 },
+        { token: token1, spender: pm, amount: amount1 }
+      ]
     };
   }
   async buildRemoveLiquidity(_params) {
@@ -304,7 +309,8 @@ var UniswapV2Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 15e4
+      gas_estimate: 15e4,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async quote(params) {
@@ -423,7 +429,11 @@ var UniswapV2Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [
+        { token: params.token_a, spender: this.router, amount: params.amount_a },
+        { token: params.token_b, spender: this.router, amount: params.amount_b }
+      ]
     };
   }
   async buildRemoveLiquidity(params) {
@@ -514,7 +524,8 @@ var AlgebraV3Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 25e4
+      gas_estimate: 25e4,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async quote(params) {
@@ -632,7 +643,11 @@ var AlgebraV3Adapter = class {
       to: pm,
       data,
       value: 0n,
-      gas_estimate: 5e5
+      gas_estimate: 5e5,
+      approvals: [
+        { token: token0, spender: pm, amount: amount0 },
+        { token: token1, spender: pm, amount: amount1 }
+      ]
     };
   }
   async buildRemoveLiquidity(_params) {
@@ -821,7 +836,8 @@ var SolidlyAdapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 2e5
+      gas_estimate: 2e5,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
     };
   }
   async callGetAmountsOut(client, callData) {
@@ -904,7 +920,11 @@ var SolidlyAdapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 35e4
+      gas_estimate: 35e4,
+      approvals: [
+        { token: params.token_a, spender: this.router, amount: params.amount_a },
+        { token: params.token_b, spender: this.router, amount: params.amount_b }
+      ]
     };
   }
   async buildRemoveLiquidity(params) {
@@ -1038,7 +1058,7 @@ var SolidlyGaugeAdapter = class {
     return this.protocolName;
   }
   // IGauge
-  async buildDeposit(gauge, amount, tokenId) {
+  async buildDeposit(gauge, amount, tokenId, lpToken) {
     if (tokenId !== void 0) {
       const data2 = encodeFunctionData8({
         abi: gaugeAbi,
@@ -1050,7 +1070,8 @@ var SolidlyGaugeAdapter = class {
         to: gauge,
         data: data2,
         value: 0n,
-        gas_estimate: 2e5
+        gas_estimate: 2e5,
+        approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
       };
     }
     const data = encodeFunctionData8({
@@ -1063,7 +1084,8 @@ var SolidlyGaugeAdapter = class {
       to: gauge,
       data,
       value: 0n,
-      gas_estimate: 2e5
+      gas_estimate: 2e5,
+      approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
     };
   }
   async buildWithdraw(gauge, amount) {
@@ -1427,7 +1449,8 @@ var AaveV3Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildBorrow(params) {
@@ -1457,7 +1480,8 @@ var AaveV3Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildWithdraw(params) {
@@ -1768,7 +1792,8 @@ var AaveV2Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildBorrow(params) {
@@ -1798,7 +1823,8 @@ var AaveV2Adapter = class {
       to: this.pool,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      approvals: [{ token: params.asset, spender: this.pool, amount: params.amount }]
     };
   }
   async buildWithdraw(params) {
