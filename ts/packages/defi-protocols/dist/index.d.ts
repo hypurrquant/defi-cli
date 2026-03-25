@@ -108,7 +108,6 @@ declare class SolidlyAdapter implements IDex {
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
-    private callGetAmountsOut;
     private encodeV1;
     private encodeV2;
     quote(params: QuoteParams): Promise<QuoteResult>;

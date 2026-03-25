@@ -1,8 +1,10 @@
-import { createPublicClient, http, parseAbi, encodeFunctionData, zeroAddress } from "viem";
-import type { Address } from "viem";
+import { parseAbi, encodeFunctionData, decodeFunctionResult, zeroAddress } from "viem";
+import type { Address, Hex } from "viem";
 import type { ILending } from "@hypurrquant/defi-core";
 import {
   DefiError,
+  multicallRead,
+  decodeU256,
   type ProtocolEntry,
   type SupplyParams,
   type BorrowParams,
@@ -51,6 +53,32 @@ function defaultMarketParams(loanToken: Address = zeroAddress as Address): Marke
     irm: zeroAddress as Address,
     lltv: 0n,
   };
+}
+
+function decodeMarket(data: Hex | null): [bigint, bigint, bigint, bigint, bigint, bigint] | null {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult({
+      abi: MORPHO_ABI,
+      functionName: "market",
+      data,
+    }) as [bigint, bigint, bigint, bigint, bigint, bigint];
+  } catch {
+    return null;
+  }
+}
+
+function decodeMarketParams(data: Hex | null): [Address, Address, Address, Address, bigint] | null {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult({
+      abi: MORPHO_ABI,
+      functionName: "idToMarketParams",
+      data,
+    }) as [Address, Address, Address, Address, bigint];
+  } catch {
+    return null;
+  }
 }
 
 export class MorphoBlueAdapter implements ILending {
@@ -144,15 +172,14 @@ export class MorphoBlueAdapter implements ILending {
       throw DefiError.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
     }
 
-    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    // Batch 1: supplyQueueLength (gate check)
+    const [queueLenRaw] = await multicallRead(this.rpcUrl, [
+      [this.defaultVault, encodeFunctionData({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })],
+    ]).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] supplyQueueLength failed: ${e}`); });
 
-    const queueLen = await client.readContract({
-      address: this.defaultVault,
-      abi: META_MORPHO_ABI,
-      functionName: "supplyQueueLength",
-    }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] supplyQueueLength failed: ${e}`); });
+    const queueLen = decodeU256(queueLenRaw ?? null);
 
-    if ((queueLen as bigint) === 0n) {
+    if (queueLen === 0n) {
       return {
         protocol: this.protocolName,
         asset,
@@ -164,44 +191,44 @@ export class MorphoBlueAdapter implements ILending {
       };
     }
 
-    const marketId = await client.readContract({
-      address: this.defaultVault,
-      abi: META_MORPHO_ABI,
-      functionName: "supplyQueue",
-      args: [0n],
-    }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] supplyQueue(0) failed: ${e}`); }) as `0x${string}`;
+    // supplyQueue(0) — single call, depends on queueLen > 0
+    const [marketIdRaw] = await multicallRead(this.rpcUrl, [
+      [this.defaultVault, encodeFunctionData({ abi: META_MORPHO_ABI, functionName: "supplyQueue", args: [0n] })],
+    ]).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] supplyQueue(0) failed: ${e}`); });
 
-    const mkt = await client.readContract({
-      address: this.morpho,
-      abi: MORPHO_ABI,
-      functionName: "market",
-      args: [marketId],
-    }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] market() failed: ${e}`); });
+    if (!marketIdRaw || marketIdRaw.length < 66) {
+      throw DefiError.rpcError(`[${this.protocolName}] supplyQueue(0) returned no data`);
+    }
+    const marketId = marketIdRaw.slice(0, 66) as `0x${string}`;
 
-    const [totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee] = mkt as [bigint, bigint, bigint, bigint, bigint, bigint];
+    // Batch 2: market + idToMarketParams (both depend on marketId, independent of each other)
+    const [marketRaw, paramsRaw] = await multicallRead(this.rpcUrl, [
+      [this.morpho, encodeFunctionData({ abi: MORPHO_ABI, functionName: "market", args: [marketId] })],
+      [this.morpho, encodeFunctionData({ abi: MORPHO_ABI, functionName: "idToMarketParams", args: [marketId] })],
+    ]).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] market/idToMarketParams failed: ${e}`); });
+
+    const mktDecoded = decodeMarket(marketRaw ?? null);
+    if (!mktDecoded) throw DefiError.rpcError(`[${this.protocolName}] market() returned no data`);
+    const [totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee] = mktDecoded;
+
+    const paramsDecoded = decodeMarketParams(paramsRaw ?? null);
+    if (!paramsDecoded) throw DefiError.rpcError(`[${this.protocolName}] idToMarketParams returned no data`);
+    const [loanToken, collateralToken, oracle, irm, lltv] = paramsDecoded;
 
     const supplyF = Number(totalSupplyAssets);
     const borrowF = Number(totalBorrowAssets);
     const util = supplyF > 0 ? borrowF / supplyF : 0;
 
-    const params2 = await client.readContract({
-      address: this.morpho,
-      abi: MORPHO_ABI,
-      functionName: "idToMarketParams",
-      args: [marketId],
-    }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] idToMarketParams failed: ${e}`); });
-
-    const [loanToken, collateralToken, oracle, irm, lltv] = params2 as [Address, Address, Address, Address, bigint];
-
     const irmMarketParams: MarketParams = { loanToken, collateralToken, oracle, irm, lltv };
     const irmMarket = { totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee };
 
-    const borrowRatePerSec = await client.readContract({
-      address: irm,
-      abi: IRM_ABI,
-      functionName: "borrowRateView",
-      args: [irmMarketParams, irmMarket],
-    }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] borrowRateView failed: ${e}`); }) as bigint;
+    // borrowRateView depends on both market + idToMarketParams results — keep separate
+    const borrowRatePerSec = await (async () => {
+      const [borrowRateRaw] = await multicallRead(this.rpcUrl!, [
+        [irm, encodeFunctionData({ abi: IRM_ABI, functionName: "borrowRateView", args: [irmMarketParams, irmMarket] })],
+      ]).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] borrowRateView failed: ${e}`); });
+      return decodeU256(borrowRateRaw ?? null);
+    })();
 
     const ratePerSec = Number(borrowRatePerSec) / 1e18;
     const borrowApy = ratePerSec * SECONDS_PER_YEAR * 100;

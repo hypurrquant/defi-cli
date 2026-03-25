@@ -1,8 +1,10 @@
-import { createPublicClient, http, parseAbi, encodeFunctionData, zeroAddress } from "viem";
-import type { Address } from "viem";
+import { createPublicClient, http, parseAbi, encodeFunctionData, decodeFunctionResult, zeroAddress } from "viem";
+import type { Address, Hex } from "viem";
 import type { ILending } from "@hypurrquant/defi-core";
 import {
   DefiError,
+  multicallRead,
+  decodeU256,
   type ProtocolEntry,
   type SupplyParams,
   type BorrowParams,
@@ -57,6 +59,51 @@ function u256ToF64(v: bigint): number {
   const MAX_U128 = (1n << 128n) - 1n;
   if (v > MAX_U128) return Infinity;
   return Number(v);
+}
+
+function decodeAddress(data: Hex | null): Address | null {
+  if (!data || data.length < 66) return null;
+  // ABI-encoded address: 12 bytes padding + 20 bytes address (total 32 bytes = 64 hex chars + 0x)
+  return `0x${data.slice(26, 66)}` as Address;
+}
+
+function decodeAddressArray(data: Hex | null): Address[] {
+  if (!data) return [];
+  try {
+    return decodeFunctionResult({
+      abi: REWARDS_CONTROLLER_ABI,
+      functionName: "getRewardsByAsset",
+      data,
+    }) as Address[];
+  } catch {
+    return [];
+  }
+}
+
+function decodeReserveData(data: Hex | null): ReturnType<typeof decodeFunctionResult> | null {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult({
+      abi: POOL_ABI,
+      functionName: "getReserveData",
+      data,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function decodeRewardsData(data: Hex | null): [bigint, bigint, bigint, bigint] | null {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult({
+      abi: REWARDS_CONTROLLER_ABI,
+      functionName: "getRewardsData",
+      data,
+    }) as [bigint, bigint, bigint, bigint];
+  } catch {
+    return null;
+  }
 }
 
 export class AaveV3Adapter implements ILending {
@@ -142,15 +189,24 @@ export class AaveV3Adapter implements ILending {
 
   async getRates(asset: Address): Promise<LendingRates> {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient({ transport: http(this.rpcUrl) });
-    const result = await client.readContract({
-      address: this.pool,
+
+    // Batch 1: getReserveData
+    const reserveCallData = encodeFunctionData({
       abi: POOL_ABI,
       functionName: "getReserveData",
       args: [asset],
-    }).catch((e: unknown) => {
+    });
+    const [reserveRaw] = await multicallRead(this.rpcUrl, [
+      [this.pool, reserveCallData],
+    ]).catch((e: unknown) => {
       throw DefiError.rpcError(`[${this.protocolName}] getReserveData failed: ${e}`);
     });
+
+    const reserveDecoded = decodeReserveData(reserveRaw ?? null);
+    if (!reserveDecoded) {
+      throw DefiError.rpcError(`[${this.protocolName}] getReserveData returned no data`);
+    }
+    const result = reserveDecoded as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, Address, Address, Address, Address, bigint, bigint, bigint];
 
     const RAY = 1e27;
     const SECONDS_PER_YEAR = 31536000;
@@ -168,18 +224,13 @@ export class AaveV3Adapter implements ILending {
     const aTokenAddress = result[8] as Address;
     const variableDebtTokenAddress = result[10] as Address;
 
-    const [totalSupply, totalBorrow] = await Promise.all([
-      client.readContract({
-        address: aTokenAddress,
-        abi: ERC20_ABI,
-        functionName: "totalSupply",
-      }).catch(() => 0n),
-      client.readContract({
-        address: variableDebtTokenAddress,
-        abi: ERC20_ABI,
-        functionName: "totalSupply",
-      }).catch(() => 0n),
+    // Batch 2: totalSupply for aToken + variableDebtToken
+    const [supplyRaw, borrowRaw] = await multicallRead(this.rpcUrl, [
+      [aTokenAddress, encodeFunctionData({ abi: ERC20_ABI, functionName: "totalSupply" })],
+      [variableDebtTokenAddress, encodeFunctionData({ abi: ERC20_ABI, functionName: "totalSupply" })],
     ]);
+    const totalSupply = decodeU256(supplyRaw ?? null);
+    const totalBorrow = decodeU256(borrowRaw ?? null);
 
     const utilization = totalSupply > 0n
       ? Number((totalBorrow * 10000n) / totalSupply) / 100
@@ -192,61 +243,52 @@ export class AaveV3Adapter implements ILending {
     const borrowEmissions: string[] = [];
 
     try {
-      const controllerAddr = await client.readContract({
-        address: aTokenAddress,
-        abi: INCENTIVES_ABI,
-        functionName: "getIncentivesController",
-      });
+      // Batch 3: getIncentivesController (single call)
+      const [controllerRaw] = await multicallRead(this.rpcUrl, [
+        [aTokenAddress, encodeFunctionData({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })],
+      ]);
+      const controllerAddr = decodeAddress(controllerRaw ?? null);
 
       if (controllerAddr && controllerAddr !== zeroAddress) {
-        const [supplyRewards, borrowRewards] = await Promise.all([
-          client.readContract({
-            address: controllerAddr,
-            abi: REWARDS_CONTROLLER_ABI,
-            functionName: "getRewardsByAsset",
-            args: [aTokenAddress],
-          }).catch(() => [] as Address[]),
-          client.readContract({
-            address: controllerAddr,
-            abi: REWARDS_CONTROLLER_ABI,
-            functionName: "getRewardsByAsset",
-            args: [variableDebtTokenAddress],
-          }).catch(() => [] as Address[]),
+        // Batch 4: getRewardsByAsset for aToken + variableDebtToken
+        const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead(this.rpcUrl, [
+          [controllerAddr, encodeFunctionData({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
+          [controllerAddr, encodeFunctionData({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })],
         ]);
+        const supplyRewards = decodeAddressArray(supplyRewardsRaw ?? null);
+        const borrowRewards = decodeAddressArray(borrowRewardsRaw ?? null);
 
-        // Fetch emissions data for supply rewards
-        const supplyDataPromises = supplyRewards.map((reward) =>
-          client.readContract({
-            address: controllerAddr,
-            abi: REWARDS_CONTROLLER_ABI,
-            functionName: "getRewardsData",
-            args: [aTokenAddress, reward],
-          }).catch(() => null),
-        );
-        const supplyData = await Promise.all(supplyDataPromises);
-        for (let i = 0; i < supplyRewards.length; i++) {
-          const data = supplyData[i];
-          if (data && data[1] > 0n) {
-            supplyRewardTokens.push(supplyRewards[i]);
-            supplyEmissions.push(data[1].toString());
+        // Batch 5: all getRewardsData calls for supply + borrow combined
+        const rewardsDataCalls: Array<[Address, Hex]> = [
+          ...supplyRewards.map((reward): [Address, Hex] => [
+            controllerAddr,
+            encodeFunctionData({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [aTokenAddress, reward] }),
+          ]),
+          ...borrowRewards.map((reward): [Address, Hex] => [
+            controllerAddr,
+            encodeFunctionData({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [variableDebtTokenAddress, reward] }),
+          ]),
+        ];
+
+        if (rewardsDataCalls.length > 0) {
+          const rewardsDataResults = await multicallRead(this.rpcUrl, rewardsDataCalls);
+
+          const supplyDataResults = rewardsDataResults.slice(0, supplyRewards.length);
+          const borrowDataResults = rewardsDataResults.slice(supplyRewards.length);
+
+          for (let i = 0; i < supplyRewards.length; i++) {
+            const data = decodeRewardsData(supplyDataResults[i] ?? null);
+            if (data && data[1] > 0n) {
+              supplyRewardTokens.push(supplyRewards[i]);
+              supplyEmissions.push(data[1].toString());
+            }
           }
-        }
-
-        // Fetch emissions data for borrow rewards
-        const borrowDataPromises = borrowRewards.map((reward) =>
-          client.readContract({
-            address: controllerAddr,
-            abi: REWARDS_CONTROLLER_ABI,
-            functionName: "getRewardsData",
-            args: [variableDebtTokenAddress, reward],
-          }).catch(() => null),
-        );
-        const borrowData = await Promise.all(borrowDataPromises);
-        for (let i = 0; i < borrowRewards.length; i++) {
-          const data = borrowData[i];
-          if (data && data[1] > 0n) {
-            borrowRewardTokens.push(borrowRewards[i]);
-            borrowEmissions.push(data[1].toString());
+          for (let i = 0; i < borrowRewards.length; i++) {
+            const data = decodeRewardsData(borrowDataResults[i] ?? null);
+            if (data && data[1] > 0n) {
+              borrowRewardTokens.push(borrowRewards[i]);
+              borrowEmissions.push(data[1].toString());
+            }
           }
         }
       }
@@ -263,39 +305,56 @@ export class AaveV3Adapter implements ILending {
 
     if ((hasSupplyRewards || hasBorrowRewards) && totalSupply > 0n) {
       try {
-        // Pool → AddressesProvider → Oracle
-        const providerAddr = await client.readContract({
-          address: this.pool,
-          abi: POOL_PROVIDER_ABI,
-          functionName: "ADDRESSES_PROVIDER",
-        });
-        const oracleAddr = await client.readContract({
-          address: providerAddr,
-          abi: ADDRESSES_PROVIDER_ABI,
-          functionName: "getPriceOracle",
-        });
-        const [assetPrice, baseCurrencyUnit, assetDecimals] = await Promise.all([
-          client.readContract({
-            address: oracleAddr,
-            abi: ORACLE_ABI,
-            functionName: "getAssetPrice",
-            args: [asset],
-          }),
-          client.readContract({
-            address: oracleAddr,
-            abi: ORACLE_ABI,
-            functionName: "BASE_CURRENCY_UNIT",
-          }),
-          client.readContract({
-            address: asset,
-            abi: ERC20_DECIMALS_ABI,
-            functionName: "decimals",
-          }).catch(() => 18),
+        // Pool → AddressesProvider → Oracle (sequential, each depends on previous)
+        const [providerRaw] = await multicallRead(this.rpcUrl, [
+          [this.pool, encodeFunctionData({ abi: POOL_PROVIDER_ABI, functionName: "ADDRESSES_PROVIDER" })],
+        ]);
+        const providerAddr = decodeAddress(providerRaw ?? null);
+        if (!providerAddr) throw new Error("No provider address");
+
+        const [oracleRaw] = await multicallRead(this.rpcUrl, [
+          [providerAddr, encodeFunctionData({ abi: ADDRESSES_PROVIDER_ABI, functionName: "getPriceOracle" })],
+        ]);
+        const oracleAddr = decodeAddress(oracleRaw ?? null);
+        if (!oracleAddr) throw new Error("No oracle address");
+
+        // Batch 6: assetPrice + BASE_CURRENCY_UNIT + asset decimals
+        const [assetPriceRaw, baseCurrencyUnitRaw, assetDecimalsRaw] = await multicallRead(this.rpcUrl, [
+          [oracleAddr, encodeFunctionData({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] })],
+          [oracleAddr, encodeFunctionData({ abi: ORACLE_ABI, functionName: "BASE_CURRENCY_UNIT" })],
+          [asset, encodeFunctionData({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })],
         ]);
 
-        const priceUnit = Number(baseCurrencyUnit);
+        const assetPrice = decodeU256(assetPriceRaw ?? null);
+        const baseCurrencyUnit = decodeU256(baseCurrencyUnitRaw ?? null);
+        // decimals() returns uint8, fits in lower bits of U256 slot
+        const assetDecimals = assetDecimalsRaw ? Number(decodeU256(assetDecimalsRaw)) : 18;
+
+        const priceUnit = Number(baseCurrencyUnit) || 1e8;
         const assetPriceF = Number(assetPrice) / priceUnit;
         const assetDecimalsDivisor = 10 ** assetDecimals;
+
+        // Collect all unique reward tokens across supply + borrow
+        const allRewardTokens = Array.from(new Set([...supplyRewardTokens, ...borrowRewardTokens])) as Address[];
+
+        // Batch 7: price + decimals for all reward tokens combined
+        const rewardPriceCalls: Array<[Address, Hex]> = allRewardTokens.flatMap((token): Array<[Address, Hex]> => [
+          [oracleAddr, encodeFunctionData({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [token] })],
+          [token, encodeFunctionData({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })],
+        ]);
+
+        const rewardPriceResults = rewardPriceCalls.length > 0
+          ? await multicallRead(this.rpcUrl, rewardPriceCalls)
+          : [];
+
+        const rewardPriceMap = new Map<string, { price: bigint; decimals: number }>();
+        for (let i = 0; i < allRewardTokens.length; i++) {
+          const priceRaw = rewardPriceResults[i * 2] ?? null;
+          const decimalsRaw = rewardPriceResults[i * 2 + 1] ?? null;
+          const price = decodeU256(priceRaw);
+          const decimals = decimalsRaw ? Number(decodeU256(decimalsRaw)) : 18;
+          rewardPriceMap.set(allRewardTokens[i].toLowerCase(), { price, decimals });
+        }
 
         // Supply-side incentive APY
         if (hasSupplyRewards) {
@@ -304,19 +363,9 @@ export class AaveV3Adapter implements ILending {
 
           for (let i = 0; i < supplyRewardTokens.length; i++) {
             const emissionPerSec = BigInt(supplyEmissions[i]);
-            const [rewardPrice, rewardDecimals] = await Promise.all([
-              client.readContract({
-                address: oracleAddr,
-                abi: ORACLE_ABI,
-                functionName: "getAssetPrice",
-                args: [supplyRewardTokens[i] as Address],
-              }).catch(() => 0n),
-              client.readContract({
-                address: supplyRewardTokens[i] as Address,
-                abi: ERC20_DECIMALS_ABI,
-                functionName: "decimals",
-              }).catch(() => 18),
-            ]);
+            const entry = rewardPriceMap.get(supplyRewardTokens[i].toLowerCase());
+            const rewardPrice = entry?.price ?? 0n;
+            const rewardDecimals = entry?.decimals ?? 18;
             if (rewardPrice > 0n) {
               const rewardPriceF = Number(rewardPrice) / priceUnit;
               const emissionPerYear = (Number(emissionPerSec) / (10 ** rewardDecimals)) * SECONDS_PER_YEAR;
@@ -335,19 +384,9 @@ export class AaveV3Adapter implements ILending {
 
           for (let i = 0; i < borrowRewardTokens.length; i++) {
             const emissionPerSec = BigInt(borrowEmissions[i]);
-            const [rewardPrice, rewardDecimals] = await Promise.all([
-              client.readContract({
-                address: oracleAddr,
-                abi: ORACLE_ABI,
-                functionName: "getAssetPrice",
-                args: [borrowRewardTokens[i] as Address],
-              }).catch(() => 0n),
-              client.readContract({
-                address: borrowRewardTokens[i] as Address,
-                abi: ERC20_DECIMALS_ABI,
-                functionName: "decimals",
-              }).catch(() => 18),
-            ]);
+            const entry = rewardPriceMap.get(borrowRewardTokens[i].toLowerCase());
+            const rewardPrice = entry?.price ?? 0n;
+            const rewardDecimals = entry?.decimals ?? 18;
             if (rewardPrice > 0n) {
               const rewardPriceF = Number(rewardPrice) / priceUnit;
               const emissionPerYear = (Number(emissionPerSec) / (10 ** rewardDecimals)) * SECONDS_PER_YEAR;

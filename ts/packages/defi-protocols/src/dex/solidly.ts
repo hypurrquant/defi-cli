@@ -1,7 +1,7 @@
-import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParameters } from "viem";
-import type { Address, PublicClient } from "viem";
+import { encodeFunctionData, parseAbi, decodeAbiParameters } from "viem";
+import type { Address } from "viem";
 
-import { DefiError } from "@hypurrquant/defi-core";
+import { DefiError, multicallRead } from "@hypurrquant/defi-core";
 import type {
   IDex,
   ProtocolEntry,
@@ -75,19 +75,6 @@ export class SolidlyAdapter implements IDex {
     };
   }
 
-  private async callGetAmountsOut(
-    client: PublicClient,
-    callData: `0x${string}`,
-  ): Promise<bigint> {
-    const result = await client.call({ to: this.router, data: callData });
-    if (!result.data) return 0n;
-    const [amounts] = decodeAbiParameters(
-      [{ name: "amounts", type: "uint256[]" }],
-      result.data,
-    );
-    return amounts.length >= 2 ? amounts[amounts.length - 1] : 0n;
-  }
-
   private encodeV1(params: QuoteParams, stable: boolean): `0x${string}` {
     return encodeFunctionData({
       abi,
@@ -107,10 +94,8 @@ export class SolidlyAdapter implements IDex {
   async quote(params: QuoteParams): Promise<QuoteResult> {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
 
-    const client = createPublicClient({ transport: http(this.rpcUrl) });
-
-    // Try all combinations: [volatile, stable] x [V1 ABI, V2 ABI (if factory present)]
-    // Pick the best (highest amountOut)
+    // Build all route variant candidates in one multicall batch.
+    // Order: V2 variants first (if factory present), then V1 volatile + stable.
     const candidates: Array<{ callData: `0x${string}`; stable: boolean }> = [
       { callData: this.encodeV1(params, false), stable: false },
       { callData: this.encodeV1(params, true), stable: true },
@@ -122,17 +107,28 @@ export class SolidlyAdapter implements IDex {
       );
     }
 
-    const results = await Promise.allSettled(
-      candidates.map((c) => this.callGetAmountsOut(client, c.callData)),
+    const rawResults = await multicallRead(
+      this.rpcUrl,
+      candidates.map((c) => [this.router, c.callData]),
     );
 
     let bestOut = 0n;
     let bestStable = false;
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      if (r.status === "fulfilled" && r.value > bestOut) {
-        bestOut = r.value;
-        bestStable = candidates[i].stable;
+    for (let i = 0; i < rawResults.length; i++) {
+      const raw = rawResults[i];
+      if (!raw) continue;
+      try {
+        const [amounts] = decodeAbiParameters(
+          [{ name: "amounts", type: "uint256[]" }],
+          raw,
+        );
+        const out = amounts.length >= 2 ? amounts[amounts.length - 1] : 0n;
+        if (out > bestOut) {
+          bestOut = out;
+          bestStable = candidates[i].stable;
+        }
+      } catch {
+        // Route failed — skip
       }
     }
 
