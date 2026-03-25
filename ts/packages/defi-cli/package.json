@@ -1,6 +1,7 @@
 {
-  "name": "defi-cli",
-  "version": "0.1.0",
+  "name": "@hypurrquant/defi-cli",
+  "version": "0.2.0",
+  "description": "Multi-chain DeFi CLI — lending, DEX, LP, bridge, vault, staking from your terminal",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -10,6 +11,30 @@
     "dist",
     "config"
   ],
+  "keywords": [
+    "defi",
+    "cli",
+    "hyperevm",
+    "hyperliquid",
+    "mantle",
+    "aave",
+    "uniswap",
+    "lending",
+    "dex",
+    "bridge",
+    "vault",
+    "staking",
+    "lp",
+    "evm",
+    "web3"
+  ],
+  "engines": {
+    "node": "^20.0.0 || ^22.0.0 || ^24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hypurrquant/defi-cli.git"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -18,10 +43,12 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@hypurrquant/defi-core": "workspace:*",
-    "@hypurrquant/defi-protocols": "workspace:*",
     "commander": "^13.0.0",
     "picocolors": "^1.1.0",
     "viem": "^2.23.0"
+  },
+  "devDependencies": {
+    "@hypurrquant/defi-core": "workspace:*",
+    "@hypurrquant/defi-protocols": "workspace:*"
   }
 }
