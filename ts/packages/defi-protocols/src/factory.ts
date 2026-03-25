@@ -13,6 +13,7 @@ import { WooFiAdapter } from "./dex/woofi.js";
 import { SolidlyGaugeAdapter } from "./dex/solidly_gauge.js";
 import { MasterChefAdapter } from "./dex/masterchef.js";
 import { MerchantMoeLBAdapter } from "./dex/merchant_moe_lb.js";
+import { KittenSwapFarmingAdapter } from "./dex/kittenswap_farming.js";
 
 // Trait interfaces
 import type { IDex } from "@hypurrquant/defi-core";
@@ -284,4 +285,21 @@ export function createOracleFromCdp(entry: ProtocolEntry, _asset: Address, rpcUr
 /** Create a MerchantMoeLBAdapter for Liquidity Book operations */
 export function createMerchantMoeLB(entry: ProtocolEntry, rpcUrl?: string): MerchantMoeLBAdapter {
   return new MerchantMoeLBAdapter(entry, rpcUrl);
+}
+
+// ============================================================
+// KittenSwap Algebra Farming
+// ============================================================
+
+/** Create a KittenSwapFarmingAdapter for Algebra eternal farming operations */
+export function createKittenSwapFarming(entry: ProtocolEntry, rpcUrl: string): KittenSwapFarmingAdapter {
+  const farmingCenter = entry.contracts?.["farming_center"];
+  if (!farmingCenter) {
+    throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'farming_center' contract address`);
+  }
+  const eternalFarming = entry.contracts?.["eternal_farming"];
+  if (!eternalFarming) {
+    throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'eternal_farming' contract address`);
+  }
+  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, rpcUrl);
 }

@@ -10,3 +10,5 @@ export { MasterChefAdapter } from "./masterchef.js";
 export { DexSpotPrice } from "./dex_price.js";
 export { MerchantMoeLBAdapter } from "./merchant_moe_lb.js";
 export type { LBAddLiquidityParams, LBRemoveLiquidityParams, LBPosition, RewardedPool } from "./merchant_moe_lb.js";
+export { KittenSwapFarmingAdapter } from "./kittenswap_farming.js";
+export type { IncentiveKey, FarmingPool } from "./kittenswap_farming.js";

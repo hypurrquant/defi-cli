@@ -108,6 +108,63 @@ declare class MerchantMoeLBAdapter {
     getUserPositions(user: Address, pool: Address, binIds?: number[]): Promise<LBPosition[]>;
 }
 
+interface IncentiveKey {
+    rewardToken: Address;
+    bonusRewardToken: Address;
+    pool: Address;
+    nonce: bigint;
+}
+interface FarmingPool {
+    pool: Address;
+    key: IncentiveKey;
+    totalReward: bigint;
+    bonusReward: bigint;
+    active: boolean;
+}
+declare class KittenSwapFarmingAdapter {
+    private readonly protocolName;
+    private readonly farmingCenter;
+    private readonly eternalFarming;
+    private readonly rpcUrl;
+    constructor(protocolName: string, farmingCenter: Address, eternalFarming: Address, rpcUrl: string);
+    name(): string;
+    /**
+     * Discover the active IncentiveKey for a given pool by scanning nonces 0–MAX_NONCE_SCAN.
+     * Checks KNOWN_NONCES first for instant resolution.
+     */
+    discoverIncentiveKey(pool: Address): Promise<IncentiveKey | null>;
+    /**
+     * Build a multicall tx that enters farming for a position NFT.
+     * Pattern: multicall([enterFarming(key, tokenId), claimReward(KITTEN, owner, max), claimReward(WHYPE, owner, max)])
+     */
+    buildEnterFarming(tokenId: bigint, pool: Address, owner: Address): Promise<DeFiTx>;
+    /**
+     * Build a tx that exits farming for a position NFT (unstakes).
+     */
+    buildExitFarming(tokenId: bigint, pool: Address): Promise<DeFiTx>;
+    /**
+     * Build a multicall tx that collects rewards for a staked position and claims them.
+     * Pattern: multicall([collectRewards(key, tokenId), claimReward(KITTEN, owner, max), claimReward(WHYPE, owner, max)])
+     */
+    buildCollectRewards(tokenId: bigint, pool: Address, owner: Address): Promise<DeFiTx>;
+    /**
+     * Build a tx that only claims already-accumulated rewards (no position change needed).
+     */
+    buildClaimReward(owner: Address): Promise<DeFiTx>;
+    /**
+     * Query pending rewards for a staked position NFT.
+     */
+    getPendingRewards(tokenId: bigint, pool: Address): Promise<{
+        reward: bigint;
+        bonusReward: bigint;
+    }>;
+    /**
+     * Discover all pools with active farming incentives.
+     * Iterates KNOWN_NONCES pools and verifies each against the on-chain incentives mapping.
+     */
+    discoverFarmingPools(): Promise<FarmingPool[]>;
+}
+
 /** Create a Dex implementation from a protocol registry entry */
 declare function createDex(entry: ProtocolEntry, rpcUrl?: string): IDex;
 /** Create a Lending implementation from a protocol registry entry */
@@ -136,6 +193,8 @@ declare function createOracleFromLending(entry: ProtocolEntry, rpcUrl: string): 
 declare function createOracleFromCdp(entry: ProtocolEntry, _asset: Address, rpcUrl: string): IOracle;
 /** Create a MerchantMoeLBAdapter for Liquidity Book operations */
 declare function createMerchantMoeLB(entry: ProtocolEntry, rpcUrl?: string): MerchantMoeLBAdapter;
+/** Create a KittenSwapFarmingAdapter for Algebra eternal farming operations */
+declare function createKittenSwapFarming(entry: ProtocolEntry, rpcUrl: string): KittenSwapFarmingAdapter;
 
 declare class UniswapV2Adapter implements IDex {
     private readonly protocolName;
@@ -533,4 +592,4 @@ declare class ERC721Adapter implements INft {
     getBalance(owner: Address, collection: Address): Promise<bigint>;
 }
 
-export { AaveOracleAdapter, AaveV2Adapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, KinetiqAdapter, type LBAddLiquidityParams, type LBPosition, type LBRemoveLiquidityParams, MasterChefAdapter, MerchantMoeLBAdapter, MorphoBlueAdapter, PendleAdapter, type RewardedPool, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createLending, createLiquidStaking, createMasterChef, createMerchantMoeLB, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };
+export { AaveOracleAdapter, AaveV2Adapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, type FarmingPool, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, type IncentiveKey, KinetiqAdapter, KittenSwapFarmingAdapter, type LBAddLiquidityParams, type LBPosition, type LBRemoveLiquidityParams, MasterChefAdapter, MerchantMoeLBAdapter, MorphoBlueAdapter, PendleAdapter, type RewardedPool, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createKittenSwapFarming, createLending, createLiquidStaking, createMasterChef, createMerchantMoeLB, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };
