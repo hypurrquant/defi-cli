@@ -1,3 +1,9 @@
+import { config } from "dotenv";
+import { resolve } from "path";
+// Load global ~/.defi/.env first, then CWD .env overrides it
+config({ path: resolve(process.env.HOME || "~", ".defi", ".env"), quiet: true });
+config({ quiet: true });
+
 import { program } from "./cli.js";
 import { showLandingPage } from "./landing.js";
 
@@ -9,7 +15,7 @@ async function main() {
       "status", "schema", "dex", "gauge", "lending", "cdp", "staking", "vault",
       "yield", "portfolio", "monitor", "alert", "scan", "arb", "positions",
       "price", "wallet", "token", "whales", "compare", "swap", "bridge", "nft",
-      "farm", "agent",
+      "farm", "agent", "setup", "init",
     ]);
     const hasSubcommand = rawArgs.some(a => !a.startsWith("-") && knownSubcommands.has(a));
     const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");

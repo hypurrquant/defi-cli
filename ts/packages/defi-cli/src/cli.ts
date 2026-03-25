@@ -33,6 +33,7 @@ import { registerSwap } from "./commands/swap.js";
 import { registerBridge } from "./commands/bridge.js";
 import { registerNft } from "./commands/nft.js";
 import { registerFarm } from "./commands/farm.js";
+import { registerSetup } from "./commands/setup.js";
 
 const BANNER = `
   ██████╗ ███████╗███████╗██╗     ██████╗██╗     ██╗
@@ -103,6 +104,7 @@ registerSwap(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
 registerNft(program, getOutputMode);
 registerFarm(program, getOutputMode, makeExecutor);
+registerSetup(program);
 
 // Agent mode command
 program
