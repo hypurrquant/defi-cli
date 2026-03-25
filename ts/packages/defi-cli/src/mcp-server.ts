@@ -522,28 +522,36 @@ server.tool(
           try {
             const oracle = createOracleFromLending(p, rpcUrl);
             const price = await oracle.getPrice(assetAddr);
-            if (price > 0) prices.push({ source: p.slug, source_type: "oracle", price });
+            if (price.price_f64 > 0) prices.push({ source: p.slug, source_type: "oracle", price: price.price_f64 });
           } catch { /* skip */ }
         }));
       }
 
       if (srcMode === "all" || srcMode === "dex") {
         const { DexSpotPrice } = await import("@hypurrquant/defi-protocols");
-        const WHYPE = "0x5555555555555555555555555555555555555555" as Address;
         const USDC_SYMBOL = "USDC";
         let usdcAddr: Address | undefined;
+        let usdcDecimals = 6;
         try {
-          usdcAddr = registry.resolveToken(chainName, USDC_SYMBOL).address as Address;
+          const usdcToken = registry.resolveToken(chainName, USDC_SYMBOL);
+          usdcAddr = usdcToken.address as Address;
+          usdcDecimals = usdcToken.decimals;
         } catch { /* no USDC on chain */ }
+
+        // Determine asset decimals from registry if resolved by symbol, else default 18
+        let assetDecimals = 18;
+        if (!/^0x[0-9a-fA-F]{40}$/.test(asset)) {
+          try { assetDecimals = registry.resolveToken(chainName, asset).decimals; } catch { /* default 18 */ }
+        }
 
         if (usdcAddr && assetAddr.toLowerCase() !== usdcAddr.toLowerCase()) {
           const dexProtos = registry.getProtocolsForChain(chainName)
             .filter(p => p.category === ProtocolCategory.Dex);
           await Promise.all(dexProtos.map(async (p) => {
             try {
-              const dex = new DexSpotPrice(p, rpcUrl);
-              const price = await dex.getPrice(assetAddr, usdcAddr!, WHYPE);
-              if (price > 0) prices.push({ source: p.slug, source_type: "dex", price });
+              const dex = createDex(p, rpcUrl);
+              const priceData = await DexSpotPrice.getPrice(dex, assetAddr, assetDecimals, usdcAddr!, usdcDecimals);
+              if (priceData.price_f64 > 0) prices.push({ source: p.slug, source_type: "dex", price: priceData.price_f64 });
             } catch { /* skip */ }
           }));
         }
@@ -596,13 +604,12 @@ server.tool(
       const { ProtocolCategory } = await import("@hypurrquant/defi-core");
       const { createOracleFromLending, DexSpotPrice } = await import("@hypurrquant/defi-protocols");
 
-      const tokens = registry.getTokensForChain(chainName);
+      const tokens = registry.tokens.get(chainName) ?? [];
       const lendingProtos = registry.getProtocolsForChain(chainName)
         .filter(p => p.category === ProtocolCategory.Lending);
       const dexProtos = registry.getProtocolsForChain(chainName)
         .filter(p => p.category === ProtocolCategory.Dex);
 
-      const WHYPE = "0x5555555555555555555555555555555555555555" as Address;
       let usdcAddr: Address | undefined;
       try {
         usdcAddr = registry.resolveToken(chainName, "USDC").address as Address;
@@ -627,16 +634,16 @@ server.tool(
         for (const p of lendingProtos) {
           try {
             const oracle = createOracleFromLending(p, rpcUrl);
-            const price = await oracle.getPrice(addr);
-            if (price > 0) { oraclePrice = price; break; }
+            const priceData = await oracle.getPrice(addr);
+            if (priceData.price_f64 > 0) { oraclePrice = priceData.price_f64; break; }
           } catch { /* skip */ }
         }
 
         for (const p of dexProtos) {
           try {
-            const dex = new DexSpotPrice(p, rpcUrl);
-            const price = await dex.getPrice(addr, usdcAddr, WHYPE);
-            if (price > 0) { dexPrice = price; break; }
+            const dex = createDex(p, rpcUrl);
+            const priceData = await DexSpotPrice.getPrice(dex, addr, token.decimals, usdcAddr!, 6);
+            if (priceData.price_f64 > 0) { dexPrice = priceData.price_f64; break; }
           } catch { /* skip */ }
         }
 

@@ -5346,27 +5346,36 @@ server.tool(
           try {
             const oracle = createOracleFromLending2(p, rpcUrl);
             const price = await oracle.getPrice(assetAddr);
-            if (price > 0) prices.push({ source: p.slug, source_type: "oracle", price });
+            if (price.price_f64 > 0) prices.push({ source: p.slug, source_type: "oracle", price: price.price_f64 });
           } catch {
           }
         }));
       }
       if (srcMode === "all" || srcMode === "dex") {
         const { DexSpotPrice: DexSpotPrice2 } = await Promise.resolve().then(() => (init_dist3(), dist_exports2));
-        const WHYPE2 = "0x5555555555555555555555555555555555555555";
         const USDC_SYMBOL = "USDC";
         let usdcAddr;
+        let usdcDecimals = 6;
         try {
-          usdcAddr = registry.resolveToken(chainName, USDC_SYMBOL).address;
+          const usdcToken = registry.resolveToken(chainName, USDC_SYMBOL);
+          usdcAddr = usdcToken.address;
+          usdcDecimals = usdcToken.decimals;
         } catch {
+        }
+        let assetDecimals = 18;
+        if (!/^0x[0-9a-fA-F]{40}$/.test(asset)) {
+          try {
+            assetDecimals = registry.resolveToken(chainName, asset).decimals;
+          } catch {
+          }
         }
         if (usdcAddr && assetAddr.toLowerCase() !== usdcAddr.toLowerCase()) {
           const dexProtos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory2.Dex);
           await Promise.all(dexProtos.map(async (p) => {
             try {
-              const dex = new DexSpotPrice2(p, rpcUrl);
-              const price = await dex.getPrice(assetAddr, usdcAddr, WHYPE2);
-              if (price > 0) prices.push({ source: p.slug, source_type: "dex", price });
+              const dex = createDex(p, rpcUrl);
+              const priceData = await DexSpotPrice2.getPrice(dex, assetAddr, assetDecimals, usdcAddr, usdcDecimals);
+              if (priceData.price_f64 > 0) prices.push({ source: p.slug, source_type: "dex", price: priceData.price_f64 });
             } catch {
             }
           }));
@@ -5409,10 +5418,9 @@ server.tool(
       const rpcUrl = chainConfig.effectiveRpcUrl();
       const { ProtocolCategory: ProtocolCategory2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
       const { createOracleFromLending: createOracleFromLending2, DexSpotPrice: DexSpotPrice2 } = await Promise.resolve().then(() => (init_dist3(), dist_exports2));
-      const tokens = registry.getTokensForChain(chainName);
+      const tokens = registry.tokens.get(chainName) ?? [];
       const lendingProtos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory2.Lending);
       const dexProtos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory2.Dex);
-      const WHYPE2 = "0x5555555555555555555555555555555555555555";
       let usdcAddr;
       try {
         usdcAddr = registry.resolveToken(chainName, "USDC").address;
@@ -5427,9 +5435,9 @@ server.tool(
         for (const p of lendingProtos) {
           try {
             const oracle = createOracleFromLending2(p, rpcUrl);
-            const price = await oracle.getPrice(addr);
-            if (price > 0) {
-              oraclePrice = price;
+            const priceData = await oracle.getPrice(addr);
+            if (priceData.price_f64 > 0) {
+              oraclePrice = priceData.price_f64;
               break;
             }
           } catch {
@@ -5437,10 +5445,10 @@ server.tool(
         }
         for (const p of dexProtos) {
           try {
-            const dex = new DexSpotPrice2(p, rpcUrl);
-            const price = await dex.getPrice(addr, usdcAddr, WHYPE2);
-            if (price > 0) {
-              dexPrice = price;
+            const dex = createDex(p, rpcUrl);
+            const priceData = await DexSpotPrice2.getPrice(dex, addr, token.decimals, usdcAddr, 6);
+            if (priceData.price_f64 > 0) {
+              dexPrice = priceData.price_f64;
               break;
             }
           } catch {
