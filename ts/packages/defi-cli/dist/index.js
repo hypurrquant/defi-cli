@@ -2,6 +2,7 @@
 
 // src/cli.ts
 import { Command } from "commander";
+import { createRequire } from "module";
 
 // src/executor.ts
 import { createPublicClient as createPublicClient2, createWalletClient, http as http2 } from "viem";
@@ -8219,6 +8220,8 @@ function registerFarm(parent, getOpts, makeExecutor2) {
 }
 
 // src/cli.ts
+var _require = createRequire(import.meta.url);
+var _pkg = _require("../package.json");
 var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2557
   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551    \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551     \u2588\u2588\u2551
@@ -8232,7 +8235,7 @@ var BANNER = `
   Scan exploits, swap tokens, bridge assets, track whales,
   compare yields \u2014 all from your terminal.
 `;
-var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version("0.1.0").addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain", "hyperevm").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
+var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version(_pkg.version).addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain", "hyperevm").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
 function getOutputMode() {
   const opts = program.opts();
   return parseOutputMode(opts);

@@ -14,8 +14,9 @@ async function main() {
     const hasSubcommand = rawArgs.some(a => !a.startsWith("-") && knownSubcommands.has(a));
     const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");
     const isHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+    const isVersion = rawArgs.includes("--version") || rawArgs.includes("-V");
 
-    if (!isHelp && (rawArgs.length === 0 || !hasSubcommand)) {
+    if (!isHelp && !isVersion && (rawArgs.length === 0 || !hasSubcommand)) {
       await showLandingPage(isJson);
       return;
     }

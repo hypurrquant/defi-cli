@@ -1,9 +1,13 @@
 import { Command } from "commander";
+import { createRequire } from "node:module";
 import { Executor } from "./executor.js";
 import { parseOutputMode } from "./output.js";
 import type { OutputMode } from "./output.js";
 import { runAgent } from "./agent.js";
 import { Registry } from "@hypurrquant/defi-core";
+
+const _require = createRequire(import.meta.url);
+const _pkg = _require("../package.json") as { version: string };
 
 import { registerStatus } from "./commands/status.js";
 import { registerSchema } from "./commands/schema.js";
@@ -47,7 +51,7 @@ const BANNER = `
 export const program = new Command()
   .name("defi")
   .description("DeFi CLI — Multi-chain DeFi toolkit")
-  .version("0.1.0")
+  .version(_pkg.version)
   .addHelpText("before", BANNER)
   .option("--json", "Output as JSON")
   .option("--ndjson", "Output as newline-delimited JSON")

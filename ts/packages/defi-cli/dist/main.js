@@ -2,6 +2,7 @@
 
 // src/cli.ts
 import { Command } from "commander";
+import { createRequire } from "module";
 
 // src/executor.ts
 import { createPublicClient as createPublicClient2, createWalletClient, http as http2 } from "viem";
@@ -8223,6 +8224,8 @@ function registerFarm(parent, getOpts, makeExecutor2) {
 }
 
 // src/cli.ts
+var _require = createRequire(import.meta.url);
+var _pkg = _require("../package.json");
 var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2557
   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551    \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551     \u2588\u2588\u2551
@@ -8236,7 +8239,7 @@ var BANNER = `
   Scan exploits, swap tokens, bridge assets, track whales,
   compare yields \u2014 all from your terminal.
 `;
-var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version("0.1.0").addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain", "hyperevm").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
+var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version(_pkg.version).addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain", "hyperevm").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
 function getOutputMode() {
   const opts = program.opts();
   return parseOutputMode(opts);
@@ -8367,7 +8370,10 @@ async function showLandingPage(isJson) {
     }, null, 2));
     return;
   }
-  const version = "0.2.0";
+  const { createRequire: createRequire2 } = await import("module");
+  const _require2 = createRequire2(import.meta.url);
+  const pkg = _require2("../package.json");
+  const version = pkg.version;
   if (!wallet) {
     console.log("");
     console.log(pc2.bold(pc2.cyan("  DeFi CLI v" + version)));
@@ -8478,7 +8484,8 @@ async function main() {
     const hasSubcommand = rawArgs.some((a) => !a.startsWith("-") && knownSubcommands.has(a));
     const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");
     const isHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
-    if (!isHelp && (rawArgs.length === 0 || !hasSubcommand)) {
+    const isVersion = rawArgs.includes("--version") || rawArgs.includes("-V");
+    if (!isHelp && !isVersion && (rawArgs.length === 0 || !hasSubcommand)) {
       await showLandingPage(isJson);
       return;
     }

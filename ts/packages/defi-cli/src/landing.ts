@@ -122,7 +122,10 @@ export async function showLandingPage(isJson: boolean): Promise<void> {
   }
 
   // Human-readable mode
-  const version = "0.2.0";
+  const { createRequire } = await import("node:module");
+  const _require = createRequire(import.meta.url);
+  const pkg = _require("../package.json") as { version: string };
+  const version = pkg.version;
 
   if (!wallet) {
     console.log("");
