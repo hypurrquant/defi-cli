@@ -71,7 +71,7 @@ function makeExecutor(): Executor {
   const opts = program.opts<{ broadcast?: boolean; chain?: string }>();
   const registry = Registry.loadEmbedded();
   const chain = registry.getChain(opts.chain ?? "hyperevm");
-  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl());
+  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url);
 }
 
 // Register all commands

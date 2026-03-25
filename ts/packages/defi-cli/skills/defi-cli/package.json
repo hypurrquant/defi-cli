@@ -1,0 +1,38 @@
+{
+  "name": "@hypurrquant/defi-cli-skill",
+  "version": "0.2.0",
+  "description": "AI agent skill for defi-cli — multi-chain DeFi operations via CLI",
+  "keywords": [
+    "ai-skill",
+    "claude",
+    "defi",
+    "lending",
+    "dex",
+    "swap",
+    "bridge",
+    "vault",
+    "staking",
+    "hyperevm",
+    "hyperliquid",
+    "mantle",
+    "aave",
+    "uniswap",
+    "yield"
+  ],
+  "author": "hypurrquant",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hypurrquant/defi-cli",
+    "directory": "ts/packages/defi-cli/skills/defi-cli"
+  },
+  "homepage": "https://github.com/hypurrquant/defi-cli#ai-agent-skill",
+  "files": [
+    "SKILL.md",
+    "references",
+    "scripts"
+  ],
+  "peerDependencies": {
+    "@hypurrquant/defi-cli": ">=0.2.0"
+  }
+}

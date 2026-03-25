@@ -1012,9 +1012,11 @@ var DEFAULT_PRIORITY_FEE_WEI = 100000000n;
 var Executor = class _Executor {
   dryRun;
   rpcUrl;
-  constructor(broadcast, rpcUrl) {
+  explorerUrl;
+  constructor(broadcast, rpcUrl, explorerUrl) {
     this.dryRun = !broadcast;
     this.rpcUrl = rpcUrl;
+    this.explorerUrl = explorerUrl;
   }
   /** Apply 20% buffer to a gas estimate */
   static applyGasBuffer(gas) {
@@ -1149,7 +1151,10 @@ var Executor = class _Executor {
       maxFeePerGas: maxFeePerGas > 0n ? maxFeePerGas : void 0,
       maxPriorityFeePerGas: maxPriorityFeePerGas > 0n ? maxPriorityFeePerGas : void 0
     });
+    const txUrl = this.explorerUrl ? `${this.explorerUrl}/tx/${txHash}` : void 0;
     process.stderr.write(`Transaction sent: ${txHash}
+`);
+    if (txUrl) process.stderr.write(`Explorer: ${txUrl}
 `);
     process.stderr.write("Waiting for confirmation...\n");
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -1165,6 +1170,7 @@ var Executor = class _Executor {
         block_number: receipt.blockNumber?.toString(),
         gas_limit: gasLimit.toString(),
         gas_used: receipt.gasUsed?.toString(),
+        explorer_url: txUrl,
         mode: "broadcast"
       }
     };
@@ -8235,7 +8241,7 @@ function makeExecutor() {
   const opts = program.opts();
   const registry = Registry.loadEmbedded();
   const chain = registry.getChain(opts.chain ?? "hyperevm");
-  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl());
+  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url);
 }
 registerStatus(program, getOutputMode);
 registerSchema(program, getOutputMode);

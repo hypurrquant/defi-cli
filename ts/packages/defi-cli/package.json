@@ -5,11 +5,13 @@
   "type": "module",
   "license": "MIT",
   "bin": {
-    "defi": "dist/main.js"
+    "defi": "dist/main.js",
+    "defi-mcp": "dist/mcp-server.js"
   },
   "files": [
     "dist",
-    "config"
+    "config",
+    "mcp-config.example.json"
   ],
   "keywords": [
     "defi",
@@ -43,9 +45,12 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "commander": "^13.0.0",
+    "dotenv": "^17.3.1",
     "picocolors": "^1.1.0",
-    "viem": "^2.23.0"
+    "viem": "^2.23.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@hypurrquant/defi-core": "workspace:*",

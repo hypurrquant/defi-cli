@@ -12,10 +12,12 @@ const DEFAULT_PRIORITY_FEE_WEI = 100_000_000n;
 export class Executor {
   readonly dryRun: boolean;
   readonly rpcUrl: string | undefined;
+  readonly explorerUrl: string | undefined;
 
-  constructor(broadcast: boolean, rpcUrl?: string) {
+  constructor(broadcast: boolean, rpcUrl?: string, explorerUrl?: string) {
     this.dryRun = !broadcast;
     this.rpcUrl = rpcUrl;
+    this.explorerUrl = explorerUrl;
   }
 
   /** Apply 20% buffer to a gas estimate */
@@ -180,7 +182,9 @@ export class Executor {
       maxPriorityFeePerGas: maxPriorityFeePerGas > 0n ? maxPriorityFeePerGas : undefined,
     });
 
+    const txUrl = this.explorerUrl ? `${this.explorerUrl}/tx/${txHash}` : undefined;
     process.stderr.write(`Transaction sent: ${txHash}\n`);
+    if (txUrl) process.stderr.write(`Explorer: ${txUrl}\n`);
     process.stderr.write("Waiting for confirmation...\n");
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -198,6 +202,7 @@ export class Executor {
         block_number: receipt.blockNumber?.toString(),
         gas_limit: gasLimit.toString(),
         gas_used: receipt.gasUsed?.toString(),
+        explorer_url: txUrl,
         mode: "broadcast",
       },
     };

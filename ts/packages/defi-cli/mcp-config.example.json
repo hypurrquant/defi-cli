@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "defi-cli": {
+      "command": "npx",
+      "args": ["-y", "@hypurrquant/defi-cli/dist/mcp-server.js"],
+      "env": {
+        "DEFI_PRIVATE_KEY": "your_private_key_here",
+        "DEFI_WALLET_ADDRESS": "your_wallet_address_here",
+        "HYPEREVM_RPC_URL": "https://rpc.hyperliquid.xyz/evm"
+      }
+    }
+  }
+}
