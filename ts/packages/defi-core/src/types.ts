@@ -175,6 +175,10 @@ export interface LendingRates {
   supply_emissions_per_second?: string[];
   /** Emissions per second per borrow reward token (raw uint256 as string) */
   borrow_emissions_per_second?: string[];
+  /** Supply-side incentive APY (%) from reward token emissions */
+  supply_incentive_apy?: number;
+  /** Borrow-side incentive APY (%) from reward token emissions (negative = subsidized) */
+  borrow_incentive_apy?: number;
 }
 
 export interface UserPosition {

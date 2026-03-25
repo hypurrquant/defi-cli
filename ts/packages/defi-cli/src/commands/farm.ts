@@ -6,7 +6,7 @@ import { Registry } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { createMasterChef, MasterChefAdapter } from "@hypurrquant/defi-protocols";
 
-export function registerFarm(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerFarm(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const farm = parent.command("farm").description("LP farm operations: deposit, withdraw, claim rewards (MasterChef)");
 
   farm.command("deposit")
@@ -15,6 +15,7 @@ export function registerFarm(parent: Command, getOpts: () => OutputMode, executo
     .requiredOption("--pid <pid>", "Farm pool ID")
     .requiredOption("--amount <amount>", "LP token amount in wei")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const registry = Registry.loadEmbedded();
       const protocol = registry.getProtocol(opts.protocol);
       const chainName = parent.opts<{ chain?: string }>().chain;
@@ -36,6 +37,7 @@ export function registerFarm(parent: Command, getOpts: () => OutputMode, executo
     .requiredOption("--pid <pid>", "Farm pool ID")
     .requiredOption("--amount <amount>", "LP token amount in wei")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const registry = Registry.loadEmbedded();
       const protocol = registry.getProtocol(opts.protocol);
       const chainName = parent.opts<{ chain?: string }>().chain;
@@ -55,6 +57,7 @@ export function registerFarm(parent: Command, getOpts: () => OutputMode, executo
     .requiredOption("--protocol <protocol>", "Protocol slug")
     .requiredOption("--pid <pid>", "Farm pool ID")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const registry = Registry.loadEmbedded();
       const protocol = registry.getProtocol(opts.protocol);
       const chainName = parent.opts<{ chain?: string }>().chain;

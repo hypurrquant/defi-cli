@@ -6,7 +6,7 @@ import { Registry } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { createLiquidStaking } from "@hypurrquant/defi-protocols";
 
-export function registerStaking(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerStaking(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const staking = parent.command("staking").description("Liquid staking: stake, unstake, info");
 
   staking.command("stake")
@@ -15,6 +15,7 @@ export function registerStaking(parent: Command, getOpts: () => OutputMode, exec
     .requiredOption("--amount <amount>", "Amount in wei")
     .option("--recipient <address>", "Recipient address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -32,6 +33,7 @@ export function registerStaking(parent: Command, getOpts: () => OutputMode, exec
     .requiredOption("--amount <amount>", "Amount in wei")
     .option("--recipient <address>", "Recipient address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);

@@ -12,7 +12,7 @@ declare function createVault(entry: ProtocolEntry, rpcUrl?: string): IVault;
 /** Create a LiquidStaking implementation from a protocol registry entry */
 declare function createLiquidStaking(entry: ProtocolEntry, rpcUrl?: string): ILiquidStaking;
 /** Create a GaugeSystem implementation from a protocol registry entry */
-declare function createGauge(entry: ProtocolEntry): IGaugeSystem;
+declare function createGauge(entry: ProtocolEntry, rpcUrl?: string): IGaugeSystem;
 /** Create a MasterChef IGauge implementation from a protocol registry entry */
 declare function createMasterChef(entry: ProtocolEntry, rpcUrl?: string): IGauge;
 /** Create a YieldSource implementation — falls back to GenericYield for unknown interfaces */
@@ -48,8 +48,10 @@ declare class UniswapV3Adapter implements IDex {
     private readonly router;
     private readonly quoter;
     private readonly positionManager;
+    private readonly factory;
     private readonly fee;
     private readonly rpcUrl;
+    private readonly useTickSpacingQuoter;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
@@ -61,11 +63,15 @@ declare class UniswapV3Adapter implements IDex {
 declare class AlgebraV3Adapter implements IDex {
     private readonly protocolName;
     private readonly router;
-    constructor(entry: ProtocolEntry, _rpcUrl?: string);
+    private readonly quoter;
+    private readonly positionManager;
+    private readonly rpcUrl;
+    private readonly useSingleQuoter;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
-    quote(_params: QuoteParams): Promise<QuoteResult>;
-    buildAddLiquidity(_params: AddLiquidityParams): Promise<DeFiTx>;
+    quote(params: QuoteParams): Promise<QuoteResult>;
+    buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx>;
     buildRemoveLiquidity(_params: RemoveLiquidityParams): Promise<DeFiTx>;
 }
 
@@ -125,11 +131,12 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
     private readonly protocolName;
     private readonly voter;
     private readonly veToken;
-    constructor(entry: ProtocolEntry, _rpcUrl?: string);
+    private readonly rpcUrl;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
     buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
-    buildClaimRewards(gauge: Address): Promise<DeFiTx>;
+    buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
     getPendingRewards(_gauge: Address, _user: Address): Promise<RewardInfo[]>;
     buildCreateLock(amount: bigint, lockDuration: number): Promise<DeFiTx>;
     buildIncreaseAmount(tokenId: bigint, amount: bigint): Promise<DeFiTx>;

@@ -2,7 +2,7 @@
 name = "Project X"
 slug = "project-x"
 category = "dex"
-interface = "uniswap_v3"
+interface = "uniswap_v4"
 chain = "hyperevm"
 native = true
 description = "Uniswap V3 fork on HyperEVM ($44M TVL)"

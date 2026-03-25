@@ -6,7 +6,7 @@ import { Registry, buildApprove, buildTransfer, erc20Abi } from "@hypurrquant/de
 import { createPublicClient, http, maxUint256 } from "viem";
 import type { Address } from "viem";
 
-export function registerToken(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerToken(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
 
   token
@@ -46,6 +46,7 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, execut
     .requiredOption("--spender <address>", "Spender address")
     .option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const tokenAddr = opts.token.startsWith("0x")
@@ -89,6 +90,7 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, execut
     .requiredOption("--to <address>", "Recipient address")
     .requiredOption("--amount <amount>", "Amount to transfer (in wei)")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const tokenAddr = opts.token.startsWith("0x")

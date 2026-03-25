@@ -487,6 +487,9 @@ function printOutput(value, mode) {
   console.log(formatOutput(value, mode));
 }
 
+// src/cli.ts
+import { Registry as Registry25 } from "@hypurrquant/defi-core";
+
 // src/commands/status.ts
 import { Registry } from "@hypurrquant/defi-core";
 import { createPublicClient as createPublicClient2, http as http2 } from "viem";
@@ -711,7 +714,7 @@ function registerSchema(parent, getOpts) {
 // src/commands/dex.ts
 import { Registry as Registry2 } from "@hypurrquant/defi-core";
 import { createDex } from "@hypurrquant/defi-protocols";
-function registerDex(parent, getOpts, executor) {
+function registerDex(parent, getOpts, makeExecutor2) {
   const dex = parent.command("dex").description("DEX operations: swap, quote, compare");
   dex.command("quote").description("Get a swap quote without executing").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-in <token>", "Input token symbol or address").requiredOption("--token-out <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
@@ -725,6 +728,7 @@ function registerDex(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   dex.command("swap").description("Execute a token swap").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-in <token>", "Input token").requiredOption("--token-out <token>", "Output token").requiredOption("--amount <amount>", "Amount in wei").option("--slippage <bps>", "Slippage tolerance in bps", "50").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry2.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -739,6 +743,47 @@ function registerDex(parent, getOpts, executor) {
       token_out: tokenOut,
       amount_in: BigInt(opts.amount),
       slippage: { bps: parseInt(opts.slippage) },
+      recipient
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  dex.command("lp-add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const chainName = parent.opts().chain ?? "hyperevm";
+    const registry = Registry2.loadEmbedded();
+    const chain = registry.getChain(chainName);
+    const protocol = registry.getProtocol(opts.protocol);
+    const adapter = createDex(protocol, chain.effectiveRpcUrl());
+    const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
+    const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
+    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
+    const tx = await adapter.buildAddLiquidity({
+      protocol: protocol.name,
+      token_a: tokenA,
+      token_b: tokenB,
+      amount_a: BigInt(opts.amountA),
+      amount_b: BigInt(opts.amountB),
+      recipient
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  dex.command("lp-remove").description("Remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--liquidity <amount>", "Liquidity amount to remove in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const chainName = parent.opts().chain ?? "hyperevm";
+    const registry = Registry2.loadEmbedded();
+    const chain = registry.getChain(chainName);
+    const protocol = registry.getProtocol(opts.protocol);
+    const adapter = createDex(protocol, chain.effectiveRpcUrl());
+    const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
+    const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
+    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
+    const tx = await adapter.buildRemoveLiquidity({
+      protocol: protocol.name,
+      token_a: tokenA,
+      token_b: tokenB,
+      liquidity: BigInt(opts.liquidity),
       recipient
     });
     const result = await executor.execute(tx);
@@ -768,10 +813,12 @@ function registerDex(parent, getOpts, executor) {
 
 // src/commands/gauge.ts
 import { Registry as Registry3 } from "@hypurrquant/defi-core";
+import { privateKeyToAccount as privateKeyToAccount2 } from "viem/accounts";
 import { createGauge } from "@hypurrquant/defi-protocols";
-function registerGauge(parent, getOpts, executor) {
+function registerGauge(parent, getOpts, makeExecutor2) {
   const gauge = parent.command("gauge").description("Gauge operations: deposit, withdraw, claim, lock, vote (ve(3,3))");
   gauge.command("deposit").description("Deposit LP tokens into a gauge").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--gauge <address>", "Gauge contract address").requiredOption("--amount <amount>", "LP token amount in wei").option("--ve-nft <tokenId>", "veNFT token ID for boosted rewards").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry3.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
     const adapter = createGauge(protocol);
@@ -781,6 +828,7 @@ function registerGauge(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   gauge.command("withdraw").description("Withdraw LP tokens from a gauge").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--gauge <address>", "Gauge contract address").requiredOption("--amount <amount>", "LP token amount in wei").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry3.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
     const adapter = createGauge(protocol);
@@ -789,14 +837,18 @@ function registerGauge(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   gauge.command("claim").description("Claim earned rewards from a gauge").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--gauge <address>", "Gauge contract address").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry3.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createGauge(protocol);
-    const tx = await adapter.buildClaimRewards(opts.gauge);
+    const adapter = createGauge(protocol, executor.rpcUrl);
+    const privateKey = process.env["DEFI_PRIVATE_KEY"];
+    const account = privateKey ? privateKeyToAccount2(privateKey).address : void 0;
+    const tx = await adapter.buildClaimRewards(opts.gauge, account);
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
   gauge.command("lock").description("Create a veNFT lock").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--amount <amount>", "Amount to lock in wei").option("--days <days>", "Lock duration in days", "365").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry3.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
     const adapter = createGauge(protocol);
@@ -805,6 +857,7 @@ function registerGauge(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   gauge.command("vote").description("Vote on gauge emissions with veNFT").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--ve-nft <tokenId>", "veNFT token ID").requiredOption("--pools <pools>", "Pool addresses (comma-separated)").requiredOption("--weights <weights>", "Vote weights (comma-separated)").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry3.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
     const adapter = createGauge(protocol);
@@ -819,7 +872,7 @@ function registerGauge(parent, getOpts, executor) {
 // src/commands/lending.ts
 import { Registry as Registry4, InterestRateMode } from "@hypurrquant/defi-core";
 import { createLending } from "@hypurrquant/defi-protocols";
-function registerLending(parent, getOpts, executor) {
+function registerLending(parent, getOpts, makeExecutor2) {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
   lending.command("rates").description("Show current lending rates").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
@@ -841,6 +894,7 @@ function registerLending(parent, getOpts, executor) {
     printOutput(position, getOpts());
   });
   lending.command("supply").description("Supply an asset to a lending protocol").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount to supply in wei").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry4.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -853,6 +907,7 @@ function registerLending(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   lending.command("borrow").description("Borrow an asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry4.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -871,6 +926,7 @@ function registerLending(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   lending.command("repay").description("Repay a borrowed asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry4.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -889,6 +945,7 @@ function registerLending(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   lending.command("withdraw").description("Withdraw a supplied asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--to <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry4.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -905,9 +962,10 @@ function registerLending(parent, getOpts, executor) {
 // src/commands/cdp.ts
 import { Registry as Registry5 } from "@hypurrquant/defi-core";
 import { createCdp } from "@hypurrquant/defi-protocols";
-function registerCdp(parent, getOpts, executor) {
+function registerCdp(parent, getOpts, makeExecutor2) {
   const cdp = parent.command("cdp").description("CDP operations: open, adjust, close, info");
   cdp.command("open").description("Open a new CDP position").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--collateral <token>", "Collateral token address").requiredOption("--amount <amount>", "Collateral amount in wei").requiredOption("--mint <amount>", "Stablecoin to mint in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry5.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -943,6 +1001,7 @@ function registerCdp(parent, getOpts, executor) {
     printOutput(info, getOpts());
   });
   cdp.command("adjust").description("Adjust an existing CDP position").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--position <id>", "CDP/trove ID").option("--add-collateral <amount>", "Add collateral in wei").option("--withdraw-collateral <amount>", "Withdraw collateral in wei").option("--mint <amount>", "Mint additional stablecoin").option("--repay <amount>", "Repay stablecoin").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry5.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -960,6 +1019,7 @@ function registerCdp(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   cdp.command("close").description("Close a CDP position").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--position <id>", "CDP/trove ID").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry5.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -974,9 +1034,10 @@ function registerCdp(parent, getOpts, executor) {
 // src/commands/staking.ts
 import { Registry as Registry6 } from "@hypurrquant/defi-core";
 import { createLiquidStaking } from "@hypurrquant/defi-protocols";
-function registerStaking(parent, getOpts, executor) {
+function registerStaking(parent, getOpts, makeExecutor2) {
   const staking = parent.command("staking").description("Liquid staking: stake, unstake, info");
   staking.command("stake").description("Stake tokens via liquid staking").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--amount <amount>", "Amount in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry6.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -988,6 +1049,7 @@ function registerStaking(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   staking.command("unstake").description("Unstake tokens").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--amount <amount>", "Amount in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry6.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -1012,9 +1074,10 @@ function registerStaking(parent, getOpts, executor) {
 // src/commands/vault.ts
 import { Registry as Registry7 } from "@hypurrquant/defi-core";
 import { createVault } from "@hypurrquant/defi-protocols";
-function registerVault(parent, getOpts, executor) {
+function registerVault(parent, getOpts, makeExecutor2) {
   const vault = parent.command("vault").description("Vault operations: deposit, withdraw, info");
   vault.command("deposit").description("Deposit assets into a vault").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--amount <amount>", "Amount in wei").option("--receiver <address>", "Receiver address for vault shares").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry7.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -1026,6 +1089,7 @@ function registerVault(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   vault.command("withdraw").description("Withdraw assets from a vault").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--amount <amount>", "Amount in wei (shares)").option("--receiver <address>", "Receiver address").option("--owner <address>", "Owner address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry7.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -1261,7 +1325,7 @@ async function scanRatesForExecute(registry, asset) {
   all.sort((a, b) => b.supply_apy - a.supply_apy);
   return all;
 }
-function registerYield(parent, getOpts, executor) {
+function registerYield(parent, getOpts, makeExecutor2) {
   const yieldCmd = parent.command("yield").description("Yield operations: compare, scan, optimize, execute");
   yieldCmd.command("compare").description("Compare lending rates across protocols for an asset").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
     try {
@@ -1472,6 +1536,7 @@ function registerYield(parent, getOpts, executor) {
         `Supplying ${humanAmount} ${asset} (${amountWei} wei) on ${proto.name} (${chain.name})...
 `
       );
+      const executor = makeExecutor2();
       const tx = await adapter.buildSupply({
         protocol: proto.name,
         asset: assetAddr,
@@ -2734,7 +2799,7 @@ async function runAllChains(registry, patterns, oracleThreshold, stableThreshold
 // src/commands/arb.ts
 import { Registry as Registry14 } from "@hypurrquant/defi-core";
 import { createDex as createDex3 } from "@hypurrquant/defi-protocols";
-function registerArb(parent, getOpts, executor) {
+function registerArb(parent, getOpts, makeExecutor2) {
   parent.command("arb").description("Detect arbitrage opportunities across DEXes").option("--token-in <token>", "Base token (default: WHYPE)", "WHYPE").option("--token-out <token>", "Quote token (default: USDC)", "USDC").option("--amount <amount>", "Test amount in wei", "1000000000000000000").option("--execute", "Execute best arb (default: analysis only)").option("--min-profit <bps>", "Min profit in bps to execute", "10").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry14.loadEmbedded();
@@ -3155,7 +3220,7 @@ function registerWallet(parent, getOpts) {
 // src/commands/token.ts
 import { Registry as Registry18, buildApprove, buildTransfer, erc20Abi } from "@hypurrquant/defi-core";
 import { createPublicClient as createPublicClient4, http as http4, maxUint256 } from "viem";
-function registerToken(parent, getOpts, executor) {
+function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--owner <address>", "Wallet address to query").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
@@ -3177,6 +3242,7 @@ function registerToken(parent, getOpts, executor) {
     }, getOpts());
   });
   token.command("approve").description("Approve a spender for a token").requiredOption("--token <token>", "Token symbol or address").requiredOption("--spender <address>", "Spender address").option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry18.loadEmbedded();
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
@@ -3200,6 +3266,7 @@ function registerToken(parent, getOpts, executor) {
     printOutput({ token: tokenAddr, owner: opts.owner, spender: opts.spender, allowance }, getOpts());
   });
   token.command("transfer").description("Transfer tokens to an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--to <address>", "Recipient address").requiredOption("--amount <amount>", "Amount to transfer (in wei)").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry18.loadEmbedded();
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
@@ -3550,8 +3617,9 @@ function registerCompare(parent, getOpts) {
 // src/commands/swap.ts
 import { Registry as Registry21 } from "@hypurrquant/defi-core";
 var ODOS_API = "https://api.odos.xyz";
-function registerSwap(parent, getOpts, executor) {
+function registerSwap(parent, getOpts, makeExecutor2) {
   parent.command("swap").description("Aggregator swap: best price across all DEXes (ODOS)").requiredOption("--token-in <token>", "Input token symbol or address").requiredOption("--token-out <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--slippage <bps>", "Slippage tolerance in basis points", "50").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry21.loadEmbedded();
     const chain = registry.getChain(chainName);
@@ -3602,14 +3670,198 @@ function registerSwap(parent, getOpts, executor) {
 // src/commands/bridge.ts
 import { Registry as Registry22 } from "@hypurrquant/defi-core";
 var LIFI_API = "https://li.quest/v1";
+var DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
+var CCTP_FEE_API = "https://iris-api.circle.com/v2/burn/USDC/fees";
+var DLN_CHAIN_IDS = {
+  ethereum: 1,
+  optimism: 10,
+  bnb: 56,
+  polygon: 137,
+  arbitrum: 42161,
+  avalanche: 43114,
+  base: 8453,
+  linea: 59144,
+  zksync: 324
+};
+async function getDebridgeQuote(srcChainId, dstChainId, srcToken, dstToken, amountRaw, recipient) {
+  const params = new URLSearchParams({
+    srcChainId: String(srcChainId),
+    srcChainTokenIn: srcToken,
+    srcChainTokenInAmount: amountRaw,
+    dstChainId: String(dstChainId),
+    dstChainTokenOut: dstToken,
+    prependOperatingExpenses: "true"
+  });
+  const res = await fetch(`${DLN_API}/quote?${params}`);
+  if (!res.ok) throw new Error(`deBridge quote failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  const estimation = data.estimation;
+  const dstOut = estimation?.dstChainTokenOut;
+  const amountOut = String(dstOut?.recommendedAmount ?? dstOut?.amount ?? "0");
+  const fulfillDelay = Number(data.order?.approximateFulfillmentDelay ?? 10);
+  const createParams = new URLSearchParams({
+    srcChainId: String(srcChainId),
+    srcChainTokenIn: srcToken,
+    srcChainTokenInAmount: amountRaw,
+    dstChainId: String(dstChainId),
+    dstChainTokenOut: dstToken,
+    dstChainTokenOutAmount: amountOut,
+    dstChainTokenOutRecipient: recipient,
+    srcChainOrderAuthorityAddress: recipient,
+    dstChainOrderAuthorityAddress: recipient,
+    prependOperatingExpenses: "true"
+  });
+  const createRes = await fetch(`${DLN_API}/create-tx?${createParams}`);
+  if (!createRes.ok) throw new Error(`deBridge create-tx failed: ${createRes.status} ${await createRes.text()}`);
+  const createData = await createRes.json();
+  return {
+    amountOut,
+    estimatedTime: fulfillDelay,
+    raw: createData
+  };
+}
+var CCTP_DOMAINS = {
+  ethereum: 0,
+  avalanche: 1,
+  optimism: 2,
+  arbitrum: 3,
+  solana: 5,
+  base: 6,
+  polygon: 7,
+  sui: 8,
+  aptos: 9
+};
+var CCTP_TOKEN_MESSENGER_V2 = "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d";
+var CCTP_USDC_ADDRESSES = {
+  ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  avalanche: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+  optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+  arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  polygon: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
+};
+async function getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc) {
+  try {
+    const res = await fetch(`${CCTP_FEE_API}/${srcDomain}/${dstDomain}`);
+    if (res.ok) {
+      const schedules = await res.json();
+      const schedule = schedules.find((s) => s.finalityThreshold === 2e3) ?? schedules[0];
+      if (schedule) {
+        const amountSubunits = BigInt(Math.round(amountUsdc * 1e6));
+        const bpsRounded = BigInt(Math.round(schedule.minimumFee * 100));
+        const protocolFee = amountSubunits * bpsRounded / 1000000n;
+        const protocolFeeBuffered = protocolFee * 120n / 100n;
+        if (schedule.forwardFee) {
+          const forwardFeeSubunits = BigInt(schedule.forwardFee.high);
+          const totalMaxFee = protocolFeeBuffered + forwardFeeSubunits;
+          return { fee: Number(totalMaxFee) / 1e6, maxFeeSubunits: totalMaxFee };
+        }
+        const minFee = protocolFeeBuffered > 0n ? protocolFeeBuffered : 10000n;
+        return { fee: Number(minFee) / 1e6, maxFeeSubunits: minFee };
+      }
+    }
+  } catch {
+  }
+  return { fee: 0.25, maxFeeSubunits: 250000n };
+}
 function registerBridge(parent, getOpts) {
-  parent.command("bridge").description("Cross-chain bridge: move assets between chains (LI.FI)").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps", "50").action(async (opts) => {
+  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, debridge, cctp", "lifi").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry22.loadEmbedded();
     const fromChain = registry.getChain(chainName);
     const toChain = registry.getChain(opts.toChain);
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
-    const sender = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
+    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
+    const provider = opts.provider.toLowerCase();
+    if (provider === "debridge") {
+      try {
+        const srcId = DLN_CHAIN_IDS[chainName] ?? fromChain.chain_id;
+        const dstId = DLN_CHAIN_IDS[opts.toChain] ?? toChain.chain_id;
+        const result = await getDebridgeQuote(
+          srcId,
+          dstId,
+          tokenAddr,
+          tokenAddr,
+          opts.amount,
+          recipient
+        );
+        const tx = result.raw.tx;
+        printOutput({
+          from_chain: fromChain.name,
+          to_chain: toChain.name,
+          token: tokenAddr,
+          amount: opts.amount,
+          bridge: "deBridge DLN",
+          estimated_output: result.amountOut,
+          estimated_time_seconds: result.estimatedTime,
+          tx: tx ? { to: tx.to, data: tx.data, value: tx.value } : void 0
+        }, getOpts());
+      } catch (e) {
+        printOutput({ error: `deBridge API error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+      }
+      return;
+    }
+    if (provider === "cctp") {
+      try {
+        const srcDomain = CCTP_DOMAINS[chainName];
+        const dstDomain = CCTP_DOMAINS[opts.toChain];
+        if (srcDomain === void 0) {
+          printOutput({ error: `CCTP not supported on source chain: ${chainName}. Supported: ${Object.keys(CCTP_DOMAINS).join(", ")}` }, getOpts());
+          return;
+        }
+        if (dstDomain === void 0) {
+          printOutput({ error: `CCTP not supported on destination chain: ${opts.toChain}. Supported: ${Object.keys(CCTP_DOMAINS).join(", ")}` }, getOpts());
+          return;
+        }
+        const usdcSrc = CCTP_USDC_ADDRESSES[chainName];
+        const usdcDst = CCTP_USDC_ADDRESSES[opts.toChain];
+        if (!usdcSrc) {
+          printOutput({ error: `No native USDC address known for ${chainName}. CCTP requires native USDC.` }, getOpts());
+          return;
+        }
+        const amountUsdc = Number(BigInt(opts.amount)) / 1e6;
+        const { fee, maxFeeSubunits } = await getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc);
+        const recipientPadded = `0x${"0".repeat(24)}${recipient.replace("0x", "").toLowerCase()}`;
+        const { encodeFunctionData: encodeFunctionData6, parseAbi: parseAbi6 } = await import("viem");
+        const tokenMessengerAbi = parseAbi6([
+          "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold) external returns (uint64 nonce)"
+        ]);
+        const data = encodeFunctionData6({
+          abi: tokenMessengerAbi,
+          functionName: "depositForBurn",
+          args: [
+            BigInt(opts.amount),
+            dstDomain,
+            recipientPadded,
+            usdcSrc,
+            `0x${"0".repeat(64)}`,
+            // any caller
+            maxFeeSubunits,
+            2e3
+            // standard finality
+          ]
+        });
+        printOutput({
+          from_chain: fromChain.name,
+          to_chain: toChain.name,
+          token: usdcSrc,
+          token_dst: usdcDst ?? tokenAddr,
+          amount: opts.amount,
+          bridge: "Circle CCTP V2",
+          estimated_fee_usdc: fee,
+          estimated_output: String(BigInt(opts.amount) - maxFeeSubunits),
+          note: "After burn, poll https://iris-api.circle.com/v2/messages/{srcDomain} for attestation, then call MessageTransmitter.receiveMessage() on destination",
+          tx: {
+            to: CCTP_TOKEN_MESSENGER_V2,
+            data,
+            value: "0x0"
+          }
+        }, getOpts());
+      } catch (e) {
+        printOutput({ error: `CCTP error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+      }
+      return;
+    }
     try {
       const params = new URLSearchParams({
         fromChain: String(fromChain.chain_id),
@@ -3617,7 +3869,7 @@ function registerBridge(parent, getOpts) {
         fromToken: tokenAddr,
         toToken: tokenAddr,
         fromAmount: opts.amount,
-        fromAddress: sender,
+        fromAddress: recipient,
         slippage: String(parseInt(opts.slippage) / 1e4)
       });
       const res = await fetch(`${LIFI_API}/quote?${params}`);
@@ -3707,9 +3959,10 @@ function registerNft(parent, getOpts) {
 // src/commands/farm.ts
 import { Registry as Registry24 } from "@hypurrquant/defi-core";
 import { createMasterChef } from "@hypurrquant/defi-protocols";
-function registerFarm(parent, getOpts, executor) {
+function registerFarm(parent, getOpts, makeExecutor2) {
   const farm = parent.command("farm").description("LP farm operations: deposit, withdraw, claim rewards (MasterChef)");
   farm.command("deposit").description("Deposit LP tokens into a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").requiredOption("--amount <amount>", "LP token amount in wei").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry24.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
     const chainName = parent.opts().chain;
@@ -3725,6 +3978,7 @@ function registerFarm(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   farm.command("withdraw").description("Withdraw LP tokens from a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").requiredOption("--amount <amount>", "LP token amount in wei").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry24.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
     const chainName = parent.opts().chain;
@@ -3739,6 +3993,7 @@ function registerFarm(parent, getOpts, executor) {
     printOutput(result, getOpts());
   });
   farm.command("claim").description("Claim pending rewards from a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").action(async (opts) => {
+    const executor = makeExecutor2();
     const registry = Registry24.loadEmbedded();
     const protocol = registry.getProtocol(opts.protocol);
     const chainName = parent.opts().chain;
@@ -3777,7 +4032,7 @@ var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551     \u2588\u2588\u2551    \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551
   \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D     \u255A\u2550\u255D     \u255A\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D
 
-  11 chains \xB7 108 protocols \xB7 by HypurrQuant
+  2 chains \xB7 32 protocols \xB7 by HypurrQuant
 
   Scan exploits, swap tokens, bridge assets, track whales,
   compare yields \u2014 all from your terminal.
@@ -3789,32 +4044,34 @@ function getOutputMode() {
 }
 function makeExecutor() {
   const opts = program.opts();
-  return new Executor(!!opts.broadcast, void 0);
+  const registry = Registry25.loadEmbedded();
+  const chain = registry.getChain(opts.chain ?? "hyperevm");
+  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl());
 }
 registerStatus(program, getOutputMode);
 registerSchema(program, getOutputMode);
-registerDex(program, getOutputMode, makeExecutor());
-registerGauge(program, getOutputMode, makeExecutor());
-registerLending(program, getOutputMode, makeExecutor());
-registerCdp(program, getOutputMode, makeExecutor());
-registerStaking(program, getOutputMode, makeExecutor());
-registerVault(program, getOutputMode, makeExecutor());
-registerYield(program, getOutputMode, makeExecutor());
+registerDex(program, getOutputMode, makeExecutor);
+registerGauge(program, getOutputMode, makeExecutor);
+registerLending(program, getOutputMode, makeExecutor);
+registerCdp(program, getOutputMode, makeExecutor);
+registerStaking(program, getOutputMode, makeExecutor);
+registerVault(program, getOutputMode, makeExecutor);
+registerYield(program, getOutputMode, makeExecutor);
 registerPortfolio(program, getOutputMode);
 registerMonitor(program, getOutputMode);
 registerAlert(program, getOutputMode);
 registerScan(program, getOutputMode);
-registerArb(program, getOutputMode, makeExecutor());
+registerArb(program, getOutputMode, makeExecutor);
 registerPositions(program, getOutputMode);
 registerPrice(program, getOutputMode);
 registerWallet(program, getOutputMode);
-registerToken(program, getOutputMode, makeExecutor());
+registerToken(program, getOutputMode, makeExecutor);
 registerWhales(program, getOutputMode);
 registerCompare(program, getOutputMode);
-registerSwap(program, getOutputMode, makeExecutor());
+registerSwap(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
 registerNft(program, getOutputMode);
-registerFarm(program, getOutputMode, makeExecutor());
+registerFarm(program, getOutputMode, makeExecutor);
 program.command("agent").description("Agent mode: read JSON commands from stdin (for AI agents)").action(async () => {
   const executor = makeExecutor();
   process.stderr.write("Agent mode: reading JSON commands from stdin...\n");
@@ -3825,4 +4082,4 @@ program.command("agent").description("Agent mode: read JSON commands from stdin 
 export {
   program
 };
-//# sourceMappingURL=chunk-PZVWF6EB.js.map
+//# sourceMappingURL=chunk-F2I4LLKZ.js.map

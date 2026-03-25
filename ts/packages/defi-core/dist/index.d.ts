@@ -134,6 +134,10 @@ interface LendingRates {
     supply_emissions_per_second?: string[];
     /** Emissions per second per borrow reward token (raw uint256 as string) */
     borrow_emissions_per_second?: string[];
+    /** Supply-side incentive APY (%) from reward token emissions */
+    supply_incentive_apy?: number;
+    /** Borrow-side incentive APY (%) from reward token emissions (negative = subsidized) */
+    borrow_incentive_apy?: number;
 }
 interface UserPosition {
     protocol: string;
@@ -462,7 +466,7 @@ interface IGauge {
     /** Withdraw LP tokens from gauge */
     buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
     /** Claim earned rewards from gauge */
-    buildClaimRewards(gauge: Address): Promise<DeFiTx>;
+    buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
     /** Get pending rewards for a user */
     getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
 }

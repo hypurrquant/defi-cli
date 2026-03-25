@@ -2,7 +2,7 @@
 name = "Ring Few"
 slug = "ring-few"
 category = "dex"
-interface = "solidly_v2"
+interface = "uniswap_v2"
 chain = "hyperevm"
 native = true
 description = "Ring Protocol standard AMM on HyperEVM ($43M TVL). NOT ve(3,3)."

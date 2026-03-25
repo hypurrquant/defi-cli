@@ -6,7 +6,7 @@ import { Registry } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { createVault } from "@hypurrquant/defi-protocols";
 
-export function registerVault(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerVault(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const vault = parent.command("vault").description("Vault operations: deposit, withdraw, info");
 
   vault.command("deposit")
@@ -15,6 +15,7 @@ export function registerVault(parent: Command, getOpts: () => OutputMode, execut
     .requiredOption("--amount <amount>", "Amount in wei")
     .option("--receiver <address>", "Receiver address for vault shares")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -33,6 +34,7 @@ export function registerVault(parent: Command, getOpts: () => OutputMode, execut
     .option("--receiver <address>", "Receiver address")
     .option("--owner <address>", "Owner address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);

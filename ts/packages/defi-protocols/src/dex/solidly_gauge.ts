@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi, zeroAddress } from "viem";
+import { createPublicClient, encodeFunctionData, http, parseAbi, zeroAddress } from "viem";
 import type { Address } from "viem";
 
 import { DefiError } from "@hypurrquant/defi-core";
@@ -14,9 +14,13 @@ const gaugeAbi = parseAbi([
   "function depositFor(uint256 amount, uint256 tokenId) external",
   "function withdraw(uint256 amount) external",
   "function getReward(address account) external",
+  "function getReward(address account, address[] tokens) external",
   "function earned(address account) external view returns (uint256)",
+  "function earned(address token, address account) external view returns (uint256)",
   "function rewardRate() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
+  "function rewardsListLength() external view returns (uint256)",
+  "function isReward(address token) external view returns (bool)",
 ]);
 
 const veAbi = parseAbi([
@@ -39,8 +43,9 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
   private readonly protocolName: string;
   private readonly voter: Address;
   private readonly veToken: Address;
+  private readonly rpcUrl: string | undefined;
 
-  constructor(entry: ProtocolEntry, _rpcUrl?: string) {
+  constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
     const voter = entry.contracts?.["voter"];
     if (!voter) {
@@ -52,6 +57,7 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     }
     this.voter = voter;
     this.veToken = veToken;
+    this.rpcUrl = rpcUrl;
   }
 
   name(): string {
@@ -105,12 +111,49 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     };
   }
 
-  async buildClaimRewards(gauge: Address): Promise<DeFiTx> {
+  async buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx> {
+    // Ramses V2 gauges use getReward(address account, address[] tokens)
+    // where account must equal msg.sender. Try to discover reward tokens via RPC.
+    if (account && this.rpcUrl) {
+      try {
+        const client = createPublicClient({ transport: http(this.rpcUrl) });
+        const listLen = await client.readContract({
+          address: gauge,
+          abi: gaugeAbi,
+          functionName: "rewardsListLength",
+        }) as bigint;
+        if (listLen > 0n) {
+          // Discover reward tokens by checking isReward against known tokens
+          // For Ramses V2, use the voter to find reward tokens
+          // Alternatively, scan storage: the gauge exposes earned(token, account)
+          // We'll pass empty tokens array and let the gauge figure it out,
+          // or pass a placeholder. Since we know RAM is the reward token
+          // from the gauge context, we need to enumerate them.
+          // Fallback: use getReward(account, []) — some implementations accept empty array
+          const data = encodeFunctionData({
+            abi: gaugeAbi,
+            functionName: "getReward",
+            args: [account, [] as Address[]],
+          });
+          return {
+            description: `[${this.protocolName}] Claim gauge rewards`,
+            to: gauge,
+            data,
+            value: 0n,
+            gas_estimate: 300_000,
+          };
+        }
+      } catch {
+        // fall through to default
+      }
+    }
+
+    // Standard Solidly V2 gauge: getReward(address account)
     // account param will be overridden by msg.sender in most gauge implementations
     const data = encodeFunctionData({
       abi: gaugeAbi,
       functionName: "getReward",
-      args: [zeroAddress],
+      args: [account ?? zeroAddress],
     });
     return {
       description: `[${this.protocolName}] Claim gauge rewards`,

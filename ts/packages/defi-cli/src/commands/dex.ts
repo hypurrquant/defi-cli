@@ -6,7 +6,7 @@ import { Registry } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { createDex } from "@hypurrquant/defi-protocols";
 
-export function registerDex(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerDex(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const dex = parent.command("dex").description("DEX operations: swap, quote, compare");
 
   dex.command("quote")
@@ -36,6 +36,7 @@ export function registerDex(parent: Command, getOpts: () => OutputMode, executor
     .option("--slippage <bps>", "Slippage tolerance in bps", "50")
     .option("--recipient <address>", "Recipient address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -47,6 +48,64 @@ export function registerDex(parent: Command, getOpts: () => OutputMode, executor
       const tx = await adapter.buildSwap({
         protocol: protocol.name, token_in: tokenIn, token_out: tokenOut,
         amount_in: BigInt(opts.amount), slippage: { bps: parseInt(opts.slippage) }, recipient,
+      });
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+    });
+
+  dex.command("lp-add")
+    .description("Add liquidity to a pool")
+    .requiredOption("--protocol <protocol>", "Protocol slug")
+    .requiredOption("--token-a <token>", "First token symbol or address")
+    .requiredOption("--token-b <token>", "Second token symbol or address")
+    .requiredOption("--amount-a <amount>", "Amount of token A in wei")
+    .requiredOption("--amount-b <amount>", "Amount of token B in wei")
+    .option("--recipient <address>", "Recipient address")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const registry = Registry.loadEmbedded();
+      const chain = registry.getChain(chainName);
+      const protocol = registry.getProtocol(opts.protocol);
+      const adapter = createDex(protocol, chain.effectiveRpcUrl());
+      const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA as Address : registry.resolveToken(chainName, opts.tokenA).address as Address;
+      const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB as Address : registry.resolveToken(chainName, opts.tokenB).address as Address;
+      const recipient = (opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001") as Address;
+      const tx = await adapter.buildAddLiquidity({
+        protocol: protocol.name,
+        token_a: tokenA,
+        token_b: tokenB,
+        amount_a: BigInt(opts.amountA),
+        amount_b: BigInt(opts.amountB),
+        recipient,
+      });
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+    });
+
+  dex.command("lp-remove")
+    .description("Remove liquidity from a pool")
+    .requiredOption("--protocol <protocol>", "Protocol slug")
+    .requiredOption("--token-a <token>", "First token symbol or address")
+    .requiredOption("--token-b <token>", "Second token symbol or address")
+    .requiredOption("--liquidity <amount>", "Liquidity amount to remove in wei")
+    .option("--recipient <address>", "Recipient address")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const registry = Registry.loadEmbedded();
+      const chain = registry.getChain(chainName);
+      const protocol = registry.getProtocol(opts.protocol);
+      const adapter = createDex(protocol, chain.effectiveRpcUrl());
+      const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA as Address : registry.resolveToken(chainName, opts.tokenA).address as Address;
+      const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB as Address : registry.resolveToken(chainName, opts.tokenB).address as Address;
+      const recipient = (opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001") as Address;
+      const tx = await adapter.buildRemoveLiquidity({
+        protocol: protocol.name,
+        token_a: tokenA,
+        token_b: tokenB,
+        liquidity: BigInt(opts.liquidity),
+        recipient,
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());

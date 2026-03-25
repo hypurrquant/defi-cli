@@ -25,6 +25,12 @@ const quoterAbi = parseAbi([
   "function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
 ]);
 
+// Ramses CL uses tickSpacing instead of fee in the quoter struct
+const ramsesQuoterAbi = parseAbi([
+  "struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; int24 tickSpacing; uint160 sqrtPriceLimitX96; }",
+  "function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
+]);
+
 const positionManagerAbi = parseAbi([
   "struct MintParams { address token0; address token1; uint24 fee; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
   "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
@@ -35,8 +41,10 @@ export class UniswapV3Adapter implements IDex {
   private readonly router: Address;
   private readonly quoter: Address | undefined;
   private readonly positionManager: Address | undefined;
+  private readonly factory: Address | undefined;
   private readonly fee: number;
   private readonly rpcUrl: string | undefined;
+  private readonly useTickSpacingQuoter: boolean;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
@@ -47,8 +55,12 @@ export class UniswapV3Adapter implements IDex {
     this.router = router;
     this.quoter = entry.contracts?.["quoter"];
     this.positionManager = entry.contracts?.["position_manager"];
+    this.factory = entry.contracts?.["factory"];
     this.fee = DEFAULT_FEE;
     this.rpcUrl = rpcUrl;
+    // Ramses CL and similar forks use tickSpacing-based pool identification
+    this.useTickSpacingQuoter = entry.contracts?.["pool_deployer"] !== undefined
+      || entry.contracts?.["gauge_factory"] !== undefined;
   }
 
   name(): string {
@@ -92,8 +104,63 @@ export class UniswapV3Adapter implements IDex {
 
     if (this.quoter) {
       const client = createPublicClient({ transport: http(this.rpcUrl) });
-      const feeTiers = [500, 3000, 10000, 100];
 
+      // Try tickSpacing-based quoter first for Ramses CL and similar forks
+      if (this.useTickSpacingQuoter) {
+        const tickSpacings = [1, 10, 50, 100, 200];
+        const tsResults = await Promise.allSettled(
+          tickSpacings.map(async (ts) => {
+            const result = await client.call({
+              to: this.quoter!,
+              data: encodeFunctionData({
+                abi: ramsesQuoterAbi,
+                functionName: "quoteExactInputSingle",
+                args: [
+                  {
+                    tokenIn: params.token_in,
+                    tokenOut: params.token_out,
+                    amountIn: params.amount_in,
+                    tickSpacing: ts,
+                    sqrtPriceLimitX96: 0n,
+                  },
+                ],
+              }),
+            });
+            if (!result.data) return { amountOut: 0n, tickSpacing: ts };
+            const [amountOut] = decodeAbiParameters(
+              [{ name: "amountOut", type: "uint256" }],
+              result.data,
+            );
+            return { amountOut, tickSpacing: ts };
+          }),
+        );
+
+        let best = { amountOut: 0n, tickSpacing: 50 };
+        for (const r of tsResults) {
+          if (r.status === "fulfilled" && r.value.amountOut > best.amountOut) {
+            best = r.value;
+          }
+        }
+
+        if (best.amountOut > 0n) {
+          return {
+            protocol: this.protocolName,
+            amount_out: best.amountOut,
+            price_impact_bps: undefined,
+            fee_bps: undefined,
+            route: [`${params.token_in} -> ${params.token_out} (tickSpacing: ${best.tickSpacing})`],
+          };
+        }
+
+        // tickSpacing-based protocol (Ramses CL): quoter returned no result.
+        // Pool exists but has no liquidity in this fork snapshot.
+        throw DefiError.rpcError(
+          `[${this.protocolName}] No quote available — pool exists but has zero liquidity for this pair`,
+        );
+      }
+
+      // Standard Uniswap V3 fee-based quoter
+      const feeTiers = [500, 3000, 10000, 100];
       const results = await Promise.allSettled(
         feeTiers.map(async (fee) => {
           const result = await client.call({
@@ -194,10 +261,15 @@ export class UniswapV3Adapter implements IDex {
     }
 
     // Sort tokens (Uniswap V3 requires token0 < token1)
-    const [token0, token1, amount0, amount1] =
+    const [token0, token1, rawAmount0, rawAmount1] =
       params.token_a.toLowerCase() < params.token_b.toLowerCase()
         ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
         : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+
+    // V3 NPM mint: getLiquidityForAmounts uses min(L0, L1), so if either is 0
+    // then liquidity=0 → revert. Use 1 wei minimum for single-side LP.
+    const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
+    const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
 
     const data = encodeFunctionData({
       abi: positionManagerAbi,

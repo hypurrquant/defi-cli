@@ -6,7 +6,7 @@ import { Registry, InterestRateMode } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { createLending } from "@hypurrquant/defi-protocols";
 
-export function registerLending(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerLending(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
 
   lending.command("rates")
@@ -45,6 +45,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, exec
     .requiredOption("--amount <amount>", "Amount to supply in wei")
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -65,6 +66,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, exec
     .option("--rate-mode <mode>", "variable or stable", "variable")
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -89,6 +91,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, exec
     .option("--rate-mode <mode>", "variable or stable", "variable")
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -112,6 +115,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, exec
     .requiredOption("--amount <amount>", "Amount in wei")
     .option("--to <address>", "Recipient address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);

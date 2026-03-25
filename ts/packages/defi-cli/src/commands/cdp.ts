@@ -6,7 +6,7 @@ import { Registry } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { createCdp } from "@hypurrquant/defi-protocols";
 
-export function registerCdp(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerCdp(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const cdp = parent.command("cdp").description("CDP operations: open, adjust, close, info");
 
   cdp.command("open")
@@ -17,6 +17,7 @@ export function registerCdp(parent: Command, getOpts: () => OutputMode, executor
     .requiredOption("--mint <amount>", "Stablecoin to mint in wei")
     .option("--recipient <address>", "Recipient address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -63,6 +64,7 @@ export function registerCdp(parent: Command, getOpts: () => OutputMode, executor
     .option("--mint <amount>", "Mint additional stablecoin")
     .option("--repay <amount>", "Repay stablecoin")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
@@ -83,6 +85,7 @@ export function registerCdp(parent: Command, getOpts: () => OutputMode, executor
     .requiredOption("--protocol <protocol>", "Protocol slug")
     .requiredOption("--position <id>", "CDP/trove ID")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);

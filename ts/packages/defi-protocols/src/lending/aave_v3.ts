@@ -36,6 +36,23 @@ const REWARDS_CONTROLLER_ABI = parseAbi([
   "function getRewardsData(address asset, address reward) external view returns (uint256 index, uint256 emissionsPerSecond, uint256 lastUpdateTimestamp, uint256 distributionEnd)",
 ]);
 
+const POOL_PROVIDER_ABI = parseAbi([
+  "function ADDRESSES_PROVIDER() external view returns (address)",
+]);
+
+const ADDRESSES_PROVIDER_ABI = parseAbi([
+  "function getPriceOracle() external view returns (address)",
+]);
+
+const ORACLE_ABI = parseAbi([
+  "function getAssetPrice(address asset) external view returns (uint256)",
+  "function BASE_CURRENCY_UNIT() external view returns (uint256)",
+]);
+
+const ERC20_DECIMALS_ABI = parseAbi([
+  "function decimals() external view returns (uint8)",
+]);
+
 function u256ToF64(v: bigint): number {
   const MAX_U128 = (1n << 128n) - 1n;
   if (v > MAX_U128) return Infinity;
@@ -235,6 +252,115 @@ export class AaveV3Adapter implements ILending {
       // Incentives not supported by this deployment — silently ignore
     }
 
+    // Calculate incentive APY from emissions using oracle prices
+    let supplyIncentiveApy: number | undefined;
+    let borrowIncentiveApy: number | undefined;
+
+    const hasSupplyRewards = supplyRewardTokens.length > 0;
+    const hasBorrowRewards = borrowRewardTokens.length > 0;
+
+    if ((hasSupplyRewards || hasBorrowRewards) && totalSupply > 0n) {
+      try {
+        // Pool → AddressesProvider → Oracle
+        const providerAddr = await client.readContract({
+          address: this.pool,
+          abi: POOL_PROVIDER_ABI,
+          functionName: "ADDRESSES_PROVIDER",
+        });
+        const oracleAddr = await client.readContract({
+          address: providerAddr,
+          abi: ADDRESSES_PROVIDER_ABI,
+          functionName: "getPriceOracle",
+        });
+        const [assetPrice, baseCurrencyUnit, assetDecimals] = await Promise.all([
+          client.readContract({
+            address: oracleAddr,
+            abi: ORACLE_ABI,
+            functionName: "getAssetPrice",
+            args: [asset],
+          }),
+          client.readContract({
+            address: oracleAddr,
+            abi: ORACLE_ABI,
+            functionName: "BASE_CURRENCY_UNIT",
+          }),
+          client.readContract({
+            address: asset,
+            abi: ERC20_DECIMALS_ABI,
+            functionName: "decimals",
+          }).catch(() => 18),
+        ]);
+
+        const priceUnit = Number(baseCurrencyUnit);
+        const assetPriceF = Number(assetPrice) / priceUnit;
+        const assetDecimalsDivisor = 10 ** assetDecimals;
+
+        // Supply-side incentive APY
+        if (hasSupplyRewards) {
+          let totalSupplyIncentiveUsdPerYear = 0;
+          const totalSupplyUsd = (Number(totalSupply) / assetDecimalsDivisor) * assetPriceF;
+
+          for (let i = 0; i < supplyRewardTokens.length; i++) {
+            const emissionPerSec = BigInt(supplyEmissions[i]);
+            const [rewardPrice, rewardDecimals] = await Promise.all([
+              client.readContract({
+                address: oracleAddr,
+                abi: ORACLE_ABI,
+                functionName: "getAssetPrice",
+                args: [supplyRewardTokens[i] as Address],
+              }).catch(() => 0n),
+              client.readContract({
+                address: supplyRewardTokens[i] as Address,
+                abi: ERC20_DECIMALS_ABI,
+                functionName: "decimals",
+              }).catch(() => 18),
+            ]);
+            if (rewardPrice > 0n) {
+              const rewardPriceF = Number(rewardPrice) / priceUnit;
+              const emissionPerYear = (Number(emissionPerSec) / (10 ** rewardDecimals)) * SECONDS_PER_YEAR;
+              totalSupplyIncentiveUsdPerYear += emissionPerYear * rewardPriceF;
+            }
+          }
+          if (totalSupplyUsd > 0) {
+            supplyIncentiveApy = (totalSupplyIncentiveUsdPerYear / totalSupplyUsd) * 100;
+          }
+        }
+
+        // Borrow-side incentive APY
+        if (hasBorrowRewards && totalBorrow > 0n) {
+          let totalBorrowIncentiveUsdPerYear = 0;
+          const totalBorrowUsd = (Number(totalBorrow) / assetDecimalsDivisor) * assetPriceF;
+
+          for (let i = 0; i < borrowRewardTokens.length; i++) {
+            const emissionPerSec = BigInt(borrowEmissions[i]);
+            const [rewardPrice, rewardDecimals] = await Promise.all([
+              client.readContract({
+                address: oracleAddr,
+                abi: ORACLE_ABI,
+                functionName: "getAssetPrice",
+                args: [borrowRewardTokens[i] as Address],
+              }).catch(() => 0n),
+              client.readContract({
+                address: borrowRewardTokens[i] as Address,
+                abi: ERC20_DECIMALS_ABI,
+                functionName: "decimals",
+              }).catch(() => 18),
+            ]);
+            if (rewardPrice > 0n) {
+              const rewardPriceF = Number(rewardPrice) / priceUnit;
+              const emissionPerYear = (Number(emissionPerSec) / (10 ** rewardDecimals)) * SECONDS_PER_YEAR;
+              totalBorrowIncentiveUsdPerYear += emissionPerYear * rewardPriceF;
+            }
+          }
+          if (totalBorrowUsd > 0) {
+            borrowIncentiveApy = (totalBorrowIncentiveUsdPerYear / totalBorrowUsd) * 100;
+          }
+        }
+      } catch {
+        // Oracle not available — skip incentive APY calculation
+      }
+    }
+
     return {
       protocol: this.protocolName,
       asset,
@@ -244,14 +370,16 @@ export class AaveV3Adapter implements ILending {
       utilization,
       total_supply: totalSupply,
       total_borrow: totalBorrow,
-      ...(supplyRewardTokens.length > 0 && {
+      ...(hasSupplyRewards && {
         supply_reward_tokens: supplyRewardTokens,
         supply_emissions_per_second: supplyEmissions,
       }),
-      ...(borrowRewardTokens.length > 0 && {
+      ...(hasBorrowRewards && {
         borrow_reward_tokens: borrowRewardTokens,
         borrow_emissions_per_second: borrowEmissions,
       }),
+      ...(supplyIncentiveApy !== undefined && { supply_incentive_apy: supplyIncentiveApy }),
+      ...(borrowIncentiveApy !== undefined && { borrow_incentive_apy: borrowIncentiveApy }),
     };
   }
 

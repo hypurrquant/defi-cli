@@ -7,7 +7,7 @@ import type { Address } from "viem";
 
 const ODOS_API = "https://api.odos.xyz";
 
-export function registerSwap(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerSwap(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   parent
     .command("swap")
     .description("Aggregator swap: best price across all DEXes (ODOS)")
@@ -17,6 +17,7 @@ export function registerSwap(parent: Command, getOpts: () => OutputMode, executo
     .option("--slippage <bps>", "Slippage tolerance in basis points", "50")
     .option("--recipient <address>", "Recipient address")
     .action(async (opts) => {
+      const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);

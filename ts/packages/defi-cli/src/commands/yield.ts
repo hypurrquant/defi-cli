@@ -292,7 +292,7 @@ async function scanRatesForExecute(registry: Registry, asset: string): Promise<S
   return all;
 }
 
-export function registerYield(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerYield(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const yieldCmd = parent
     .command("yield")
     .description("Yield operations: compare, scan, optimize, execute");
@@ -573,6 +573,7 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, execut
           `Supplying ${humanAmount} ${asset} (${amountWei} wei) on ${proto.name} (${chain.name})...\n`,
         );
 
+        const executor = makeExecutor();
         const tx = await adapter.buildSupply({
           protocol: proto.name,
           asset: assetAddr,

@@ -72,6 +72,10 @@ export function createDex(entry: ProtocolEntry, rpcUrl?: string): IDex {
   switch (entry.interface) {
     case "uniswap_v3":
       return new UniswapV3Adapter(entry, rpcUrl);
+    case "uniswap_v4":
+      throw DefiError.unsupported(
+        `[${entry.name}] Uniswap V4 (singleton PoolManager) is not yet supported — use HyperSwap V3 or another V3-compatible DEX for quotes`,
+      );
     case "algebra_v3":
       return new AlgebraV3Adapter(entry, rpcUrl);
     case "uniswap_v2":
@@ -168,13 +172,13 @@ export function createLiquidStaking(entry: ProtocolEntry, rpcUrl?: string): ILiq
 // ============================================================
 
 /** Create a GaugeSystem implementation from a protocol registry entry */
-export function createGauge(entry: ProtocolEntry): IGaugeSystem {
+export function createGauge(entry: ProtocolEntry, rpcUrl?: string): IGaugeSystem {
   switch (entry.interface) {
     case "solidly_v2":
     case "solidly_cl":
     case "algebra_v3":
     case "hybra":
-      return new SolidlyGaugeAdapter(entry);
+      return new SolidlyGaugeAdapter(entry, rpcUrl);
     default:
       throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported`);
   }

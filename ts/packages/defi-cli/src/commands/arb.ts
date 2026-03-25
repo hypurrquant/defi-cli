@@ -6,7 +6,7 @@ import { Registry } from "@hypurrquant/defi-core";
 import { createDex } from "@hypurrquant/defi-protocols";
 import type { Address } from "viem";
 
-export function registerArb(parent: Command, getOpts: () => OutputMode, executor: Executor): void {
+export function registerArb(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   parent
     .command("arb")
     .description("Detect arbitrage opportunities across DEXes")

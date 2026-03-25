@@ -9,7 +9,7 @@ export interface IGauge {
   /** Withdraw LP tokens from gauge */
   buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
   /** Claim earned rewards from gauge */
-  buildClaimRewards(gauge: Address): Promise<DeFiTx>;
+  buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
   /** Get pending rewards for a user */
   getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
 }

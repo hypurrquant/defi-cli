@@ -3,6 +3,7 @@ import { Executor } from "./executor.js";
 import { parseOutputMode } from "./output.js";
 import type { OutputMode } from "./output.js";
 import { runAgent } from "./agent.js";
+import { Registry } from "@hypurrquant/defi-core";
 
 import { registerStatus } from "./commands/status.js";
 import { registerSchema } from "./commands/schema.js";
@@ -37,7 +38,7 @@ const BANNER = `
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  11 chains · 108 protocols · by HypurrQuant
+  2 chains · 32 protocols · by HypurrQuant
 
   Scan exploits, swap tokens, bridge assets, track whales,
   compare yields — all from your terminal.
@@ -65,38 +66,39 @@ function getOutputMode(): OutputMode {
   return parseOutputMode(opts);
 }
 
-// Build executor from global options
+// Build executor from global options (lazy — must be called inside action handler, not at registration)
 function makeExecutor(): Executor {
   const opts = program.opts<{ broadcast?: boolean; chain?: string }>();
-  // rpcUrl will be resolved when commands run; pass undefined for now
-  return new Executor(!!opts.broadcast, undefined);
+  const registry = Registry.loadEmbedded();
+  const chain = registry.getChain(opts.chain ?? "hyperevm");
+  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl());
 }
 
 // Register all commands
 registerStatus(program, getOutputMode);
 registerSchema(program, getOutputMode);
-registerDex(program, getOutputMode, makeExecutor());
-registerGauge(program, getOutputMode, makeExecutor());
-registerLending(program, getOutputMode, makeExecutor());
-registerCdp(program, getOutputMode, makeExecutor());
-registerStaking(program, getOutputMode, makeExecutor());
-registerVault(program, getOutputMode, makeExecutor());
-registerYield(program, getOutputMode, makeExecutor());
+registerDex(program, getOutputMode, makeExecutor);
+registerGauge(program, getOutputMode, makeExecutor);
+registerLending(program, getOutputMode, makeExecutor);
+registerCdp(program, getOutputMode, makeExecutor);
+registerStaking(program, getOutputMode, makeExecutor);
+registerVault(program, getOutputMode, makeExecutor);
+registerYield(program, getOutputMode, makeExecutor);
 registerPortfolio(program, getOutputMode);
 registerMonitor(program, getOutputMode);
 registerAlert(program, getOutputMode);
 registerScan(program, getOutputMode);
-registerArb(program, getOutputMode, makeExecutor());
+registerArb(program, getOutputMode, makeExecutor);
 registerPositions(program, getOutputMode);
 registerPrice(program, getOutputMode);
 registerWallet(program, getOutputMode);
-registerToken(program, getOutputMode, makeExecutor());
+registerToken(program, getOutputMode, makeExecutor);
 registerWhales(program, getOutputMode);
 registerCompare(program, getOutputMode);
-registerSwap(program, getOutputMode, makeExecutor());
+registerSwap(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
 registerNft(program, getOutputMode);
-registerFarm(program, getOutputMode, makeExecutor());
+registerFarm(program, getOutputMode, makeExecutor);
 
 // Agent mode command
 program
