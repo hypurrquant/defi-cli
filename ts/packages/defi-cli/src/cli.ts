@@ -34,6 +34,7 @@ import { registerBridge } from "./commands/bridge.js";
 import { registerNft } from "./commands/nft.js";
 import { registerFarm } from "./commands/farm.js";
 import { registerSetup } from "./commands/setup.js";
+import { registerLB } from "./commands/lb.js";
 
 const BANNER = `
   ██████╗ ███████╗███████╗██╗     ██████╗██╗     ██╗
@@ -104,6 +105,7 @@ registerSwap(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
 registerNft(program, getOutputMode);
 registerFarm(program, getOutputMode, makeExecutor);
+registerLB(program, getOutputMode, makeExecutor);
 registerSetup(program);
 
 // Agent mode command

@@ -8,3 +8,5 @@ export { WooFiAdapter } from "./woofi.js";
 export { SolidlyGaugeAdapter } from "./solidly_gauge.js";
 export { MasterChefAdapter } from "./masterchef.js";
 export { DexSpotPrice } from "./dex_price.js";
+export { MerchantMoeLBAdapter } from "./merchant_moe_lb.js";
+export type { LBAddLiquidityParams, LBRemoveLiquidityParams, LBPosition, RewardedPool } from "./merchant_moe_lb.js";

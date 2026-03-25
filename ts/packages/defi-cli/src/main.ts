@@ -15,7 +15,7 @@ async function main() {
       "status", "schema", "dex", "gauge", "lending", "cdp", "staking", "vault",
       "yield", "portfolio", "monitor", "alert", "scan", "arb", "positions",
       "price", "wallet", "token", "whales", "compare", "swap", "bridge", "nft",
-      "farm", "agent", "setup", "init",
+      "farm", "lb", "agent", "setup", "init",
     ]);
     const hasSubcommand = rawArgs.some(a => !a.startsWith("-") && knownSubcommands.has(a));
     const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");

@@ -1850,22 +1850,29 @@ import { encodeFunctionData as encodeFunctionData6, parseAbi as parseAbi6, decod
 import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, zeroAddress as zeroAddress3 } from "viem";
 import { createPublicClient as createPublicClient42, encodeFunctionData as encodeFunctionData8, http as http42, parseAbi as parseAbi8, zeroAddress as zeroAddress4 } from "viem";
 import { encodeFunctionData as encodeFunctionData9, parseAbi as parseAbi9, createPublicClient as createPublicClient5, http as http5 } from "viem";
-import { createPublicClient as createPublicClient6, http as http6, parseAbi as parseAbi10, encodeFunctionData as encodeFunctionData10, decodeFunctionResult as decodeFunctionResult22, zeroAddress as zeroAddress5 } from "viem";
-import { createPublicClient as createPublicClient7, http as http7, parseAbi as parseAbi11, encodeFunctionData as encodeFunctionData11, zeroAddress as zeroAddress6 } from "viem";
-import { createPublicClient as createPublicClient8, http as http8, parseAbi as parseAbi12 } from "viem";
-import { createPublicClient as createPublicClient9, http as http9, parseAbi as parseAbi13, encodeFunctionData as encodeFunctionData12 } from "viem";
+import {
+  encodeFunctionData as encodeFunctionData10,
+  decodeFunctionResult as decodeFunctionResult22,
+  parseAbi as parseAbi10,
+  createPublicClient as createPublicClient6,
+  http as http6
+} from "viem";
+import { createPublicClient as createPublicClient7, http as http7, parseAbi as parseAbi11, encodeFunctionData as encodeFunctionData11, decodeFunctionResult as decodeFunctionResult3, zeroAddress as zeroAddress5 } from "viem";
+import { createPublicClient as createPublicClient8, http as http8, parseAbi as parseAbi12, encodeFunctionData as encodeFunctionData12, zeroAddress as zeroAddress6 } from "viem";
+import { createPublicClient as createPublicClient9, http as http9, parseAbi as parseAbi13 } from "viem";
 import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData13 } from "viem";
 import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData14 } from "viem";
-import { parseAbi as parseAbi16, encodeFunctionData as encodeFunctionData15, decodeFunctionResult as decodeFunctionResult3, zeroAddress as zeroAddress7 } from "viem";
-import { createPublicClient as createPublicClient12, http as http12, parseAbi as parseAbi17, encodeFunctionData as encodeFunctionData16, zeroAddress as zeroAddress8 } from "viem";
-import { createPublicClient as createPublicClient13, http as http13, parseAbi as parseAbi18 } from "viem";
-import { createPublicClient as createPublicClient14, http as http14, parseAbi as parseAbi19, encodeFunctionData as encodeFunctionData17 } from "viem";
-import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData18 } from "viem";
-import { createPublicClient as createPublicClient15, http as http15, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData19, zeroAddress as zeroAddress9 } from "viem";
-import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi222, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress10 } from "viem";
-import { parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } from "viem";
+import { createPublicClient as createPublicClient12, http as http12, parseAbi as parseAbi16, encodeFunctionData as encodeFunctionData15 } from "viem";
+import { parseAbi as parseAbi17, encodeFunctionData as encodeFunctionData16, decodeFunctionResult as decodeFunctionResult4, zeroAddress as zeroAddress7 } from "viem";
+import { createPublicClient as createPublicClient13, http as http13, parseAbi as parseAbi18, encodeFunctionData as encodeFunctionData17, zeroAddress as zeroAddress8 } from "viem";
+import { createPublicClient as createPublicClient14, http as http14, parseAbi as parseAbi19 } from "viem";
+import { createPublicClient as createPublicClient15, http as http15, parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData18 } from "viem";
+import { parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData19 } from "viem";
+import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi222, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress9 } from "viem";
+import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21, zeroAddress as zeroAddress10 } from "viem";
 import { parseAbi as parseAbi24, encodeFunctionData as encodeFunctionData222 } from "viem";
-import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi25 } from "viem";
+import { parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23 } from "viem";
+import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi26 } from "viem";
 var DEFAULT_FEE = 3e3;
 var swapRouterAbi = parseAbi4([
   "struct ExactInputSingleParams { address tokenIn; address tokenOut; uint24 fee; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96; }",
@@ -3211,7 +3218,682 @@ var MasterChefAdapter = class {
     }));
   }
 };
-var POOL_ABI = parseAbi10([
+var lbRouterAbi = parseAbi10([
+  "struct LiquidityParameters { address tokenX; address tokenY; uint256 binStep; uint256 amountX; uint256 amountY; uint256 amountXMin; uint256 amountYMin; uint256 activeIdDesired; uint256 idSlippage; int256[] deltaIds; uint256[] distributionX; uint256[] distributionY; address to; address refundTo; uint256 deadline; }",
+  "function addLiquidity(LiquidityParameters calldata liquidityParameters) external returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] memory depositIds, uint256[] memory liquidityMinted)",
+  "function removeLiquidity(address tokenX, address tokenY, uint16 binStep, uint256 amountXMin, uint256 amountYMin, uint256[] memory ids, uint256[] memory amounts, address to, uint256 deadline) external returns (uint256 amountX, uint256 amountY)"
+]);
+var lbFactoryAbi = parseAbi10([
+  "function getNumberOfLBPairs() external view returns (uint256)",
+  "function getLBPairAtIndex(uint256 index) external view returns (address)"
+]);
+var lbPairAbi = parseAbi10([
+  "function getLBHooksParameters() external view returns (bytes32)",
+  "function getActiveId() external view returns (uint24)",
+  "function getBinStep() external view returns (uint16)",
+  "function getTokenX() external view returns (address)",
+  "function getTokenY() external view returns (address)",
+  "function balanceOf(address account, uint256 id) external view returns (uint256)",
+  "function balanceOfBatch(address[] calldata accounts, uint256[] calldata ids) external view returns (uint256[] memory)"
+]);
+var lbRewarderAbi = parseAbi10([
+  "function getRewardToken() external view returns (address)",
+  "function getRewardedRange() external view returns (uint256 minBinId, uint256 maxBinId)",
+  "function getPendingRewards(address user, uint256[] calldata ids) external view returns (uint256 pendingRewards)",
+  "function claim(address user, uint256[] calldata ids) external",
+  "function getPid() external view returns (uint256)",
+  "function isStopped() external view returns (bool)",
+  "function getLBPair() external view returns (address)",
+  "function getMasterChef() external view returns (address)"
+]);
+var masterChefAbi = parseAbi10([
+  "function getMoePerSecond() external view returns (uint256)",
+  "function getTreasuryShare() external view returns (uint256)",
+  "function getStaticShare() external view returns (uint256)",
+  "function getVeMoe() external view returns (address)"
+]);
+var veMoeAbi = parseAbi10([
+  "function getWeight(uint256 pid) external view returns (uint256)",
+  "function getTotalWeight() external view returns (uint256)",
+  "function getTopPoolIds() external view returns (uint256[] memory)"
+]);
+var lbPairBinAbi = parseAbi10([
+  "function getBin(uint24 id) external view returns (uint128 reserveX, uint128 reserveY)",
+  "function getActiveId() external view returns (uint24)"
+]);
+var lbQuoterAbi2 = parseAbi10([
+  "function findBestPathFromAmountIn(address[] calldata route, uint128 amountIn) external view returns ((address[] route, address[] pairs, uint256[] binSteps, uint256[] versions, uint128[] amounts, uint128[] virtualAmountsWithoutSlippage, uint128[] fees))"
+]);
+var erc20Abi2 = parseAbi10([
+  "function symbol() external view returns (string)"
+]);
+var _addressAbi = parseAbi10(["function f() external view returns (address)"]);
+function decodeAddressResult(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult22({ abi: _addressAbi, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
+var _uint256Abi = parseAbi10(["function f() external view returns (uint256)"]);
+function decodeUint256Result(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult22({ abi: _uint256Abi, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
+var _boolAbi = parseAbi10(["function f() external view returns (bool)"]);
+function decodeBoolResult(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult22({ abi: _boolAbi, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
+function decodeStringResult(data) {
+  if (!data) return "?";
+  try {
+    return decodeFunctionResult22({ abi: erc20Abi2, functionName: "symbol", data });
+  } catch {
+    return "?";
+  }
+}
+var _rangeAbi = parseAbi10(["function f() external view returns (uint256 minBinId, uint256 maxBinId)"]);
+function decodeRangeResult(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult22({ abi: _rangeAbi, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
+var _binAbi = parseAbi10(["function f() external view returns (uint128 reserveX, uint128 reserveY)"]);
+function decodeBinResult(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult22({ abi: _binAbi, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
+var _uint256ArrayAbi = parseAbi10(["function f() external view returns (uint256[] memory)"]);
+function decodeUint256ArrayResult(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult22({ abi: _uint256ArrayAbi, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
+function extractRewarderAddress(hooksParams) {
+  if (!hooksParams || hooksParams === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+    return null;
+  }
+  const hex = hooksParams.slice(2);
+  if (hex.length < 64) return null;
+  const addrHex = hex.slice(24, 64);
+  if (addrHex === "0000000000000000000000000000000000000000") return null;
+  return `0x${addrHex}`;
+}
+function buildUniformDistribution(deltaIds) {
+  const PRECISION = 10n ** 18n;
+  const n = deltaIds.length;
+  const xBins = deltaIds.filter((d) => d >= 0).length;
+  const yBins = deltaIds.filter((d) => d <= 0).length;
+  const distributionX = [];
+  const distributionY = [];
+  for (const delta of deltaIds) {
+    const xShare = delta >= 0 && xBins > 0 ? PRECISION / BigInt(xBins) : 0n;
+    const yShare = delta <= 0 && yBins > 0 ? PRECISION / BigInt(yBins) : 0n;
+    distributionX.push(xShare);
+    distributionY.push(yShare);
+  }
+  const xSum = distributionX.reduce((a, b) => a + b, 0n);
+  const ySum = distributionY.reduce((a, b) => a + b, 0n);
+  if (xSum > 0n && xSum !== PRECISION) {
+    const firstX = distributionX.findIndex((v) => v > 0n);
+    if (firstX !== -1) distributionX[firstX] += PRECISION - xSum;
+  }
+  if (ySum > 0n && ySum !== PRECISION) {
+    const firstY = distributionY.findIndex((v) => v > 0n);
+    if (firstY !== -1) distributionY[firstY] += PRECISION - ySum;
+  }
+  return { distributionX, distributionY };
+}
+var MerchantMoeLBAdapter = class {
+  protocolName;
+  lbRouter;
+  lbFactory;
+  lbQuoter;
+  rpcUrl;
+  /** WMNT address (lb_mid_wmnt in config) used for MOE price routing */
+  wmnt;
+  /** USDT address (lb_mid_usdt in config) used for MNT/USD price routing */
+  usdt;
+  constructor(entry, rpcUrl) {
+    this.protocolName = entry.name;
+    const lbRouter = entry.contracts?.["lb_router"];
+    if (!lbRouter) {
+      throw new DefiError("CONTRACT_ERROR", "Missing 'lb_router' contract address");
+    }
+    const lbFactory = entry.contracts?.["lb_factory"];
+    if (!lbFactory) {
+      throw new DefiError("CONTRACT_ERROR", "Missing 'lb_factory' contract address");
+    }
+    this.lbRouter = lbRouter;
+    this.lbFactory = lbFactory;
+    this.lbQuoter = entry.contracts?.["lb_quoter"];
+    this.wmnt = entry.contracts?.["lb_mid_wmnt"];
+    this.usdt = entry.contracts?.["lb_mid_usdt"];
+    this.rpcUrl = rpcUrl;
+  }
+  name() {
+    return this.protocolName;
+  }
+  requireRpc() {
+    if (!this.rpcUrl) {
+      throw DefiError.rpcError(`[${this.protocolName}] RPC URL required`);
+    }
+    return this.rpcUrl;
+  }
+  /**
+   * Build an addLiquidity transaction for a Liquidity Book pair.
+   * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+   */
+  async buildAddLiquidity(params) {
+    const numBins = params.numBins ?? 5;
+    const deadline = params.deadline ?? BigInt("18446744073709551615");
+    let activeIdDesired = params.activeIdDesired;
+    if (activeIdDesired === void 0) {
+      const rpcUrl = this.requireRpc();
+      const client = createPublicClient6({ transport: http6(rpcUrl) });
+      const activeId = await client.readContract({
+        address: params.pool,
+        abi: lbPairAbi,
+        functionName: "getActiveId"
+      });
+      activeIdDesired = activeId;
+    }
+    const deltaIds = [];
+    for (let d = -numBins; d <= numBins; d++) {
+      deltaIds.push(d);
+    }
+    const { distributionX, distributionY } = buildUniformDistribution(deltaIds);
+    const data = encodeFunctionData10({
+      abi: lbRouterAbi,
+      functionName: "addLiquidity",
+      args: [
+        {
+          tokenX: params.tokenX,
+          tokenY: params.tokenY,
+          binStep: BigInt(params.binStep),
+          amountX: params.amountX,
+          amountY: params.amountY,
+          amountXMin: 0n,
+          amountYMin: 0n,
+          activeIdDesired: BigInt(activeIdDesired),
+          idSlippage: BigInt(numBins + 2),
+          deltaIds: deltaIds.map(BigInt),
+          distributionX,
+          distributionY,
+          to: params.recipient,
+          refundTo: params.recipient,
+          deadline
+        }
+      ]
+    });
+    return {
+      description: `[${this.protocolName}] LB addLiquidity ${params.amountX} tokenX + ${params.amountY} tokenY across ${deltaIds.length} bins`,
+      to: this.lbRouter,
+      data,
+      value: 0n,
+      gas_estimate: 8e5,
+      approvals: [
+        { token: params.tokenX, spender: this.lbRouter, amount: params.amountX },
+        { token: params.tokenY, spender: this.lbRouter, amount: params.amountY }
+      ]
+    };
+  }
+  /**
+   * Build a removeLiquidity transaction for specific LB bins.
+   */
+  async buildRemoveLiquidity(params) {
+    const deadline = params.deadline ?? BigInt("18446744073709551615");
+    const data = encodeFunctionData10({
+      abi: lbRouterAbi,
+      functionName: "removeLiquidity",
+      args: [
+        params.tokenX,
+        params.tokenY,
+        params.binStep,
+        params.amountXMin ?? 0n,
+        params.amountYMin ?? 0n,
+        params.binIds.map(BigInt),
+        params.amounts,
+        params.recipient,
+        deadline
+      ]
+    });
+    return {
+      description: `[${this.protocolName}] LB removeLiquidity from ${params.binIds.length} bins`,
+      to: this.lbRouter,
+      data,
+      value: 0n,
+      gas_estimate: 6e5
+    };
+  }
+  /**
+   * Auto-detect bin IDs for a pool from the rewarder's rewarded range.
+   * Falls back to active bin ± 50 scan if no rewarder exists.
+   */
+  async autoDetectBins(pool) {
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const hooksParams = await client.readContract({
+      address: pool,
+      abi: lbPairAbi,
+      functionName: "getLBHooksParameters"
+    });
+    const rewarder = extractRewarderAddress(hooksParams);
+    if (rewarder) {
+      const range = await client.readContract({
+        address: rewarder,
+        abi: lbRewarderAbi,
+        functionName: "getRewardedRange"
+      });
+      const min = Number(range[0]);
+      const max = Number(range[1]);
+      const ids2 = [];
+      for (let b = min; b <= max; b++) ids2.push(b);
+      return ids2;
+    }
+    const activeId = await client.readContract({
+      address: pool,
+      abi: lbPairAbi,
+      functionName: "getActiveId"
+    });
+    const ids = [];
+    for (let b = activeId - 50; b <= activeId + 50; b++) ids.push(b);
+    return ids;
+  }
+  /**
+   * Get pending MOE rewards for a user across specified bin IDs.
+   * If binIds is omitted, auto-detects from the rewarder's rewarded range.
+   * Reads the rewarder address from the pool's hooks parameters.
+   */
+  async getPendingRewards(user, pool, binIds) {
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const hooksParams = await client.readContract({
+      address: pool,
+      abi: lbPairAbi,
+      functionName: "getLBHooksParameters"
+    });
+    const rewarder = extractRewarderAddress(hooksParams);
+    if (!rewarder) {
+      return [];
+    }
+    let resolvedBinIds = binIds;
+    if (!resolvedBinIds || resolvedBinIds.length === 0) {
+      const range = await client.readContract({
+        address: rewarder,
+        abi: lbRewarderAbi,
+        functionName: "getRewardedRange"
+      });
+      const min = Number(range[0]);
+      const max = Number(range[1]);
+      resolvedBinIds = [];
+      for (let b = min; b <= max; b++) resolvedBinIds.push(b);
+    }
+    const [pending, rewardToken] = await Promise.all([
+      client.readContract({
+        address: rewarder,
+        abi: lbRewarderAbi,
+        functionName: "getPendingRewards",
+        args: [user, resolvedBinIds.map(BigInt)]
+      }),
+      client.readContract({
+        address: rewarder,
+        abi: lbRewarderAbi,
+        functionName: "getRewardToken"
+      })
+    ]);
+    return [
+      {
+        token: rewardToken,
+        symbol: "MOE",
+        amount: pending
+      }
+    ];
+  }
+  /**
+   * Build a claim rewards transaction for specific LB bins.
+   * If binIds is omitted, auto-detects from the rewarder's rewarded range.
+   */
+  async buildClaimRewards(user, pool, binIds) {
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const hooksParams = await client.readContract({
+      address: pool,
+      abi: lbPairAbi,
+      functionName: "getLBHooksParameters"
+    });
+    const rewarder = extractRewarderAddress(hooksParams);
+    if (!rewarder) {
+      throw new DefiError("CONTRACT_ERROR", `[${this.protocolName}] Pool ${pool} has no active rewarder`);
+    }
+    let resolvedBinIds = binIds;
+    if (!resolvedBinIds || resolvedBinIds.length === 0) {
+      const range = await client.readContract({
+        address: rewarder,
+        abi: lbRewarderAbi,
+        functionName: "getRewardedRange"
+      });
+      const min = Number(range[0]);
+      const max = Number(range[1]);
+      resolvedBinIds = [];
+      for (let b = min; b <= max; b++) resolvedBinIds.push(b);
+    }
+    const data = encodeFunctionData10({
+      abi: lbRewarderAbi,
+      functionName: "claim",
+      args: [user, resolvedBinIds.map(BigInt)]
+    });
+    return {
+      description: `[${this.protocolName}] LB claim rewards for ${resolvedBinIds.length} bins`,
+      to: rewarder,
+      data,
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+  /**
+   * Discover all active rewarded LB pools by iterating the factory.
+   * Uses 7 multicall batches to minimise RPC round-trips and avoid 429s.
+   *
+   * Batch 1: getNumberOfLBPairs(), then getLBPairAtIndex(i) for all i
+   * Batch 2: getLBHooksParameters() for all pairs → extract rewarder addresses
+   * Batch 3: isStopped/getRewardedRange/getRewardToken/getPid/getMasterChef for each rewarder
+   * Batch 4: getTokenX/getTokenY for each rewarded pair, then symbol() for unique tokens
+   * Batch 5: Bootstrap MasterChef→VeMoe, then getMoePerSecond/getTreasuryShare/getStaticShare/getTotalWeight/getTopPoolIds
+   * Batch 6: VeMoe.getWeight(pid) for each rewarded pool
+   * Batch 7: Pool.getBin(binId) for all bins in rewarded range of each pool
+   * Price: LB Quoter findBestPathFromAmountIn for MOE/WMNT and WMNT/USDT prices
+   */
+  async discoverRewardedPools() {
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const pairCount = await client.readContract({
+      address: this.lbFactory,
+      abi: lbFactoryAbi,
+      functionName: "getNumberOfLBPairs"
+    });
+    const count = Number(pairCount);
+    if (count === 0) return [];
+    const batch1Calls = Array.from({ length: count }, (_, i) => [
+      this.lbFactory,
+      encodeFunctionData10({ abi: lbFactoryAbi, functionName: "getLBPairAtIndex", args: [BigInt(i)] })
+    ]);
+    const batch1Results = await multicallRead(rpcUrl, batch1Calls);
+    const pairAddresses = batch1Results.map((r) => decodeAddressResult(r)).filter((a) => a !== null);
+    if (pairAddresses.length === 0) return [];
+    const batch2Calls = pairAddresses.map((pair) => [
+      pair,
+      encodeFunctionData10({ abi: lbPairAbi, functionName: "getLBHooksParameters" })
+    ]);
+    const batch2Results = await multicallRead(rpcUrl, batch2Calls);
+    const rewardedPairs = [];
+    for (let i = 0; i < pairAddresses.length; i++) {
+      const raw = batch2Results[i];
+      if (!raw) continue;
+      let hooksBytes;
+      try {
+        const _bytes32Abi = parseAbi10(["function f() external view returns (bytes32)"]);
+        hooksBytes = decodeFunctionResult22({ abi: _bytes32Abi, functionName: "f", data: raw });
+      } catch {
+        continue;
+      }
+      const rewarder = extractRewarderAddress(hooksBytes);
+      if (rewarder) {
+        rewardedPairs.push({ pool: pairAddresses[i], rewarder });
+      }
+    }
+    if (rewardedPairs.length === 0) return [];
+    const batch3Calls = [];
+    for (const { rewarder } of rewardedPairs) {
+      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "isStopped" })]);
+      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getRewardedRange" })]);
+      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getRewardToken" })]);
+      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getPid" })]);
+      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getMasterChef" })]);
+    }
+    const batch3Results = await multicallRead(rpcUrl, batch3Calls);
+    const batch4aCalls = [];
+    for (const { pool } of rewardedPairs) {
+      batch4aCalls.push([pool, encodeFunctionData10({ abi: lbPairAbi, functionName: "getTokenX" })]);
+      batch4aCalls.push([pool, encodeFunctionData10({ abi: lbPairAbi, functionName: "getTokenY" })]);
+    }
+    const batch4aResults = await multicallRead(rpcUrl, batch4aCalls);
+    const tokenXAddresses = [];
+    const tokenYAddresses = [];
+    for (let i = 0; i < rewardedPairs.length; i++) {
+      tokenXAddresses.push(decodeAddressResult(batch4aResults[i * 2] ?? null));
+      tokenYAddresses.push(decodeAddressResult(batch4aResults[i * 2 + 1] ?? null));
+    }
+    const uniqueTokens = Array.from(
+      new Set([...tokenXAddresses, ...tokenYAddresses].filter((a) => a !== null))
+    );
+    const batch4bCalls = uniqueTokens.map((token) => [
+      token,
+      encodeFunctionData10({ abi: erc20Abi2, functionName: "symbol" })
+    ]);
+    const batch4bResults = await multicallRead(rpcUrl, batch4bCalls);
+    const symbolMap = /* @__PURE__ */ new Map();
+    for (let i = 0; i < uniqueTokens.length; i++) {
+      symbolMap.set(uniqueTokens[i], decodeStringResult(batch4bResults[i] ?? null));
+    }
+    const STRIDE3 = 5;
+    const poolData = [];
+    for (let i = 0; i < rewardedPairs.length; i++) {
+      const base = i * STRIDE3;
+      poolData.push({
+        stopped: decodeBoolResult(batch3Results[base] ?? null) ?? false,
+        range: decodeRangeResult(batch3Results[base + 1] ?? null),
+        rewardToken: decodeAddressResult(batch3Results[base + 2] ?? null),
+        pid: Number(decodeUint256Result(batch3Results[base + 3] ?? null) ?? 0n),
+        masterChef: decodeAddressResult(batch3Results[base + 4] ?? null)
+      });
+    }
+    const masterChefAddr = poolData.map((d) => d.masterChef).find((a) => a !== null) ?? null;
+    let moePerDay = 0;
+    let topPoolIds = /* @__PURE__ */ new Set();
+    let totalWeightRaw = 0n;
+    let veMoeAddr = null;
+    if (masterChefAddr) {
+      veMoeAddr = await client.readContract({
+        address: masterChefAddr,
+        abi: masterChefAbi,
+        functionName: "getVeMoe"
+      });
+      const batch5Calls = [
+        [masterChefAddr, encodeFunctionData10({ abi: masterChefAbi, functionName: "getMoePerSecond" })],
+        [masterChefAddr, encodeFunctionData10({ abi: masterChefAbi, functionName: "getTreasuryShare" })],
+        [masterChefAddr, encodeFunctionData10({ abi: masterChefAbi, functionName: "getStaticShare" })],
+        [veMoeAddr, encodeFunctionData10({ abi: veMoeAbi, functionName: "getTotalWeight" })],
+        [veMoeAddr, encodeFunctionData10({ abi: veMoeAbi, functionName: "getTopPoolIds" })]
+      ];
+      const batch5Results = await multicallRead(rpcUrl, batch5Calls);
+      const moePerSecRaw = decodeUint256Result(batch5Results[0] ?? null) ?? 0n;
+      const treasuryShareRaw = decodeUint256Result(batch5Results[1] ?? null) ?? 0n;
+      const staticShareRaw = decodeUint256Result(batch5Results[2] ?? null) ?? 0n;
+      totalWeightRaw = decodeUint256Result(batch5Results[3] ?? null) ?? 0n;
+      const topPoolIdsRaw = decodeUint256ArrayResult(batch5Results[4] ?? null) ?? [];
+      topPoolIds = new Set(topPoolIdsRaw.map(Number));
+      const PRECISION = 10n ** 18n;
+      const netPerSec = moePerSecRaw * (PRECISION - treasuryShareRaw) / PRECISION * (PRECISION - staticShareRaw) / PRECISION;
+      moePerDay = Number(netPerSec * 86400n) / 1e18;
+    }
+    const weightByPid = /* @__PURE__ */ new Map();
+    if (veMoeAddr && rewardedPairs.length > 0) {
+      const batch6Calls = poolData.map((d) => [
+        veMoeAddr,
+        encodeFunctionData10({ abi: veMoeAbi, functionName: "getWeight", args: [BigInt(d.pid)] })
+      ]);
+      const batch6Results = await multicallRead(rpcUrl, batch6Calls);
+      for (let i = 0; i < poolData.length; i++) {
+        weightByPid.set(poolData[i].pid, decodeUint256Result(batch6Results[i] ?? null) ?? 0n);
+      }
+    }
+    let moePriceUsd = 0;
+    let wmntPriceUsd = 0;
+    const MOE_ADDR = "0x4515A45337F461A11Ff0FE8aBF3c606AE5dC00c9";
+    if (this.lbQuoter && this.wmnt && this.usdt) {
+      try {
+        const [moeWmntQuote, wmntUsdtQuote] = await Promise.all([
+          client.readContract({
+            address: this.lbQuoter,
+            abi: lbQuoterAbi2,
+            functionName: "findBestPathFromAmountIn",
+            args: [[MOE_ADDR, this.wmnt], 10n ** 18n]
+          }),
+          client.readContract({
+            address: this.lbQuoter,
+            abi: lbQuoterAbi2,
+            functionName: "findBestPathFromAmountIn",
+            args: [[this.wmnt, this.usdt], 10n ** 18n]
+          })
+        ]);
+        const moeInWmnt = Number(moeWmntQuote.amounts.at(-1) ?? 0n) / 1e18;
+        wmntPriceUsd = Number(wmntUsdtQuote.amounts.at(-1) ?? 0n) / 1e6;
+        moePriceUsd = moeInWmnt * wmntPriceUsd;
+      } catch {
+      }
+    }
+    const binRequests = [];
+    for (let i = 0; i < rewardedPairs.length; i++) {
+      const range = poolData[i].range;
+      if (!range) continue;
+      const minBin = Number(range[0]);
+      const maxBin = Number(range[1]);
+      for (let b = minBin; b <= maxBin; b++) {
+        binRequests.push({ poolIdx: i, binId: b });
+      }
+    }
+    const binReservesX = /* @__PURE__ */ new Map();
+    const binReservesY = /* @__PURE__ */ new Map();
+    if (binRequests.length > 0) {
+      const batch7Calls = binRequests.map(({ poolIdx, binId }) => [
+        rewardedPairs[poolIdx].pool,
+        encodeFunctionData10({ abi: lbPairBinAbi, functionName: "getBin", args: [binId] })
+      ]);
+      const batch7Results = await multicallRead(rpcUrl, batch7Calls);
+      for (let j = 0; j < binRequests.length; j++) {
+        const { poolIdx, binId } = binRequests[j];
+        const decoded = decodeBinResult(batch7Results[j] ?? null);
+        if (!decoded) continue;
+        if (!binReservesX.has(poolIdx)) {
+          binReservesX.set(poolIdx, /* @__PURE__ */ new Map());
+          binReservesY.set(poolIdx, /* @__PURE__ */ new Map());
+        }
+        binReservesX.get(poolIdx).set(binId, decoded[0]);
+        binReservesY.get(poolIdx).set(binId, decoded[1]);
+      }
+    }
+    const stableSymbols = /* @__PURE__ */ new Set(["USDT", "USDC", "MUSD", "AUSD", "USDY", "FDUSD"]);
+    const mntSymbols = /* @__PURE__ */ new Set(["WMNT", "MNT"]);
+    const moeSymbols = /* @__PURE__ */ new Set(["MOE"]);
+    const sixDecimalStables = /* @__PURE__ */ new Set(["USDT", "USDC", "FDUSD"]);
+    const getTokenPriceUsd = (sym) => {
+      if (stableSymbols.has(sym)) return 1;
+      if (mntSymbols.has(sym)) return wmntPriceUsd;
+      if (moeSymbols.has(sym)) return moePriceUsd;
+      return 0;
+    };
+    const getTokenDecimals = (sym) => {
+      return sixDecimalStables.has(sym) ? 6 : 18;
+    };
+    const results = [];
+    for (let i = 0; i < rewardedPairs.length; i++) {
+      const { pool, rewarder } = rewardedPairs[i];
+      const data = poolData[i];
+      const tokenX = tokenXAddresses[i] ?? "0x0000000000000000000000000000000000000000";
+      const tokenY = tokenYAddresses[i] ?? "0x0000000000000000000000000000000000000000";
+      const symX = symbolMap.get(tokenX) ?? "?";
+      const symY = symbolMap.get(tokenY) ?? "?";
+      const isTopPool = topPoolIds.has(data.pid);
+      const weight = weightByPid.get(data.pid) ?? 0n;
+      let poolMoePerDay = 0;
+      if (isTopPool && totalWeightRaw > 0n && weight > 0n) {
+        poolMoePerDay = moePerDay * (Number(weight) / Number(totalWeightRaw));
+      }
+      const rxMap = binReservesX.get(i);
+      const ryMap = binReservesY.get(i);
+      const range = data.range;
+      let rangeTvlUsd = 0;
+      let rewardedBins = 0;
+      if (range) {
+        const minBin = Number(range[0]);
+        const maxBin = Number(range[1]);
+        rewardedBins = maxBin - minBin + 1;
+        if (rxMap && ryMap) {
+          const priceX = getTokenPriceUsd(symX);
+          const priceY = getTokenPriceUsd(symY);
+          const decX = getTokenDecimals(symX);
+          const decY = getTokenDecimals(symY);
+          for (let b = minBin; b <= maxBin; b++) {
+            const rx = rxMap.get(b) ?? 0n;
+            const ry = ryMap.get(b) ?? 0n;
+            rangeTvlUsd += Number(rx) / 10 ** decX * priceX;
+            rangeTvlUsd += Number(ry) / 10 ** decY * priceY;
+          }
+        }
+      }
+      const aprPercent = rangeTvlUsd > 0 && moePriceUsd > 0 ? poolMoePerDay * moePriceUsd * 365 / rangeTvlUsd * 100 : 0;
+      results.push({
+        pool,
+        rewarder,
+        rewardToken: data.rewardToken ?? "0x0000000000000000000000000000000000000000",
+        minBinId: range ? Number(range[0]) : 0,
+        maxBinId: range ? Number(range[1]) : 0,
+        pid: data.pid,
+        stopped: data.stopped,
+        tokenX,
+        tokenY,
+        symbolX: symX,
+        symbolY: symY,
+        isTopPool,
+        moePerDay: poolMoePerDay,
+        rangeTvlUsd,
+        aprPercent,
+        rewardedBins
+      });
+    }
+    return results;
+  }
+  /**
+   * Get a user's LB positions (bin balances) across a range of bin IDs.
+   * If binIds is omitted, auto-detects from the rewarder's rewarded range (or active ± 50).
+   */
+  async getUserPositions(user, pool, binIds) {
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const resolvedBinIds = binIds && binIds.length > 0 ? binIds : await this.autoDetectBins(pool);
+    const accounts = resolvedBinIds.map(() => user);
+    const ids = resolvedBinIds.map(BigInt);
+    const balances = await client.readContract({
+      address: pool,
+      abi: lbPairAbi,
+      functionName: "balanceOfBatch",
+      args: [accounts, ids]
+    });
+    return resolvedBinIds.map((binId, i) => ({ binId, balance: balances[i] ?? 0n })).filter((p) => p.balance > 0n);
+  }
+};
+var POOL_ABI = parseAbi11([
   "function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
   "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
   "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
@@ -3219,27 +3901,27 @@ var POOL_ABI = parseAbi10([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)"
 ]);
-var ERC20_ABI2 = parseAbi10([
+var ERC20_ABI2 = parseAbi11([
   "function totalSupply() external view returns (uint256)"
 ]);
-var INCENTIVES_ABI = parseAbi10([
+var INCENTIVES_ABI = parseAbi11([
   "function getIncentivesController() external view returns (address)"
 ]);
-var REWARDS_CONTROLLER_ABI = parseAbi10([
+var REWARDS_CONTROLLER_ABI = parseAbi11([
   "function getRewardsByAsset(address asset) external view returns (address[])",
   "function getRewardsData(address asset, address reward) external view returns (uint256 index, uint256 emissionsPerSecond, uint256 lastUpdateTimestamp, uint256 distributionEnd)"
 ]);
-var POOL_PROVIDER_ABI = parseAbi10([
+var POOL_PROVIDER_ABI = parseAbi11([
   "function ADDRESSES_PROVIDER() external view returns (address)"
 ]);
-var ADDRESSES_PROVIDER_ABI = parseAbi10([
+var ADDRESSES_PROVIDER_ABI = parseAbi11([
   "function getPriceOracle() external view returns (address)"
 ]);
-var ORACLE_ABI = parseAbi10([
+var ORACLE_ABI = parseAbi11([
   "function getAssetPrice(address asset) external view returns (uint256)",
   "function BASE_CURRENCY_UNIT() external view returns (uint256)"
 ]);
-var ERC20_DECIMALS_ABI = parseAbi10([
+var ERC20_DECIMALS_ABI = parseAbi11([
   "function decimals() external view returns (uint8)"
 ]);
 function u256ToF64(v) {
@@ -3254,7 +3936,7 @@ function decodeAddress(data) {
 function decodeAddressArray(data) {
   if (!data) return [];
   try {
-    return decodeFunctionResult22({
+    return decodeFunctionResult3({
       abi: REWARDS_CONTROLLER_ABI,
       functionName: "getRewardsByAsset",
       data
@@ -3266,7 +3948,7 @@ function decodeAddressArray(data) {
 function decodeReserveData(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult22({
+    return decodeFunctionResult3({
       abi: POOL_ABI,
       functionName: "getReserveData",
       data
@@ -3278,7 +3960,7 @@ function decodeReserveData(data) {
 function decodeRewardsData(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult22({
+    return decodeFunctionResult3({
       abi: REWARDS_CONTROLLER_ABI,
       functionName: "getRewardsData",
       data
@@ -3302,7 +3984,7 @@ var AaveV3Adapter = class {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData10({
+    const data = encodeFunctionData11({
       abi: POOL_ABI,
       functionName: "supply",
       args: [params.asset, params.amount, params.on_behalf_of, 0]
@@ -3318,7 +4000,7 @@ var AaveV3Adapter = class {
   }
   async buildBorrow(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode.Stable ? 1n : 2n;
-    const data = encodeFunctionData10({
+    const data = encodeFunctionData11({
       abi: POOL_ABI,
       functionName: "borrow",
       args: [params.asset, params.amount, rateMode, 0, params.on_behalf_of]
@@ -3333,7 +4015,7 @@ var AaveV3Adapter = class {
   }
   async buildRepay(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode.Stable ? 1n : 2n;
-    const data = encodeFunctionData10({
+    const data = encodeFunctionData11({
       abi: POOL_ABI,
       functionName: "repay",
       args: [params.asset, params.amount, rateMode, params.on_behalf_of]
@@ -3348,7 +4030,7 @@ var AaveV3Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData10({
+    const data = encodeFunctionData11({
       abi: POOL_ABI,
       functionName: "withdraw",
       args: [params.asset, params.amount, params.to]
@@ -3363,7 +4045,7 @@ var AaveV3Adapter = class {
   }
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const reserveCallData = encodeFunctionData10({
+    const reserveCallData = encodeFunctionData11({
       abi: POOL_ABI,
       functionName: "getReserveData",
       args: [asset]
@@ -3390,8 +4072,8 @@ var AaveV3Adapter = class {
     const aTokenAddress = result[8];
     const variableDebtTokenAddress = result[10];
     const [supplyRaw, borrowRaw] = await multicallRead(this.rpcUrl, [
-      [aTokenAddress, encodeFunctionData10({ abi: ERC20_ABI2, functionName: "totalSupply" })],
-      [variableDebtTokenAddress, encodeFunctionData10({ abi: ERC20_ABI2, functionName: "totalSupply" })]
+      [aTokenAddress, encodeFunctionData11({ abi: ERC20_ABI2, functionName: "totalSupply" })],
+      [variableDebtTokenAddress, encodeFunctionData11({ abi: ERC20_ABI2, functionName: "totalSupply" })]
     ]);
     const totalSupply = decodeU256(supplyRaw ?? null);
     const totalBorrow = decodeU256(borrowRaw ?? null);
@@ -3402,24 +4084,24 @@ var AaveV3Adapter = class {
     const borrowEmissions = [];
     try {
       const [controllerRaw] = await multicallRead(this.rpcUrl, [
-        [aTokenAddress, encodeFunctionData10({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
+        [aTokenAddress, encodeFunctionData11({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
       ]);
       const controllerAddr = decodeAddress(controllerRaw ?? null);
       if (controllerAddr && controllerAddr !== zeroAddress5) {
         const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead(this.rpcUrl, [
-          [controllerAddr, encodeFunctionData10({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
-          [controllerAddr, encodeFunctionData10({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
+          [controllerAddr, encodeFunctionData11({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
+          [controllerAddr, encodeFunctionData11({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
         ]);
         const supplyRewards = decodeAddressArray(supplyRewardsRaw ?? null);
         const borrowRewards = decodeAddressArray(borrowRewardsRaw ?? null);
         const rewardsDataCalls = [
           ...supplyRewards.map((reward) => [
             controllerAddr,
-            encodeFunctionData10({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [aTokenAddress, reward] })
+            encodeFunctionData11({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [aTokenAddress, reward] })
           ]),
           ...borrowRewards.map((reward) => [
             controllerAddr,
-            encodeFunctionData10({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [variableDebtTokenAddress, reward] })
+            encodeFunctionData11({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [variableDebtTokenAddress, reward] })
           ])
         ];
         if (rewardsDataCalls.length > 0) {
@@ -3451,19 +4133,19 @@ var AaveV3Adapter = class {
     if ((hasSupplyRewards || hasBorrowRewards) && totalSupply > 0n) {
       try {
         const [providerRaw] = await multicallRead(this.rpcUrl, [
-          [this.pool, encodeFunctionData10({ abi: POOL_PROVIDER_ABI, functionName: "ADDRESSES_PROVIDER" })]
+          [this.pool, encodeFunctionData11({ abi: POOL_PROVIDER_ABI, functionName: "ADDRESSES_PROVIDER" })]
         ]);
         const providerAddr = decodeAddress(providerRaw ?? null);
         if (!providerAddr) throw new Error("No provider address");
         const [oracleRaw] = await multicallRead(this.rpcUrl, [
-          [providerAddr, encodeFunctionData10({ abi: ADDRESSES_PROVIDER_ABI, functionName: "getPriceOracle" })]
+          [providerAddr, encodeFunctionData11({ abi: ADDRESSES_PROVIDER_ABI, functionName: "getPriceOracle" })]
         ]);
         const oracleAddr = decodeAddress(oracleRaw ?? null);
         if (!oracleAddr) throw new Error("No oracle address");
         const [assetPriceRaw, baseCurrencyUnitRaw, assetDecimalsRaw] = await multicallRead(this.rpcUrl, [
-          [oracleAddr, encodeFunctionData10({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] })],
-          [oracleAddr, encodeFunctionData10({ abi: ORACLE_ABI, functionName: "BASE_CURRENCY_UNIT" })],
-          [asset, encodeFunctionData10({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
+          [oracleAddr, encodeFunctionData11({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] })],
+          [oracleAddr, encodeFunctionData11({ abi: ORACLE_ABI, functionName: "BASE_CURRENCY_UNIT" })],
+          [asset, encodeFunctionData11({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
         ]);
         const assetPrice = decodeU256(assetPriceRaw ?? null);
         const baseCurrencyUnit = decodeU256(baseCurrencyUnitRaw ?? null);
@@ -3473,8 +4155,8 @@ var AaveV3Adapter = class {
         const assetDecimalsDivisor = 10 ** assetDecimals;
         const allRewardTokens = Array.from(/* @__PURE__ */ new Set([...supplyRewardTokens, ...borrowRewardTokens]));
         const rewardPriceCalls = allRewardTokens.flatMap((token) => [
-          [oracleAddr, encodeFunctionData10({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [token] })],
-          [token, encodeFunctionData10({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
+          [oracleAddr, encodeFunctionData11({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [token] })],
+          [token, encodeFunctionData11({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
         ]);
         const rewardPriceResults = rewardPriceCalls.length > 0 ? await multicallRead(this.rpcUrl, rewardPriceCalls) : [];
         const rewardPriceMap = /* @__PURE__ */ new Map();
@@ -3547,7 +4229,7 @@ var AaveV3Adapter = class {
   }
   async getUserPosition(user) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+    const client = createPublicClient7({ transport: http7(this.rpcUrl) });
     const result = await client.readContract({
       address: this.pool,
       abi: POOL_ABI,
@@ -3574,7 +4256,7 @@ var AaveV3Adapter = class {
     };
   }
 };
-var POOL_ABI2 = parseAbi11([
+var POOL_ABI2 = parseAbi12([
   "function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
   "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
   "function repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) external returns (uint256)",
@@ -3587,7 +4269,7 @@ var POOL_ABI2 = parseAbi11([
   //            [9]=variableDebtTokenAddress, [10]=interestRateStrategyAddress, [11]=id
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 variableBorrowIndex, uint128 currentLiquidityRate, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint8 id)"
 ]);
-var ERC20_ABI22 = parseAbi11([
+var ERC20_ABI22 = parseAbi12([
   "function totalSupply() external view returns (uint256)"
 ]);
 function u256ToF642(v) {
@@ -3610,7 +4292,7 @@ var AaveV2Adapter = class {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData11({
+    const data = encodeFunctionData12({
       abi: POOL_ABI2,
       functionName: "deposit",
       args: [params.asset, params.amount, params.on_behalf_of, 0]
@@ -3626,7 +4308,7 @@ var AaveV2Adapter = class {
   }
   async buildBorrow(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode.Stable ? 1n : 2n;
-    const data = encodeFunctionData11({
+    const data = encodeFunctionData12({
       abi: POOL_ABI2,
       functionName: "borrow",
       args: [params.asset, params.amount, rateMode, 0, params.on_behalf_of]
@@ -3641,7 +4323,7 @@ var AaveV2Adapter = class {
   }
   async buildRepay(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode.Stable ? 1n : 2n;
-    const data = encodeFunctionData11({
+    const data = encodeFunctionData12({
       abi: POOL_ABI2,
       functionName: "repay",
       args: [params.asset, params.amount, rateMode, params.on_behalf_of]
@@ -3656,7 +4338,7 @@ var AaveV2Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData11({
+    const data = encodeFunctionData12({
       abi: POOL_ABI2,
       functionName: "withdraw",
       args: [params.asset, params.amount, params.to]
@@ -3671,7 +4353,7 @@ var AaveV2Adapter = class {
   }
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient7({ transport: http7(this.rpcUrl) });
+    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
     const result = await client.readContract({
       address: this.pool,
       abi: POOL_ABI2,
@@ -3717,7 +4399,7 @@ var AaveV2Adapter = class {
   }
   async getUserPosition(user) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient7({ transport: http7(this.rpcUrl) });
+    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
     const result = await client.readContract({
       address: this.pool,
       abi: POOL_ABI2,
@@ -3744,7 +4426,7 @@ var AaveV2Adapter = class {
     };
   }
 };
-var ORACLE_ABI2 = parseAbi12([
+var ORACLE_ABI2 = parseAbi13([
   "function getAssetPrice(address asset) external view returns (uint256)",
   "function getAssetsPrices(address[] calldata assets) external view returns (uint256[] memory)",
   "function BASE_CURRENCY_UNIT() external view returns (uint256)"
@@ -3765,7 +4447,7 @@ var AaveOracleAdapter = class {
     return this.protocolName;
   }
   async getPrice(asset) {
-    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
+    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
     const baseUnit = await client.readContract({
       address: this.oracle,
       abi: ORACLE_ABI2,
@@ -3792,7 +4474,7 @@ var AaveOracleAdapter = class {
     };
   }
   async getPrices(assets) {
-    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
+    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
     const baseUnit = await client.readContract({
       address: this.oracle,
       abi: ORACLE_ABI2,
@@ -3821,7 +4503,7 @@ var AaveOracleAdapter = class {
     });
   }
 };
-var CTOKEN_ABI = parseAbi13([
+var CTOKEN_ABI = parseAbi14([
   "function supplyRatePerBlock() external view returns (uint256)",
   "function borrowRatePerBlock() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
@@ -3848,7 +4530,7 @@ var CompoundV2Adapter = class {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: CTOKEN_ABI,
       functionName: "mint",
       args: [params.amount]
@@ -3862,7 +4544,7 @@ var CompoundV2Adapter = class {
     };
   }
   async buildBorrow(params) {
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: CTOKEN_ABI,
       functionName: "borrow",
       args: [params.amount]
@@ -3876,7 +4558,7 @@ var CompoundV2Adapter = class {
     };
   }
   async buildRepay(params) {
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: CTOKEN_ABI,
       functionName: "repayBorrow",
       args: [params.amount]
@@ -3890,7 +4572,7 @@ var CompoundV2Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: CTOKEN_ABI,
       functionName: "redeem",
       args: [params.amount]
@@ -3905,7 +4587,7 @@ var CompoundV2Adapter = class {
   }
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
+    const client = createPublicClient10({ transport: http10(this.rpcUrl) });
     const [supplyRate, borrowRate, totalSupply, totalBorrows] = await Promise.all([
       client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e) => {
         throw DefiError.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`);
@@ -3939,7 +4621,7 @@ var CompoundV2Adapter = class {
     );
   }
 };
-var COMET_ABI = parseAbi14([
+var COMET_ABI = parseAbi15([
   "function getUtilization() external view returns (uint256)",
   "function getSupplyRate(uint256 utilization) external view returns (uint64)",
   "function getBorrowRate(uint256 utilization) external view returns (uint64)",
@@ -3965,7 +4647,7 @@ var CompoundV3Adapter = class {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: COMET_ABI,
       functionName: "supply",
       args: [params.asset, params.amount]
@@ -3979,7 +4661,7 @@ var CompoundV3Adapter = class {
     };
   }
   async buildBorrow(params) {
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: COMET_ABI,
       functionName: "withdraw",
       args: [params.asset, params.amount]
@@ -3993,7 +4675,7 @@ var CompoundV3Adapter = class {
     };
   }
   async buildRepay(params) {
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: COMET_ABI,
       functionName: "supply",
       args: [params.asset, params.amount]
@@ -4007,7 +4689,7 @@ var CompoundV3Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: COMET_ABI,
       functionName: "withdraw",
       args: [params.asset, params.amount]
@@ -4022,7 +4704,7 @@ var CompoundV3Adapter = class {
   }
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient10({ transport: http10(this.rpcUrl) });
+    const client = createPublicClient11({ transport: http11(this.rpcUrl) });
     const utilization = await client.readContract({
       address: this.comet,
       abi: COMET_ABI,
@@ -4061,7 +4743,7 @@ var CompoundV3Adapter = class {
     );
   }
 };
-var EULER_VAULT_ABI = parseAbi15([
+var EULER_VAULT_ABI = parseAbi16([
   "function deposit(uint256 amount, address receiver) external returns (uint256)",
   "function withdraw(uint256 amount, address receiver, address owner) external returns (uint256)",
   "function borrow(uint256 amount, address receiver) external returns (uint256)",
@@ -4087,7 +4769,7 @@ var EulerV2Adapter = class {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: EULER_VAULT_ABI,
       functionName: "deposit",
       args: [params.amount, params.on_behalf_of]
@@ -4101,7 +4783,7 @@ var EulerV2Adapter = class {
     };
   }
   async buildBorrow(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: EULER_VAULT_ABI,
       functionName: "borrow",
       args: [params.amount, params.on_behalf_of]
@@ -4115,7 +4797,7 @@ var EulerV2Adapter = class {
     };
   }
   async buildRepay(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: EULER_VAULT_ABI,
       functionName: "repay",
       args: [params.amount, params.on_behalf_of]
@@ -4129,7 +4811,7 @@ var EulerV2Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: EULER_VAULT_ABI,
       functionName: "withdraw",
       args: [params.amount, params.to, params.to]
@@ -4144,7 +4826,7 @@ var EulerV2Adapter = class {
   }
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient11({ transport: http11(this.rpcUrl) });
+    const client = createPublicClient12({ transport: http12(this.rpcUrl) });
     const [totalSupply, totalBorrows, interestRate] = await Promise.all([
       client.readContract({ address: this.euler, abi: EULER_VAULT_ABI, functionName: "totalSupply" }).catch((e) => {
         throw DefiError.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
@@ -4178,7 +4860,7 @@ var EulerV2Adapter = class {
     );
   }
 };
-var MORPHO_ABI = parseAbi16([
+var MORPHO_ABI = parseAbi17([
   "function market(bytes32 id) external view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee)",
   "function idToMarketParams(bytes32 id) external view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)",
   "function supply((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsSupplied, uint256 sharesSupplied)",
@@ -4186,13 +4868,13 @@ var MORPHO_ABI = parseAbi16([
   "function repay((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsRepaid, uint256 sharesRepaid)",
   "function withdraw((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)"
 ]);
-var META_MORPHO_ABI = parseAbi16([
+var META_MORPHO_ABI = parseAbi17([
   "function supplyQueueLength() external view returns (uint256)",
   "function supplyQueue(uint256 index) external view returns (bytes32)",
   "function totalAssets() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)"
 ]);
-var IRM_ABI = parseAbi16([
+var IRM_ABI = parseAbi17([
   "function borrowRateView((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee) market) external view returns (uint256)"
 ]);
 var SECONDS_PER_YEAR3 = 365.25 * 24 * 3600;
@@ -4208,7 +4890,7 @@ function defaultMarketParams(loanToken = zeroAddress7) {
 function decodeMarket(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult3({
+    return decodeFunctionResult4({
       abi: MORPHO_ABI,
       functionName: "market",
       data
@@ -4220,7 +4902,7 @@ function decodeMarket(data) {
 function decodeMarketParams(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult3({
+    return decodeFunctionResult4({
       abi: MORPHO_ABI,
       functionName: "idToMarketParams",
       data
@@ -4248,7 +4930,7 @@ var MorphoBlueAdapter = class {
   }
   async buildSupply(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: MORPHO_ABI,
       functionName: "supply",
       args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
@@ -4263,7 +4945,7 @@ var MorphoBlueAdapter = class {
   }
   async buildBorrow(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: MORPHO_ABI,
       functionName: "borrow",
       args: [market, params.amount, 0n, params.on_behalf_of, params.on_behalf_of]
@@ -4278,7 +4960,7 @@ var MorphoBlueAdapter = class {
   }
   async buildRepay(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: MORPHO_ABI,
       functionName: "repay",
       args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
@@ -4293,7 +4975,7 @@ var MorphoBlueAdapter = class {
   }
   async buildWithdraw(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: MORPHO_ABI,
       functionName: "withdraw",
       args: [market, params.amount, 0n, params.to, params.to]
@@ -4312,7 +4994,7 @@ var MorphoBlueAdapter = class {
       throw DefiError.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
     }
     const [queueLenRaw] = await multicallRead(this.rpcUrl, [
-      [this.defaultVault, encodeFunctionData15({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })]
+      [this.defaultVault, encodeFunctionData16({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })]
     ]).catch((e) => {
       throw DefiError.rpcError(`[${this.protocolName}] supplyQueueLength failed: ${e}`);
     });
@@ -4329,7 +5011,7 @@ var MorphoBlueAdapter = class {
       };
     }
     const [marketIdRaw] = await multicallRead(this.rpcUrl, [
-      [this.defaultVault, encodeFunctionData15({ abi: META_MORPHO_ABI, functionName: "supplyQueue", args: [0n] })]
+      [this.defaultVault, encodeFunctionData16({ abi: META_MORPHO_ABI, functionName: "supplyQueue", args: [0n] })]
     ]).catch((e) => {
       throw DefiError.rpcError(`[${this.protocolName}] supplyQueue(0) failed: ${e}`);
     });
@@ -4338,8 +5020,8 @@ var MorphoBlueAdapter = class {
     }
     const marketId = marketIdRaw.slice(0, 66);
     const [marketRaw, paramsRaw] = await multicallRead(this.rpcUrl, [
-      [this.morpho, encodeFunctionData15({ abi: MORPHO_ABI, functionName: "market", args: [marketId] })],
-      [this.morpho, encodeFunctionData15({ abi: MORPHO_ABI, functionName: "idToMarketParams", args: [marketId] })]
+      [this.morpho, encodeFunctionData16({ abi: MORPHO_ABI, functionName: "market", args: [marketId] })],
+      [this.morpho, encodeFunctionData16({ abi: MORPHO_ABI, functionName: "idToMarketParams", args: [marketId] })]
     ]).catch((e) => {
       throw DefiError.rpcError(`[${this.protocolName}] market/idToMarketParams failed: ${e}`);
     });
@@ -4356,7 +5038,7 @@ var MorphoBlueAdapter = class {
     const irmMarket = { totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee };
     const borrowRatePerSec = await (async () => {
       const [borrowRateRaw] = await multicallRead(this.rpcUrl, [
-        [irm, encodeFunctionData15({ abi: IRM_ABI, functionName: "borrowRateView", args: [irmMarketParams, irmMarket] })]
+        [irm, encodeFunctionData16({ abi: IRM_ABI, functionName: "borrowRateView", args: [irmMarketParams, irmMarket] })]
       ]).catch((e) => {
         throw DefiError.rpcError(`[${this.protocolName}] borrowRateView failed: ${e}`);
       });
@@ -4382,18 +5064,18 @@ var MorphoBlueAdapter = class {
     );
   }
 };
-var BORROWER_OPS_ABI = parseAbi17([
+var BORROWER_OPS_ABI = parseAbi18([
   "function openTrove(address _owner, uint256 _ownerIndex, uint256 _collAmount, uint256 _boldAmount, uint256 _upperHint, uint256 _lowerHint, uint256 _annualInterestRate, uint256 _maxUpfrontFee, address _addManager, address _removeManager, address _receiver) external returns (uint256)",
   "function adjustTrove(uint256 _troveId, uint256 _collChange, bool _isCollIncrease, uint256 _debtChange, bool _isDebtIncrease, uint256 _upperHint, uint256 _lowerHint, uint256 _maxUpfrontFee) external",
   "function closeTrove(uint256 _troveId) external"
 ]);
-var TROVE_MANAGER_ABI = parseAbi17([
+var TROVE_MANAGER_ABI = parseAbi18([
   "function getLatestTroveData(uint256 _troveId) external view returns (uint256 entireDebt, uint256 entireColl, uint256 redistDebtGain, uint256 redistCollGain, uint256 accruedInterest, uint256 recordedDebt, uint256 annualInterestRate, uint256 accruedBatchManagementFee, uint256 weightedRecordedDebt, uint256 lastInterestRateAdjTime)"
 ]);
-var HINT_HELPERS_ABI = parseAbi17([
+var HINT_HELPERS_ABI = parseAbi18([
   "function getApproxHint(uint256 _collIndex, uint256 _interestRate, uint256 _numTrials, uint256 _inputRandomSeed) external view returns (uint256 hintId, uint256 diff, uint256 latestRandomSeed)"
 ]);
-var SORTED_TROVES_ABI = parseAbi17([
+var SORTED_TROVES_ABI = parseAbi18([
   "function findInsertPosition(uint256 _annualInterestRate, uint256 _prevId, uint256 _nextId) external view returns (uint256 prevId, uint256 nextId)"
 ]);
 var FelixCdpAdapter = class {
@@ -4421,7 +5103,7 @@ var FelixCdpAdapter = class {
     if (!this.hintHelpers || !this.sortedTroves || !this.rpcUrl) {
       return [0n, 0n];
     }
-    const client = createPublicClient12({ transport: http12(this.rpcUrl) });
+    const client = createPublicClient13({ transport: http13(this.rpcUrl) });
     const approxResult = await client.readContract({
       address: this.hintHelpers,
       abi: HINT_HELPERS_ABI,
@@ -4444,7 +5126,7 @@ var FelixCdpAdapter = class {
     const interestRate = 50000000000000000n;
     const [upperHint, lowerHint] = await this.getHints(interestRate);
     const hasHints = upperHint !== 0n || lowerHint !== 0n;
-    const data = encodeFunctionData16({
+    const data = encodeFunctionData17({
       abi: BORROWER_OPS_ABI,
       functionName: "openTrove",
       args: [
@@ -4473,7 +5155,7 @@ var FelixCdpAdapter = class {
   async buildAdjust(params) {
     const collChange = params.collateral_delta ?? 0n;
     const debtChange = params.debt_delta ?? 0n;
-    const data = encodeFunctionData16({
+    const data = encodeFunctionData17({
       abi: BORROWER_OPS_ABI,
       functionName: "adjustTrove",
       args: [
@@ -4496,7 +5178,7 @@ var FelixCdpAdapter = class {
     };
   }
   async buildClose(params) {
-    const data = encodeFunctionData16({
+    const data = encodeFunctionData17({
       abi: BORROWER_OPS_ABI,
       functionName: "closeTrove",
       args: [params.cdp_id]
@@ -4512,7 +5194,7 @@ var FelixCdpAdapter = class {
   async getCdpInfo(cdpId) {
     if (!this.rpcUrl) throw DefiError.rpcError(`[${this.protocolName}] getCdpInfo requires RPC \u2014 set HYPEREVM_RPC_URL`);
     if (!this.troveManager) throw DefiError.contractError(`[${this.protocolName}] trove_manager contract not configured`);
-    const client = createPublicClient12({ transport: http12(this.rpcUrl) });
+    const client = createPublicClient13({ transport: http13(this.rpcUrl) });
     const data = await client.readContract({
       address: this.troveManager,
       abi: TROVE_MANAGER_ABI,
@@ -4545,7 +5227,7 @@ var FelixCdpAdapter = class {
     };
   }
 };
-var PRICE_FEED_ABI = parseAbi18([
+var PRICE_FEED_ABI = parseAbi19([
   "function fetchPrice() external view returns (uint256 price, bool isNewOracleFailureDetected)",
   "function lastGoodPrice() external view returns (uint256)"
 ]);
@@ -4571,7 +5253,7 @@ var FelixOracleAdapter = class {
     if (asset !== this.asset && this.asset !== "0x0000000000000000000000000000000000000000") {
       throw DefiError.unsupported(`[${this.protocolName}] Felix PriceFeed only supports asset ${this.asset}`);
     }
-    const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
     let priceVal;
     try {
       const result = await client.readContract({
@@ -4610,7 +5292,7 @@ var FelixOracleAdapter = class {
     return results;
   }
 };
-var ERC4626_ABI = parseAbi19([
+var ERC4626_ABI = parseAbi20([
   "function asset() external view returns (address)",
   "function totalAssets() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
@@ -4634,7 +5316,7 @@ var ERC4626VaultAdapter = class {
     return this.protocolName;
   }
   async buildDeposit(assets, receiver) {
-    const data = encodeFunctionData17({
+    const data = encodeFunctionData18({
       abi: ERC4626_ABI,
       functionName: "deposit",
       args: [assets, receiver]
@@ -4648,7 +5330,7 @@ var ERC4626VaultAdapter = class {
     };
   }
   async buildWithdraw(assets, receiver, owner) {
-    const data = encodeFunctionData17({
+    const data = encodeFunctionData18({
       abi: ERC4626_ABI,
       functionName: "withdraw",
       args: [assets, receiver, owner]
@@ -4663,7 +5345,7 @@ var ERC4626VaultAdapter = class {
   }
   async totalAssets() {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI,
@@ -4674,7 +5356,7 @@ var ERC4626VaultAdapter = class {
   }
   async convertToShares(assets) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI,
@@ -4686,7 +5368,7 @@ var ERC4626VaultAdapter = class {
   }
   async convertToAssets(shares) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI,
@@ -4698,7 +5380,7 @@ var ERC4626VaultAdapter = class {
   }
   async getVaultInfo() {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
     const [totalAssets, totalSupply, asset] = await Promise.all([
       client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI, functionName: "totalAssets" }).catch((e) => {
         throw DefiError.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
@@ -4719,7 +5401,7 @@ var ERC4626VaultAdapter = class {
     };
   }
 };
-var GENERIC_LST_ABI = parseAbi20([
+var GENERIC_LST_ABI = parseAbi21([
   "function stake() external payable returns (uint256)",
   "function unstake(uint256 amount) external returns (uint256)"
 ]);
@@ -4736,7 +5418,7 @@ var GenericLstAdapter = class {
     return this.protocolName;
   }
   async buildStake(params) {
-    const data = encodeFunctionData18({ abi: GENERIC_LST_ABI, functionName: "stake" });
+    const data = encodeFunctionData19({ abi: GENERIC_LST_ABI, functionName: "stake" });
     return {
       description: `[${this.protocolName}] Stake ${params.amount} HYPE`,
       to: this.staking,
@@ -4746,7 +5428,7 @@ var GenericLstAdapter = class {
     };
   }
   async buildUnstake(params) {
-    const data = encodeFunctionData18({
+    const data = encodeFunctionData19({
       abi: GENERIC_LST_ABI,
       functionName: "unstake",
       args: [params.amount]
@@ -4763,11 +5445,11 @@ var GenericLstAdapter = class {
     throw DefiError.unsupported(`[${this.protocolName}] getInfo requires RPC`);
   }
 };
-var STHYPE_ABI = parseAbi21([
+var STHYPE_ABI = parseAbi222([
   "function submit(address referral) external payable returns (uint256)",
   "function requestWithdrawals(uint256[] amounts, address owner) external returns (uint256[] requestIds)"
 ]);
-var ERC20_ABI3 = parseAbi21([
+var ERC20_ABI3 = parseAbi222([
   "function totalSupply() external view returns (uint256)"
 ]);
 var StHypeAdapter = class {
@@ -4787,7 +5469,7 @@ var StHypeAdapter = class {
     return this.protocolName;
   }
   async buildStake(params) {
-    const data = encodeFunctionData19({
+    const data = encodeFunctionData20({
       abi: STHYPE_ABI,
       functionName: "submit",
       args: [zeroAddress9]
@@ -4801,7 +5483,7 @@ var StHypeAdapter = class {
     };
   }
   async buildUnstake(params) {
-    const data = encodeFunctionData19({
+    const data = encodeFunctionData20({
       abi: STHYPE_ABI,
       functionName: "requestWithdrawals",
       args: [[params.amount], params.recipient]
@@ -4816,7 +5498,7 @@ var StHypeAdapter = class {
   }
   async getInfo() {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
+    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
     const tokenAddr = this.sthypeToken ?? this.staking;
     const totalSupply = await client.readContract({
       address: tokenAddr,
@@ -4834,12 +5516,12 @@ var StHypeAdapter = class {
     };
   }
 };
-var KINETIQ_ABI = parseAbi222([
+var KINETIQ_ABI = parseAbi23([
   "function stake() external payable returns (uint256)",
   "function requestUnstake(uint256 amount) external returns (uint256)",
   "function totalStaked() external view returns (uint256)"
 ]);
-var ORACLE_ABI3 = parseAbi222([
+var ORACLE_ABI3 = parseAbi23([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
 var WHYPE = "0x5555555555555555555555555555555555555555";
@@ -4861,7 +5543,7 @@ var KinetiqAdapter = class {
     return this.protocolName;
   }
   async buildStake(params) {
-    const data = encodeFunctionData20({ abi: KINETIQ_ABI, functionName: "stake" });
+    const data = encodeFunctionData21({ abi: KINETIQ_ABI, functionName: "stake" });
     return {
       description: `[${this.protocolName}] Stake ${params.amount} HYPE for kHYPE`,
       to: this.staking,
@@ -4871,7 +5553,7 @@ var KinetiqAdapter = class {
     };
   }
   async buildUnstake(params) {
-    const data = encodeFunctionData20({
+    const data = encodeFunctionData21({
       abi: KINETIQ_ABI,
       functionName: "requestUnstake",
       args: [params.amount]
@@ -4886,7 +5568,7 @@ var KinetiqAdapter = class {
   }
   async getInfo() {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
     const totalStaked = await client.readContract({
       address: this.staking,
       abi: KINETIQ_ABI,
@@ -4908,15 +5590,15 @@ var KinetiqAdapter = class {
     };
   }
 };
-var HLP_ABI = parseAbi23([
+var HLP_ABI = parseAbi24([
   "function deposit(uint256 amount) external returns (uint256)",
   "function withdraw(uint256 shares) external returns (uint256)"
 ]);
-var RYSK_ABI = parseAbi24([
+var RYSK_ABI = parseAbi25([
   "function openOption(address underlying, uint256 strikePrice, uint256 expiry, bool isCall, uint256 amount) external returns (uint256 premium)",
   "function closeOption(address underlying, uint256 strikePrice, uint256 expiry, bool isCall, uint256 amount) external returns (uint256 payout)"
 ]);
-var ERC721_ABI = parseAbi25([
+var ERC721_ABI = parseAbi26([
   "function name() returns (string)",
   "function symbol() returns (string)",
   "function totalSupply() returns (uint256)",
@@ -4936,7 +5618,7 @@ var ERC721Adapter = class {
   }
   async getCollectionInfo(collection) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
+    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
     const [collectionName, symbol, totalSupply] = await Promise.all([
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "name" }).catch((e) => {
         throw DefiError.rpcError(`[${this.protocolName}] name failed: ${e}`);
@@ -4955,7 +5637,7 @@ var ERC721Adapter = class {
   }
   async getTokenInfo(collection, tokenId) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
+    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
     const [owner, tokenUri] = await Promise.all([
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "ownerOf", args: [tokenId] }).catch((e) => {
         throw DefiError.rpcError(`[${this.protocolName}] ownerOf failed: ${e}`);
@@ -4971,7 +5653,7 @@ var ERC721Adapter = class {
   }
   async getBalance(owner, collection) {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
+    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
     return client.readContract({ address: collection, abi: ERC721_ABI, functionName: "balanceOf", args: [owner] }).catch((e) => {
       throw DefiError.rpcError(`[${this.protocolName}] balanceOf failed: ${e}`);
     });
@@ -5091,6 +5773,9 @@ function createOracleFromCdp(entry, _asset, rpcUrl) {
     default:
       throw DefiError.unsupported(`Oracle not available for CDP interface '${entry.interface}'`);
   }
+}
+function createMerchantMoeLB(entry, rpcUrl) {
+  return new MerchantMoeLBAdapter(entry, rpcUrl);
 }
 var DexSpotPrice = class {
   /**
@@ -6099,20 +6784,20 @@ function registerYield(parent, getOpts, makeExecutor2) {
 }
 
 // src/commands/portfolio.ts
-import { encodeFunctionData as encodeFunctionData24, parseAbi as parseAbi27 } from "viem";
+import { encodeFunctionData as encodeFunctionData25, parseAbi as parseAbi28 } from "viem";
 
 // src/portfolio-tracker.ts
 import { mkdirSync, writeFileSync, readdirSync as readdirSync2, readFileSync as readFileSync2, existsSync as existsSync2 } from "fs";
 import { homedir } from "os";
 import { resolve as resolve2 } from "path";
-import { encodeFunctionData as encodeFunctionData23, parseAbi as parseAbi26 } from "viem";
-var ERC20_ABI4 = parseAbi26([
+import { encodeFunctionData as encodeFunctionData24, parseAbi as parseAbi27 } from "viem";
+var ERC20_ABI4 = parseAbi27([
   "function balanceOf(address owner) external view returns (uint256)"
 ]);
-var ORACLE_ABI4 = parseAbi26([
+var ORACLE_ABI4 = parseAbi27([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
-var POOL_ABI3 = parseAbi26([
+var POOL_ABI3 = parseAbi27([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)"
 ]);
 function decodeU256Word(data, wordOffset = 0) {
@@ -6141,7 +6826,7 @@ async function takeSnapshot(chainName, wallet, registry) {
     tokenEntries.push({ symbol: t.symbol, address: entry.address, decimals: entry.decimals });
     calls.push([
       entry.address,
-      encodeFunctionData23({ abi: ERC20_ABI4, functionName: "balanceOf", args: [user] })
+      encodeFunctionData24({ abi: ERC20_ABI4, functionName: "balanceOf", args: [user] })
     ]);
     callLabels.push(`balance:${t.symbol}`);
   }
@@ -6149,7 +6834,7 @@ async function takeSnapshot(chainName, wallet, registry) {
   for (const p of lendingProtocols) {
     calls.push([
       p.contracts["pool"],
-      encodeFunctionData23({ abi: POOL_ABI3, functionName: "getUserAccountData", args: [user] })
+      encodeFunctionData24({ abi: POOL_ABI3, functionName: "getUserAccountData", args: [user] })
     ]);
     callLabels.push(`lending:${p.name}`);
   }
@@ -6159,7 +6844,7 @@ async function takeSnapshot(chainName, wallet, registry) {
   if (oracleAddr) {
     calls.push([
       oracleAddr,
-      encodeFunctionData23({ abi: ORACLE_ABI4, functionName: "getAssetPrice", args: [wrappedNative] })
+      encodeFunctionData24({ abi: ORACLE_ABI4, functionName: "getAssetPrice", args: [wrappedNative] })
     ]);
     callLabels.push("price:native");
   }
@@ -6297,13 +6982,13 @@ function calculatePnL(current, previous) {
 }
 
 // src/commands/portfolio.ts
-var ERC20_ABI5 = parseAbi27([
+var ERC20_ABI5 = parseAbi28([
   "function balanceOf(address owner) external view returns (uint256)"
 ]);
-var POOL_ABI4 = parseAbi27([
+var POOL_ABI4 = parseAbi28([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)"
 ]);
-var ORACLE_ABI5 = parseAbi27([
+var ORACLE_ABI5 = parseAbi28([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
 function decodeU2562(data, wordOffset = 0) {
@@ -6343,7 +7028,7 @@ function registerPortfolio(parent, getOpts) {
       if (entry.address === "0x0000000000000000000000000000000000000000") continue;
       calls.push([
         entry.address,
-        encodeFunctionData24({ abi: ERC20_ABI5, functionName: "balanceOf", args: [user] })
+        encodeFunctionData25({ abi: ERC20_ABI5, functionName: "balanceOf", args: [user] })
       ]);
       callLabels.push(`balance:${symbol}`);
     }
@@ -6351,7 +7036,7 @@ function registerPortfolio(parent, getOpts) {
     for (const p of lendingProtocols) {
       calls.push([
         p.contracts["pool"],
-        encodeFunctionData24({ abi: POOL_ABI4, functionName: "getUserAccountData", args: [user] })
+        encodeFunctionData25({ abi: POOL_ABI4, functionName: "getUserAccountData", args: [user] })
       ]);
       callLabels.push(`lending:${p.name}`);
     }
@@ -6361,7 +7046,7 @@ function registerPortfolio(parent, getOpts) {
     if (oracleAddr) {
       calls.push([
         oracleAddr,
-        encodeFunctionData24({ abi: ORACLE_ABI5, functionName: "getAssetPrice", args: [wrappedNative] })
+        encodeFunctionData25({ abi: ORACLE_ABI5, functionName: "getAssetPrice", args: [wrappedNative] })
       ]);
       callLabels.push("price:native");
     }
@@ -6723,14 +7408,14 @@ function registerAlert(parent, getOpts) {
 }
 
 // src/commands/scan.ts
-import { encodeFunctionData as encodeFunctionData25, parseAbi as parseAbi28 } from "viem";
-var AAVE_ORACLE_ABI = parseAbi28([
+import { encodeFunctionData as encodeFunctionData26, parseAbi as parseAbi29 } from "viem";
+var AAVE_ORACLE_ABI = parseAbi29([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
-var UNIV2_ROUTER_ABI = parseAbi28([
+var UNIV2_ROUTER_ABI = parseAbi29([
   "function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory)"
 ]);
-var VTOKEN_ABI = parseAbi28([
+var VTOKEN_ABI = parseAbi29([
   "function exchangeRateStored() external view returns (uint256)"
 ]);
 var STABLECOINS = /* @__PURE__ */ new Set(["USDC", "USDT", "DAI", "USDT0"]);
@@ -6840,7 +7525,7 @@ function registerScan(parent, getOpts) {
               callTypes.push({ kind: "oracle", oracle: oracle.name, token: token.symbol, oracleDecimals: oracle.decimals });
               calls.push([
                 oracle.addr,
-                encodeFunctionData25({ abi: AAVE_ORACLE_ABI, functionName: "getAssetPrice", args: [token.address] })
+                encodeFunctionData26({ abi: AAVE_ORACLE_ABI, functionName: "getAssetPrice", args: [token.address] })
               ]);
             }
           }
@@ -6851,7 +7536,7 @@ function registerScan(parent, getOpts) {
               callTypes.push({ kind: "dex", token: token.symbol, outDecimals: quoteStable.decimals });
               calls.push([
                 dexRouter,
-                encodeFunctionData25({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [amountIn, path] })
+                encodeFunctionData26({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [amountIn, path] })
               ]);
             }
           }
@@ -6860,7 +7545,7 @@ function registerScan(parent, getOpts) {
           callTypes.push({ kind: "stable", from: "USDC", to: "USDT", outDecimals: usdt.decimals });
           calls.push([
             dexRouter,
-            encodeFunctionData25({
+            encodeFunctionData26({
               abi: UNIV2_ROUTER_ABI,
               functionName: "getAmountsOut",
               args: [BigInt(10) ** BigInt(usdc.decimals), [usdc.address, usdt.address]]
@@ -6869,7 +7554,7 @@ function registerScan(parent, getOpts) {
           callTypes.push({ kind: "stable", from: "USDT", to: "USDC", outDecimals: usdc.decimals });
           calls.push([
             dexRouter,
-            encodeFunctionData25({
+            encodeFunctionData26({
               abi: UNIV2_ROUTER_ABI,
               functionName: "getAmountsOut",
               args: [BigInt(10) ** BigInt(usdt.decimals), [usdt.address, usdc.address]]
@@ -6880,7 +7565,7 @@ function registerScan(parent, getOpts) {
           for (const fork of compoundForks) {
             for (const { key, addr } of fork.vtokens) {
               callTypes.push({ kind: "exchangeRate", protocol: fork.name, vtoken: key });
-              calls.push([addr, encodeFunctionData25({ abi: VTOKEN_ABI, functionName: "exchangeRateStored", args: [] })]);
+              calls.push([addr, encodeFunctionData26({ abi: VTOKEN_ABI, functionName: "exchangeRateStored", args: [] })]);
             }
           }
         }
@@ -7098,22 +7783,22 @@ async function runAllChains(registry, patterns, oracleThreshold, stableThreshold
         for (const oracle of oracles) {
           for (const token of scanTokens) {
             cts.push({ kind: "oracle", oracle: oracle.name, token: token.symbol, dec: oracle.decimals });
-            calls.push([oracle.addr, encodeFunctionData25({ abi: AAVE_ORACLE_ABI, functionName: "getAssetPrice", args: [token.address] })]);
+            calls.push([oracle.addr, encodeFunctionData26({ abi: AAVE_ORACLE_ABI, functionName: "getAssetPrice", args: [token.address] })]);
           }
         }
         if (dexRouter) {
           for (const token of scanTokens) {
             const path = wrappedNative && token.address.toLowerCase() === wrappedNative.toLowerCase() ? [token.address, quoteStable.address] : wrappedNative ? [token.address, wrappedNative, quoteStable.address] : [token.address, quoteStable.address];
             cts.push({ kind: "dex", token: token.symbol, dec: quoteStable.decimals });
-            calls.push([dexRouter, encodeFunctionData25({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [BigInt(10) ** BigInt(token.decimals), path] })]);
+            calls.push([dexRouter, encodeFunctionData26({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [BigInt(10) ** BigInt(token.decimals), path] })]);
           }
         }
       }
       if (doStable && usdc && usdt && dexRouter) {
         cts.push({ kind: "stable", from: "USDC", to: "USDT", dec: usdt.decimals });
-        calls.push([dexRouter, encodeFunctionData25({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [BigInt(10) ** BigInt(usdc.decimals), [usdc.address, usdt.address]] })]);
+        calls.push([dexRouter, encodeFunctionData26({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [BigInt(10) ** BigInt(usdc.decimals), [usdc.address, usdt.address]] })]);
         cts.push({ kind: "stable", from: "USDT", to: "USDC", dec: usdc.decimals });
-        calls.push([dexRouter, encodeFunctionData25({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [BigInt(10) ** BigInt(usdt.decimals), [usdt.address, usdc.address]] })]);
+        calls.push([dexRouter, encodeFunctionData26({ abi: UNIV2_ROUTER_ABI, functionName: "getAmountsOut", args: [BigInt(10) ** BigInt(usdt.decimals), [usdt.address, usdc.address]] })]);
       }
       if (calls.length === 0) return null;
       const ct0 = Date.now();
@@ -7241,14 +7926,14 @@ function registerArb(parent, getOpts, makeExecutor2) {
 }
 
 // src/commands/positions.ts
-import { encodeFunctionData as encodeFunctionData26, parseAbi as parseAbi29 } from "viem";
-var ERC20_ABI6 = parseAbi29([
+import { encodeFunctionData as encodeFunctionData27, parseAbi as parseAbi30 } from "viem";
+var ERC20_ABI6 = parseAbi30([
   "function balanceOf(address owner) external view returns (uint256)"
 ]);
-var POOL_ABI5 = parseAbi29([
+var POOL_ABI5 = parseAbi30([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)"
 ]);
-var ORACLE_ABI6 = parseAbi29([
+var ORACLE_ABI6 = parseAbi30([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
 function round22(x) {
@@ -7277,7 +7962,7 @@ async function scanSingleChain(chainName, rpc, user, tokens, lendingPools, oracl
       callTypes.push({ kind: "token", symbol: token.symbol, decimals: token.decimals });
       calls.push([
         token.address,
-        encodeFunctionData26({ abi: ERC20_ABI6, functionName: "balanceOf", args: [user] })
+        encodeFunctionData27({ abi: ERC20_ABI6, functionName: "balanceOf", args: [user] })
       ]);
     }
   }
@@ -7285,14 +7970,14 @@ async function scanSingleChain(chainName, rpc, user, tokens, lendingPools, oracl
     callTypes.push({ kind: "lending", protocol: name, iface });
     calls.push([
       pool,
-      encodeFunctionData26({ abi: POOL_ABI5, functionName: "getUserAccountData", args: [user] })
+      encodeFunctionData27({ abi: POOL_ABI5, functionName: "getUserAccountData", args: [user] })
     ]);
   }
   if (oracleAddr) {
     callTypes.push({ kind: "native_price" });
     calls.push([
       oracleAddr,
-      encodeFunctionData26({ abi: ORACLE_ABI6, functionName: "getAssetPrice", args: [wrappedNative] })
+      encodeFunctionData27({ abi: ORACLE_ABI6, functionName: "getAssetPrice", args: [wrappedNative] })
     ]);
   }
   if (calls.length === 0) return null;
@@ -7585,14 +8270,14 @@ function registerPrice(parent, getOpts) {
 }
 
 // src/commands/wallet.ts
-import { createPublicClient as createPublicClient18, http as http18, formatEther } from "viem";
+import { createPublicClient as createPublicClient19, http as http19, formatEther } from "viem";
 function registerWallet(parent, getOpts) {
   const wallet = parent.command("wallet").description("Wallet management");
   wallet.command("balance").description("Show native token balance").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient18({ transport: http18(chain.effectiveRpcUrl()) });
+    const client = createPublicClient19({ transport: http19(chain.effectiveRpcUrl()) });
     const balance = await client.getBalance({ address: opts.address });
     printOutput({
       chain: chain.name,
@@ -7609,14 +8294,14 @@ function registerWallet(parent, getOpts) {
 }
 
 // src/commands/token.ts
-import { createPublicClient as createPublicClient19, http as http19, maxUint256 } from "viem";
+import { createPublicClient as createPublicClient20, http as http20, maxUint256 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--owner <address>", "Wallet address to query").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient19({ transport: http19(chain.effectiveRpcUrl()) });
+    const client = createPublicClient20({ transport: http20(chain.effectiveRpcUrl()) });
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
     const [balance, symbol, decimals] = await Promise.all([
       client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [opts.owner] }),
@@ -7645,7 +8330,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient19({ transport: http19(chain.effectiveRpcUrl()) });
+    const client = createPublicClient20({ transport: http20(chain.effectiveRpcUrl()) });
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
     const allowance = await client.readContract({
       address: tokenAddr,
@@ -7667,8 +8352,8 @@ function registerToken(parent, getOpts, makeExecutor2) {
 }
 
 // src/commands/whales.ts
-import { encodeFunctionData as encodeFunctionData27, parseAbi as parseAbi30 } from "viem";
-var POOL_ABI6 = parseAbi30([
+import { encodeFunctionData as encodeFunctionData28, parseAbi as parseAbi31 } from "viem";
+var POOL_ABI6 = parseAbi31([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)"
 ]);
 function round24(x) {
@@ -7779,7 +8464,7 @@ function registerWhales(parent, getOpts) {
         for (const { pool } of lendingPools) {
           calls.push([
             pool,
-            encodeFunctionData27({ abi: POOL_ABI6, functionName: "getUserAccountData", args: [whale.address] })
+            encodeFunctionData28({ abi: POOL_ABI6, functionName: "getUserAccountData", args: [whale.address] })
           ]);
         }
       }
@@ -8207,11 +8892,11 @@ function registerBridge(parent, getOpts) {
         const amountUsdc = Number(BigInt(opts.amount)) / 1e6;
         const { fee, maxFeeSubunits } = await getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc);
         const recipientPadded = `0x${"0".repeat(24)}${recipient.replace("0x", "").toLowerCase()}`;
-        const { encodeFunctionData: encodeFunctionData28, parseAbi: parseAbi31 } = await import("viem");
-        const tokenMessengerAbi = parseAbi31([
+        const { encodeFunctionData: encodeFunctionData29, parseAbi: parseAbi33 } = await import("viem");
+        const tokenMessengerAbi = parseAbi33([
           "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold) external returns (uint64 nonce)"
         ]);
-        const data = encodeFunctionData28({
+        const data = encodeFunctionData29({
           abi: tokenMessengerAbi,
           functionName: "depositForBurn",
           args: [
@@ -8548,6 +9233,107 @@ function registerSetup(program2) {
   });
 }
 
+// src/commands/lb.ts
+function registerLB(parent, getOpts, makeExecutor2) {
+  const lb = parent.command("lb").description("Merchant Moe Liquidity Book: add/remove liquidity, rewards, positions");
+  lb.command("add").description("Add liquidity to a Liquidity Book pair").requiredOption("--protocol <protocol>", "Protocol slug (e.g. merchantmoe-mantle)").requiredOption("--pool <address>", "LB pair address").requiredOption("--token-x <address>", "Token X address").requiredOption("--token-y <address>", "Token Y address").requiredOption("--bin-step <step>", "Bin step of the pair").option("--amount-x <wei>", "Amount of token X in wei", "0").option("--amount-y <wei>", "Amount of token Y in wei", "0").option("--bins <N>", "Number of bins on each side of active bin", "5").option("--active-id <id>", "Active bin id (defaults to on-chain query)").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const registry = Registry.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "mantle");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMerchantMoeLB(protocol, rpcUrl);
+    const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+    const tx = await adapter.buildAddLiquidity({
+      pool: opts.pool,
+      tokenX: opts.tokenX,
+      tokenY: opts.tokenY,
+      binStep: parseInt(opts.binStep),
+      amountX: BigInt(opts.amountX),
+      amountY: BigInt(opts.amountY),
+      numBins: parseInt(opts.bins),
+      activeIdDesired: opts.activeId ? parseInt(opts.activeId) : void 0,
+      recipient
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lb.command("remove").description("Remove liquidity from Liquidity Book bins").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-x <address>", "Token X address").requiredOption("--token-y <address>", "Token Y address").requiredOption("--bin-step <step>", "Bin step of the pair").requiredOption("--bins <binIds>", "Comma-separated bin IDs to remove from").requiredOption("--amounts <amounts>", "Comma-separated LB token amounts to remove per bin (wei)").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const registry = Registry.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const adapter = createMerchantMoeLB(protocol);
+    const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+    const binIds = opts.bins.split(",").map((s) => parseInt(s.trim()));
+    const amounts = opts.amounts.split(",").map((s) => BigInt(s.trim()));
+    const tx = await adapter.buildRemoveLiquidity({
+      tokenX: opts.tokenX,
+      tokenY: opts.tokenY,
+      binStep: parseInt(opts.binStep),
+      binIds,
+      amounts,
+      recipient
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lb.command("rewards").description("Show pending MOE rewards for a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pool <address>", "LB pair address").option("--bins <binIds>", "Comma-separated bin IDs to check (auto-detected from rewarder range if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
+    const registry = Registry.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "mantle");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMerchantMoeLB(protocol, rpcUrl);
+    const user = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!user) throw new Error("--address or DEFI_WALLET_ADDRESS required");
+    const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
+    const rewards = await adapter.getPendingRewards(user, opts.pool, binIds);
+    printOutput(rewards, getOpts());
+  });
+  lb.command("claim").description("Claim pending MOE rewards from a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pool <address>", "LB pair address").option("--bins <binIds>", "Comma-separated bin IDs to claim from (auto-detected from rewarder range if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const registry = Registry.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "mantle");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMerchantMoeLB(protocol, rpcUrl);
+    const user = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!user) throw new Error("--address or DEFI_WALLET_ADDRESS required");
+    const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
+    const tx = await adapter.buildClaimRewards(user, opts.pool, binIds);
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lb.command("discover").description("Find all rewarded LB pools on chain").requiredOption("--protocol <protocol>", "Protocol slug").option("--active-only", "Only show non-stopped pools").action(async (opts) => {
+    const registry = Registry.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "mantle");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMerchantMoeLB(protocol, rpcUrl);
+    let pools = await adapter.discoverRewardedPools();
+    if (opts.activeOnly) {
+      pools = pools.filter((p) => !p.stopped);
+    }
+    printOutput(pools, getOpts());
+  });
+  lb.command("positions").description("Show user positions per bin in a LB pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pool <address>", "LB pair address").option("--bins <binIds>", "Comma-separated bin IDs to query (auto-detected from rewarder range or active \xB1 50 if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
+    const registry = Registry.loadEmbedded();
+    const protocol = registry.getProtocol(opts.protocol);
+    const chainName = parent.opts().chain;
+    const chain = registry.getChain(chainName ?? "mantle");
+    const rpcUrl = chain.effectiveRpcUrl();
+    const adapter = createMerchantMoeLB(protocol, rpcUrl);
+    const user = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!user) throw new Error("--address or DEFI_WALLET_ADDRESS required");
+    const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
+    const positions = await adapter.getUserPositions(user, opts.pool, binIds);
+    printOutput(positions, getOpts());
+  });
+}
+
 // src/cli.ts
 var _require = createRequire(import.meta.url);
 var _pkg = _require("../package.json");
@@ -8559,7 +9345,7 @@ var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551     \u2588\u2588\u2551    \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551
   \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D     \u255A\u2550\u255D     \u255A\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D
 
-  2 chains \xB7 32 protocols \xB7 by HypurrQuant
+  2 chains \xB7 30 protocols \xB7 by HypurrQuant
 
   Scan exploits, swap tokens, bridge assets, track whales,
   compare yields \u2014 all from your terminal.
@@ -8599,6 +9385,7 @@ registerSwap(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
 registerNft(program, getOutputMode);
 registerFarm(program, getOutputMode, makeExecutor);
+registerLB(program, getOutputMode, makeExecutor);
 registerSetup(program);
 program.command("agent").description("Agent mode: read JSON commands from stdin (for AI agents)").action(async () => {
   const executor = makeExecutor();

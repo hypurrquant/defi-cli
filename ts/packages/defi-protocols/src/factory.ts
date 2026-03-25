@@ -12,6 +12,7 @@ import { SolidlyAdapter } from "./dex/solidly.js";
 import { WooFiAdapter } from "./dex/woofi.js";
 import { SolidlyGaugeAdapter } from "./dex/solidly_gauge.js";
 import { MasterChefAdapter } from "./dex/masterchef.js";
+import { MerchantMoeLBAdapter } from "./dex/merchant_moe_lb.js";
 
 // Trait interfaces
 import type { IDex } from "@hypurrquant/defi-core";
@@ -274,4 +275,13 @@ export function createOracleFromCdp(entry: ProtocolEntry, _asset: Address, rpcUr
     default:
       throw DefiError.unsupported(`Oracle not available for CDP interface '${entry.interface}'`);
   }
+}
+
+// ============================================================
+// Merchant Moe LB
+// ============================================================
+
+/** Create a MerchantMoeLBAdapter for Liquidity Book operations */
+export function createMerchantMoeLB(entry: ProtocolEntry, rpcUrl?: string): MerchantMoeLBAdapter {
+  return new MerchantMoeLBAdapter(entry, rpcUrl);
 }

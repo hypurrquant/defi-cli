@@ -1,5 +1,112 @@
-import { ProtocolEntry, ICdp, IDerivatives, IDex, IGaugeSystem, ILending, ILiquidStaking, IGauge, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, DeFiTx, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, RewardInfo, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
+import { ProtocolEntry, DeFiTx, RewardInfo, ICdp, IDerivatives, IDex, IGaugeSystem, ILending, ILiquidStaking, IGauge, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
 import { Address } from 'viem';
+
+interface LBAddLiquidityParams {
+    pool: Address;
+    tokenX: Address;
+    tokenY: Address;
+    binStep: number;
+    amountX: bigint;
+    amountY: bigint;
+    /** Number of bins on each side of active bin to distribute across (default: 5) */
+    numBins?: number;
+    /** Active bin id desired (defaults to on-chain query if rpcUrl provided) */
+    activeIdDesired?: number;
+    recipient: Address;
+    deadline?: bigint;
+}
+interface LBRemoveLiquidityParams {
+    tokenX: Address;
+    tokenY: Address;
+    binStep: number;
+    binIds: number[];
+    /** Amount of LB tokens to remove per bin (in order matching binIds) */
+    amounts: bigint[];
+    amountXMin?: bigint;
+    amountYMin?: bigint;
+    recipient: Address;
+    deadline?: bigint;
+}
+interface LBPosition {
+    binId: number;
+    balance: bigint;
+}
+interface RewardedPool {
+    pool: Address;
+    rewarder: Address;
+    rewardToken: Address;
+    minBinId: number;
+    maxBinId: number;
+    pid: number;
+    stopped: boolean;
+    tokenX: Address;
+    tokenY: Address;
+    symbolX: string;
+    symbolY: string;
+    isTopPool: boolean;
+    moePerDay: number;
+    rangeTvlUsd: number;
+    aprPercent: number;
+    rewardedBins: number;
+}
+declare class MerchantMoeLBAdapter {
+    private readonly protocolName;
+    private readonly lbRouter;
+    private readonly lbFactory;
+    private readonly lbQuoter?;
+    private readonly rpcUrl?;
+    /** WMNT address (lb_mid_wmnt in config) used for MOE price routing */
+    private readonly wmnt?;
+    /** USDT address (lb_mid_usdt in config) used for MNT/USD price routing */
+    private readonly usdt?;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
+    name(): string;
+    private requireRpc;
+    /**
+     * Build an addLiquidity transaction for a Liquidity Book pair.
+     * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+     */
+    buildAddLiquidity(params: LBAddLiquidityParams): Promise<DeFiTx>;
+    /**
+     * Build a removeLiquidity transaction for specific LB bins.
+     */
+    buildRemoveLiquidity(params: LBRemoveLiquidityParams): Promise<DeFiTx>;
+    /**
+     * Auto-detect bin IDs for a pool from the rewarder's rewarded range.
+     * Falls back to active bin ± 50 scan if no rewarder exists.
+     */
+    private autoDetectBins;
+    /**
+     * Get pending MOE rewards for a user across specified bin IDs.
+     * If binIds is omitted, auto-detects from the rewarder's rewarded range.
+     * Reads the rewarder address from the pool's hooks parameters.
+     */
+    getPendingRewards(user: Address, pool: Address, binIds?: number[]): Promise<RewardInfo[]>;
+    /**
+     * Build a claim rewards transaction for specific LB bins.
+     * If binIds is omitted, auto-detects from the rewarder's rewarded range.
+     */
+    buildClaimRewards(user: Address, pool: Address, binIds?: number[]): Promise<DeFiTx>;
+    /**
+     * Discover all active rewarded LB pools by iterating the factory.
+     * Uses 7 multicall batches to minimise RPC round-trips and avoid 429s.
+     *
+     * Batch 1: getNumberOfLBPairs(), then getLBPairAtIndex(i) for all i
+     * Batch 2: getLBHooksParameters() for all pairs → extract rewarder addresses
+     * Batch 3: isStopped/getRewardedRange/getRewardToken/getPid/getMasterChef for each rewarder
+     * Batch 4: getTokenX/getTokenY for each rewarded pair, then symbol() for unique tokens
+     * Batch 5: Bootstrap MasterChef→VeMoe, then getMoePerSecond/getTreasuryShare/getStaticShare/getTotalWeight/getTopPoolIds
+     * Batch 6: VeMoe.getWeight(pid) for each rewarded pool
+     * Batch 7: Pool.getBin(binId) for all bins in rewarded range of each pool
+     * Price: LB Quoter findBestPathFromAmountIn for MOE/WMNT and WMNT/USDT prices
+     */
+    discoverRewardedPools(): Promise<RewardedPool[]>;
+    /**
+     * Get a user's LB positions (bin balances) across a range of bin IDs.
+     * If binIds is omitted, auto-detects from the rewarder's rewarded range (or active ± 50).
+     */
+    getUserPositions(user: Address, pool: Address, binIds?: number[]): Promise<LBPosition[]>;
+}
 
 /** Create a Dex implementation from a protocol registry entry */
 declare function createDex(entry: ProtocolEntry, rpcUrl?: string): IDex;
@@ -27,6 +134,8 @@ declare function createNft(entry: ProtocolEntry, rpcUrl?: string): INft;
 declare function createOracleFromLending(entry: ProtocolEntry, rpcUrl: string): IOracle;
 /** Create an Oracle from a CDP protocol entry (Felix has its own PriceFeed contract) */
 declare function createOracleFromCdp(entry: ProtocolEntry, _asset: Address, rpcUrl: string): IOracle;
+/** Create a MerchantMoeLBAdapter for Liquidity Book operations */
+declare function createMerchantMoeLB(entry: ProtocolEntry, rpcUrl?: string): MerchantMoeLBAdapter;
 
 declare class UniswapV2Adapter implements IDex {
     private readonly protocolName;
@@ -424,4 +533,4 @@ declare class ERC721Adapter implements INft {
     getBalance(owner: Address, collection: Address): Promise<bigint>;
 }
 
-export { AaveOracleAdapter, AaveV2Adapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, KinetiqAdapter, MasterChefAdapter, MorphoBlueAdapter, PendleAdapter, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createLending, createLiquidStaking, createMasterChef, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };
+export { AaveOracleAdapter, AaveV2Adapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, KinetiqAdapter, type LBAddLiquidityParams, type LBPosition, type LBRemoveLiquidityParams, MasterChefAdapter, MerchantMoeLBAdapter, MorphoBlueAdapter, PendleAdapter, type RewardedPool, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createLending, createLiquidStaking, createMasterChef, createMerchantMoeLB, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };
