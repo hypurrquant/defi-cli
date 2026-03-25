@@ -27,12 +27,6 @@ importers:
 
   packages/defi-cli:
     dependencies:
-      '@hypurrquant/defi-core':
-        specifier: workspace:*
-        version: link:../defi-core
-      '@hypurrquant/defi-protocols':
-        specifier: workspace:*
-        version: link:../defi-protocols
       commander:
         specifier: ^13.0.0
         version: 13.1.0
@@ -42,6 +36,13 @@ importers:
       viem:
         specifier: ^2.23.0
         version: 2.47.5(typescript@5.9.3)(zod@3.25.76)
+    devDependencies:
+      '@hypurrquant/defi-core':
+        specifier: workspace:*
+        version: link:../defi-core
+      '@hypurrquant/defi-protocols':
+        specifier: workspace:*
+        version: link:../defi-protocols
 
   packages/defi-core:
     dependencies:
