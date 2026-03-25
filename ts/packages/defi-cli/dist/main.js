@@ -863,6 +863,10 @@ async function multicallRead(rpcUrl, calls) {
   });
   return decoded.map((r) => r.success ? r.returnData : null);
 }
+function decodeU256(data) {
+  if (!data || data.length < 66) return 0n;
+  return BigInt(data.slice(0, 66));
+}
 var ChainConfig = class {
   name;
   chain_id;
@@ -6120,7 +6124,7 @@ var POOL_ABI4 = parseAbi27([
 var ORACLE_ABI5 = parseAbi27([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
-function decodeU256(data, wordOffset = 0) {
+function decodeU2562(data, wordOffset = 0) {
   if (!data || data.length < 2 + (wordOffset + 1) * 64) return 0n;
   const hex = data.slice(2 + wordOffset * 64, 2 + wordOffset * 64 + 64);
   return BigInt("0x" + hex);
@@ -6200,7 +6204,7 @@ function registerPortfolio(parent, getOpts) {
     let nativePriceUsd = 0;
     if (oracleAddr) {
       const priceData = results[results.length - 1] ?? null;
-      nativePriceUsd = Number(decodeU256(priceData)) / 1e8;
+      nativePriceUsd = Number(decodeU2562(priceData)) / 1e8;
     }
     let totalValueUsd = 0;
     let idx = 0;
@@ -6214,7 +6218,7 @@ function registerPortfolio(parent, getOpts) {
       }
       if (entry.address === "0x0000000000000000000000000000000000000000") continue;
       if (idx >= results.length) break;
-      const balance = decodeU256(results[idx] ?? null);
+      const balance = decodeU2562(results[idx] ?? null);
       if (balance > 0n) {
         const decimals = entry.decimals;
         const balF64 = Number(balance) / 10 ** decimals;
@@ -6234,9 +6238,9 @@ function registerPortfolio(parent, getOpts) {
       if (idx >= results.length) break;
       const data = results[idx] ?? null;
       if (data && data.length >= 2 + 192 * 2) {
-        const collateral = Number(decodeU256(data, 0)) / 1e8;
-        const debt = Number(decodeU256(data, 1)) / 1e8;
-        const hfRaw = decodeU256(data, 5);
+        const collateral = Number(decodeU2562(data, 0)) / 1e8;
+        const debt = Number(decodeU2562(data, 1)) / 1e8;
+        const hfRaw = decodeU2562(data, 5);
         let hf = null;
         if (hfRaw <= BigInt("0xffffffffffffffffffffffffffffffff")) {
           const v = Number(hfRaw) / 1e18;
@@ -7078,7 +7082,7 @@ function estimateTokenValue(symbol, balance, nativePrice) {
   if (["WETH", "ETH", "METH", "CBETH", "WSTETH"].includes(s)) return balance * 2350;
   return balance * nativePrice;
 }
-function decodeU2562(data, offset = 0) {
+function decodeU2563(data, offset = 0) {
   if (!data || data.length < 2 + (offset + 32) * 2) return 0n;
   const hex = data.slice(2 + offset * 64, 2 + offset * 64 + 64);
   return BigInt("0x" + hex);
@@ -7116,7 +7120,7 @@ async function scanSingleChain(chainName, rpc, user, tokens, lendingPools, oracl
   } catch {
     return null;
   }
-  const nativePrice = oracleAddr ? Number(decodeU2562(results[results.length - 1])) / 1e8 : 0;
+  const nativePrice = oracleAddr ? Number(decodeU2563(results[results.length - 1])) / 1e8 : 0;
   const tokenBalances = [];
   const lendingPositions = [];
   let chainValue = 0;
@@ -7126,7 +7130,7 @@ async function scanSingleChain(chainName, rpc, user, tokens, lendingPools, oracl
     const ct = callTypes[i];
     const data = results[i] ?? null;
     if (ct.kind === "token") {
-      const balance = decodeU2562(data);
+      const balance = decodeU2563(data);
       if (balance > 0n) {
         const balF64 = Number(balance) / 10 ** ct.decimals;
         const valueUsd = estimateTokenValue(ct.symbol, balF64, nativePrice);
@@ -7143,9 +7147,9 @@ async function scanSingleChain(chainName, rpc, user, tokens, lendingPools, oracl
       if (data && data.length >= 2 + 192 * 2) {
         const priceDecimals = ct.iface === "aave_v2" ? 18 : 8;
         const divisor = 10 ** priceDecimals;
-        const collateral = Number(decodeU2562(data, 0)) / divisor;
-        const debt = Number(decodeU2562(data, 1)) / divisor;
-        const hfRaw = decodeU2562(data, 5);
+        const collateral = Number(decodeU2563(data, 0)) / divisor;
+        const debt = Number(decodeU2563(data, 1)) / divisor;
+        const hfRaw = decodeU2563(data, 5);
         let hf = null;
         if (hfRaw <= BigInt("0xffffffffffffffffffffffffffffffff")) {
           const v = Number(hfRaw) / 1e18;
@@ -7491,7 +7495,7 @@ function round24(x) {
 function round43(x) {
   return Math.round(x * 1e4) / 1e4;
 }
-function decodeU2563(data, wordOffset = 0) {
+function decodeU2564(data, wordOffset = 0) {
   if (!data || data.length < 2 + (wordOffset + 1) * 64) return 0n;
   const hex = data.slice(2 + wordOffset * 64, 2 + wordOffset * 64 + 64);
   return BigInt("0x" + hex);
@@ -7616,9 +7620,9 @@ function registerWhales(parent, getOpts) {
           if (data && data.length >= 2 + 192 * 2) {
             const dec = iface === "aave_v2" ? 18 : 8;
             const divisor = 10 ** dec;
-            const collateral = Number(decodeU2563(data, 0)) / divisor;
-            const debt = Number(decodeU2563(data, 1)) / divisor;
-            const hfRaw = decodeU2563(data, 5);
+            const collateral = Number(decodeU2564(data, 0)) / divisor;
+            const debt = Number(decodeU2564(data, 1)) / divisor;
+            const hfRaw = decodeU2564(data, 5);
             let hf = null;
             if (hfRaw <= BigInt("0xffffffffffffffffffffffffffffffff")) {
               const v = Number(hfRaw) / 1e18;
@@ -8021,11 +8025,11 @@ function registerBridge(parent, getOpts) {
         const amountUsdc = Number(BigInt(opts.amount)) / 1e6;
         const { fee, maxFeeSubunits } = await getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc);
         const recipientPadded = `0x${"0".repeat(24)}${recipient.replace("0x", "").toLowerCase()}`;
-        const { encodeFunctionData: encodeFunctionData28, parseAbi: parseAbi31 } = await import("viem");
-        const tokenMessengerAbi = parseAbi31([
+        const { encodeFunctionData: encodeFunctionData29, parseAbi: parseAbi33 } = await import("viem");
+        const tokenMessengerAbi = parseAbi33([
           "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold) external returns (uint64 nonce)"
         ]);
-        const data = encodeFunctionData28({
+        const data = encodeFunctionData29({
           abi: tokenMessengerAbi,
           functionName: "depositForBurn",
           args: [
@@ -8274,9 +8278,210 @@ program.command("agent").description("Agent mode: read JSON commands from stdin 
   process.exit(1);
 });
 
+// src/landing.ts
+import pc2 from "picocolors";
+import { encodeFunctionData as encodeFunctionData28, parseAbi as parseAbi31, formatUnits } from "viem";
+var HYPEREVM_DISPLAY = ["HYPE", "WHYPE", "USDC", "USDT0", "USDe", "kHYPE", "wstHYPE"];
+var MANTLE_DISPLAY = ["MNT", "WMNT", "USDC", "USDT", "WETH", "mETH"];
+var balanceOfAbi = parseAbi31([
+  "function balanceOf(address account) view returns (uint256)"
+]);
+var getEthBalanceAbi = parseAbi31([
+  "function getEthBalance(address addr) view returns (uint256)"
+]);
+async function fetchBalances(rpcUrl, wallet, tokens) {
+  const calls = tokens.map((t) => {
+    const isNative = t.tags?.includes("native") || t.address === "0x0000000000000000000000000000000000000000";
+    if (isNative) {
+      return [
+        MULTICALL3_ADDRESS,
+        encodeFunctionData28({
+          abi: getEthBalanceAbi,
+          functionName: "getEthBalance",
+          args: [wallet]
+        })
+      ];
+    }
+    return [
+      t.address,
+      encodeFunctionData28({
+        abi: balanceOfAbi,
+        functionName: "balanceOf",
+        args: [wallet]
+      })
+    ];
+  });
+  let results;
+  try {
+    results = await multicallRead(rpcUrl, calls);
+  } catch {
+    results = tokens.map(() => null);
+  }
+  return tokens.map((t, i) => {
+    const raw = decodeU256(results[i]);
+    const formatted = formatUnits(raw, t.decimals);
+    const num = parseFloat(formatted);
+    const display = num === 0 ? "0.00" : num >= 1e3 ? num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+    return { symbol: t.symbol, balance: display, decimals: t.decimals };
+  });
+}
+function shortenAddress(addr) {
+  if (addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+function padRight(s, len) {
+  return s.length >= len ? s : s + " ".repeat(len - s.length);
+}
+function padLeft(s, len) {
+  return s.length >= len ? s : " ".repeat(len - s.length) + s;
+}
+function formatBalanceLine(sym, bal) {
+  const symPad = padRight(sym, 10);
+  const balPad = padLeft(bal, 12);
+  return `  ${symPad}${balPad}`;
+}
+async function showLandingPage(isJson) {
+  const registry = Registry.loadEmbedded();
+  const wallet = process.env.DEFI_WALLET_ADDRESS;
+  if (isJson) {
+    if (!wallet) {
+      console.log(JSON.stringify({ error: "DEFI_WALLET_ADDRESS not set" }, null, 2));
+      return;
+    }
+    const heChain2 = registry.getChain("hyperevm");
+    const mantleChain2 = registry.getChain("mantle");
+    const heTokens2 = (registry.tokens.get("hyperevm") ?? []).filter((t) => HYPEREVM_DISPLAY.includes(t.symbol));
+    const mantleTokens2 = (registry.tokens.get("mantle") ?? []).filter((t) => MANTLE_DISPLAY.includes(t.symbol));
+    const heSorted2 = HYPEREVM_DISPLAY.map((s) => heTokens2.find((t) => t.symbol === s)).filter(Boolean);
+    const mantleSorted2 = MANTLE_DISPLAY.map((s) => mantleTokens2.find((t) => t.symbol === s)).filter(Boolean);
+    const [heBalances2, mantleBalances2] = await Promise.all([
+      fetchBalances(heChain2.effectiveRpcUrl(), wallet, heSorted2),
+      fetchBalances(mantleChain2.effectiveRpcUrl(), wallet, mantleSorted2)
+    ]);
+    console.log(JSON.stringify({
+      wallet,
+      chains: {
+        hyperevm: { name: heChain2.name, balances: heBalances2 },
+        mantle: { name: mantleChain2.name, balances: mantleBalances2 }
+      }
+    }, null, 2));
+    return;
+  }
+  const version = "0.2.0";
+  if (!wallet) {
+    console.log("");
+    console.log(pc2.bold(pc2.cyan("  DeFi CLI v" + version)));
+    console.log("");
+    console.log(pc2.yellow("  Wallet not configured."));
+    console.log("  Set DEFI_WALLET_ADDRESS to see your balances:");
+    console.log("");
+    console.log(pc2.dim("    export DEFI_WALLET_ADDRESS=0x..."));
+    console.log("");
+    console.log("  Commands:");
+    console.log(pc2.dim("    defi status              Protocol overview"));
+    console.log(pc2.dim("    defi lending rates       Compare lending APYs"));
+    console.log(pc2.dim("    defi dex quote           Get swap quotes"));
+    console.log(pc2.dim("    defi portfolio           View all positions"));
+    console.log(pc2.dim("    defi scan                Exploit detection"));
+    console.log(pc2.dim("    defi --help              Full command list"));
+    console.log("");
+    return;
+  }
+  const heChain = registry.getChain("hyperevm");
+  const mantleChain = registry.getChain("mantle");
+  const heTokens = (registry.tokens.get("hyperevm") ?? []).filter((t) => HYPEREVM_DISPLAY.includes(t.symbol));
+  const mantleTokens = (registry.tokens.get("mantle") ?? []).filter((t) => MANTLE_DISPLAY.includes(t.symbol));
+  const heSorted = HYPEREVM_DISPLAY.map((s) => heTokens.find((t) => t.symbol === s)).filter(Boolean);
+  const mantleSorted = MANTLE_DISPLAY.map((s) => mantleTokens.find((t) => t.symbol === s)).filter(Boolean);
+  const [heBalances, mantleBalances] = await Promise.all([
+    fetchBalances(heChain.effectiveRpcUrl(), wallet, heSorted).catch(
+      () => heSorted.map((t) => ({ symbol: t.symbol, balance: "?", decimals: t.decimals }))
+    ),
+    fetchBalances(mantleChain.effectiveRpcUrl(), wallet, mantleSorted).catch(
+      () => mantleSorted.map((t) => ({ symbol: t.symbol, balance: "?", decimals: t.decimals }))
+    )
+  ]);
+  const colWidth = 38;
+  const divider = "\u2500".repeat(colWidth - 2);
+  console.log("");
+  console.log(
+    pc2.bold(pc2.cyan("  DeFi CLI v" + version)) + pc2.dim("  \u2014  ") + pc2.bold(heChain.name) + pc2.dim(" \xB7 ") + pc2.bold(mantleChain.name)
+  );
+  console.log("");
+  console.log("  Wallet: " + pc2.yellow(shortenAddress(wallet)));
+  console.log("");
+  const heHeader = padRight(
+    "  " + pc2.bold(heChain.name),
+    colWidth + 10
+    /* account for ANSI */
+  );
+  const mantleHeader = pc2.bold(mantleChain.name);
+  console.log(heHeader + "  " + mantleHeader);
+  const heDivider = padRight("  " + pc2.dim(divider), colWidth + 10);
+  const mantleDivider = pc2.dim(divider);
+  console.log(heDivider + "  " + mantleDivider);
+  const maxRows = Math.max(heBalances.length, mantleBalances.length);
+  for (let i = 0; i < maxRows; i++) {
+    const heEntry = heBalances[i];
+    const mantleEntry = mantleBalances[i];
+    const heText = heEntry ? formatBalanceLine(heEntry.symbol, heEntry.balance) : "";
+    const mantleText = mantleEntry ? formatBalanceLine(mantleEntry.symbol, mantleEntry.balance) : "";
+    const heColored = heEntry ? heEntry.balance === "0.00" || heEntry.balance === "?" ? pc2.dim(heText) : heText : "";
+    const mantleColored = mantleEntry ? mantleEntry.balance === "0.00" || mantleEntry.balance === "?" ? pc2.dim(mantleText) : mantleText : "";
+    const visibleLen = heText.length;
+    const padNeeded = colWidth - visibleLen;
+    const paddedHe = heColored + (padNeeded > 0 ? " ".repeat(padNeeded) : "");
+    console.log(paddedHe + "  " + mantleColored);
+  }
+  console.log("");
+  console.log("  " + pc2.bold("Commands:"));
+  console.log("    " + pc2.cyan("defi status") + "              Protocol overview");
+  console.log("    " + pc2.cyan("defi lending rates") + "       Compare lending APYs");
+  console.log("    " + pc2.cyan("defi dex quote") + "           Get swap quotes");
+  console.log("    " + pc2.cyan("defi portfolio") + "           View all positions");
+  console.log("    " + pc2.cyan("defi scan") + "                Exploit detection");
+  console.log("    " + pc2.cyan("defi --help") + "              Full command list");
+  console.log("");
+}
+
 // src/main.ts
 async function main() {
   try {
+    const rawArgs = process.argv.slice(2);
+    const knownSubcommands = /* @__PURE__ */ new Set([
+      "status",
+      "schema",
+      "dex",
+      "gauge",
+      "lending",
+      "cdp",
+      "staking",
+      "vault",
+      "yield",
+      "portfolio",
+      "monitor",
+      "alert",
+      "scan",
+      "arb",
+      "positions",
+      "price",
+      "wallet",
+      "token",
+      "whales",
+      "compare",
+      "swap",
+      "bridge",
+      "nft",
+      "farm",
+      "agent"
+    ]);
+    const hasSubcommand = rawArgs.some((a) => !a.startsWith("-") && knownSubcommands.has(a));
+    const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");
+    const isHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+    if (!isHelp && (rawArgs.length === 0 || !hasSubcommand)) {
+      await showLandingPage(isJson);
+      return;
+    }
     await program.parseAsync(process.argv);
   } catch (error) {
     const isJsonMode = process.argv.includes("--json") || process.argv.includes("--ndjson");
