@@ -2,7 +2,8 @@ import { createPublicClient, createWalletClient, http, parseAbi, encodeFunctionD
 import type { Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { DefiError } from "@hypurrquant/defi-core";
-import type { ActionResult, DeFiTx, TxStatus } from "@hypurrquant/defi-core";
+import { TxStatus } from "@hypurrquant/defi-core";
+import type { ActionResult, DeFiTx } from "@hypurrquant/defi-core";
 
 const ERC20_ABI = parseAbi([
   "function allowance(address owner, address spender) external view returns (uint256)",
@@ -159,6 +160,47 @@ export class Executor {
     const from: `0x${string}` = privateKey
       ? privateKeyToAccount(privateKey as `0x${string}`).address
       : "0x0000000000000000000000000000000000000001";
+
+    // Check approvals before simulation
+    if (tx.approvals && tx.approvals.length > 0) {
+      const pendingApprovals: Array<{ token: string; spender: string; needed: string; current: string }> = [];
+      for (const approval of tx.approvals) {
+        try {
+          const allowance = await client.readContract({
+            address: approval.token,
+            abi: ERC20_ABI,
+            functionName: "allowance",
+            args: [from as `0x${string}`, approval.spender],
+          });
+          if (allowance < approval.amount) {
+            pendingApprovals.push({
+              token: approval.token,
+              spender: approval.spender,
+              needed: approval.amount.toString(),
+              current: allowance.toString(),
+            });
+          }
+        } catch { /* skip check on error */ }
+      }
+      if (pendingApprovals.length > 0) {
+        return {
+          tx_hash: undefined,
+          status: TxStatus.NeedsApproval,
+          gas_used: tx.gas_estimate,
+          description: tx.description,
+          details: {
+            to: tx.to,
+            from,
+            data: tx.data,
+            value: tx.value.toString(),
+            mode: "simulated",
+            result: "needs_approval",
+            pending_approvals: pendingApprovals,
+            hint: "Use --broadcast to auto-approve and execute",
+          },
+        };
+      }
+    }
 
     try {
       await client.call({ to: tx.to, data: tx.data, value: tx.value, account: from });

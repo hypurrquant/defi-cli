@@ -3,6 +3,7 @@ var TxStatus = /* @__PURE__ */ ((TxStatus2) => {
   TxStatus2["DryRun"] = "dry_run";
   TxStatus2["Simulated"] = "simulated";
   TxStatus2["SimulationFailed"] = "simulation_failed";
+  TxStatus2["NeedsApproval"] = "needs_approval";
   TxStatus2["Pending"] = "pending";
   TxStatus2["Confirmed"] = "confirmed";
   TxStatus2["Failed"] = "failed";

@@ -986,6 +986,7 @@ var init_dist2 = __esm({
       TxStatus2["DryRun"] = "dry_run";
       TxStatus2["Simulated"] = "simulated";
       TxStatus2["SimulationFailed"] = "simulation_failed";
+      TxStatus2["NeedsApproval"] = "needs_approval";
       TxStatus2["Pending"] = "pending";
       TxStatus2["Confirmed"] = "confirmed";
       TxStatus2["Failed"] = "failed";
@@ -4802,6 +4803,7 @@ import { z } from "zod";
 
 // src/executor.ts
 init_dist2();
+init_dist2();
 import { createPublicClient as createPublicClient18, createWalletClient, http as http18, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData23 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 var ERC20_ABI4 = parseAbi26([
@@ -4923,6 +4925,46 @@ var Executor = class _Executor {
     const client = createPublicClient18({ transport: http18(rpcUrl) });
     const privateKey = process.env["DEFI_PRIVATE_KEY"];
     const from = privateKey ? privateKeyToAccount(privateKey).address : "0x0000000000000000000000000000000000000001";
+    if (tx.approvals && tx.approvals.length > 0) {
+      const pendingApprovals = [];
+      for (const approval of tx.approvals) {
+        try {
+          const allowance = await client.readContract({
+            address: approval.token,
+            abi: ERC20_ABI4,
+            functionName: "allowance",
+            args: [from, approval.spender]
+          });
+          if (allowance < approval.amount) {
+            pendingApprovals.push({
+              token: approval.token,
+              spender: approval.spender,
+              needed: approval.amount.toString(),
+              current: allowance.toString()
+            });
+          }
+        } catch {
+        }
+      }
+      if (pendingApprovals.length > 0) {
+        return {
+          tx_hash: void 0,
+          status: TxStatus.NeedsApproval,
+          gas_used: tx.gas_estimate,
+          description: tx.description,
+          details: {
+            to: tx.to,
+            from,
+            data: tx.data,
+            value: tx.value.toString(),
+            mode: "simulated",
+            result: "needs_approval",
+            pending_approvals: pendingApprovals,
+            hint: "Use --broadcast to auto-approve and execute"
+          }
+        };
+      }
+    }
     try {
       await client.call({ to: tx.to, data: tx.data, value: tx.value, account: from });
       const gasEstimate = await this.estimateGasWithBuffer(rpcUrl, tx, from);

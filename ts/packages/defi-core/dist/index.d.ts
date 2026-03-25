@@ -27,6 +27,7 @@ declare enum TxStatus {
     DryRun = "dry_run",
     Simulated = "simulated",
     SimulationFailed = "simulation_failed",
+    NeedsApproval = "needs_approval",
     Pending = "pending",
     Confirmed = "confirmed",
     Failed = "failed"
