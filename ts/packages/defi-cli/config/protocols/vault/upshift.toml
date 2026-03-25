@@ -1,0 +1,14 @@
+[protocol]
+name = "Upshift"
+slug = "upshift"
+category = "vault"
+interface = "erc4626"
+chain = "hyperevm"
+native = false
+description = "Upshift — tokenized yield vaults on HyperEVM"
+
+[protocol.contracts]
+vault = "0x96C6cBB6251Ee1c257b2162ca0f39AA5Fa44B1FB"
+hbhype = "0x96C6cBB6251Ee1c257b2162ca0f39AA5Fa44B1FB"
+hbubtc = "0xc061d38903b99aC12713B550C2CB44B221674F94"
+hlpe = "0x8fFDcd8A96d293f45aA044d10b899F9D71897E8a"

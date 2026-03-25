@@ -1,0 +1,21 @@
+[protocol]
+name = "Felix Vaults"
+slug = "felix-vaults"
+category = "vault"
+interface = "erc4626"
+chain = "hyperevm"
+native = false
+description = "Felix Vaults — MetaMorpho ERC-4626 vaults on Morpho Blue, TVL $96M"
+
+[protocol.contracts]
+# Felix vaults are MetaMorpho vaults built on Morpho Blue
+# Default vault is feHYPE; use fehype/feusdc/feusdt0 for specific vaults
+morpho_blue = "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"
+vault = "0x2900ABd73631b2f60747e687095537B673c06A76"
+fehype = "0x2900ABd73631b2f60747e687095537B673c06A76"
+feusdc = "0x8A862fD6c12f9ad34C9c2ff45AB2b6712e8CEa27"
+feusdt0 = "0xFc5126377F0efc0041C0969Ef9BA903Ce67d151e"
+feusdt0_frontier = "0x9896a8605763106e57A51aa0a97Fe8099E806bb3"
+feusde = "0x835febf893c6dddee5cf762b0f8e31c5b06938ab"
+feusdhl = "0x9c59a9389D8f72DE2CdAf1126F36EA4790E2275e"
+feusdhl_frontier = "0x66c71204B70aE27BE6dC3eb41F9aF5868E68fDb6"

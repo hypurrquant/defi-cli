@@ -1,0 +1,17 @@
+[protocol]
+name = "Looping Collective"
+slug = "looping-collective"
+category = "vault"
+interface = "erc4626"
+chain = "hyperevm"
+native = true
+description = "Looping Collective — automated looping vaults on HyperEVM ($17M TVL)"
+
+[protocol.contracts]
+# loopedHYPE (LHYPE) — automated HYPE looping vault (BoringVault/ERC4626)
+vault = "0x5748ae796AE46A4F1348a1693de4b50560485562"
+lhype = "0x5748ae796AE46A4F1348a1693de4b50560485562"
+# Wrapped HLP (wHLP) — BoringVault accruing HLP yield
+whlp = "0x1359b05241cA5076c9F59605214f4F84114c0dE8"
+whlp_accountant = "0x470bd109A24f608590d85fc1f5a4B6e625E8bDfF"
+whlp_depositor = "0x340C9f6159ABc2bdfCC0E2b9Fe91D739006b41c1"

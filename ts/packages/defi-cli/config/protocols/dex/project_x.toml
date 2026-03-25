@@ -1,0 +1,13 @@
+[protocol]
+name = "Project X"
+slug = "project-x"
+category = "dex"
+interface = "uniswap_v4"
+chain = "hyperevm"
+native = true
+description = "Uniswap V3 fork on HyperEVM ($44M TVL)"
+
+[protocol.contracts]
+router = "0x1EbDFC75FfE3ba3de61E7138a3E8706aC841Af9B"
+factory = "0xFF7B3E8C00e57ea31477c32A5B52a58Eea47b072"
+position_manager = "0xeaD19AE861c29bBb2101E834922B2FEee69B9091"

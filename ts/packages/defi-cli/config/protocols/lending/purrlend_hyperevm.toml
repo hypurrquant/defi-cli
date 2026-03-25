@@ -1,0 +1,14 @@
+[protocol]
+name = "Purrlend"
+slug = "purrlend-hyperevm"
+category = "lending"
+interface = "aave_v3"
+chain = "hyperevm"
+native = true
+description = "Purrlend lending on HyperEVM"
+
+[protocol.contracts]
+pool = "0xb61218d3efe306f7579ee50d1a606d56bc222048"
+pool_addresses_provider = "0xf33e33b35163ce2f46bf7150e1592839ac199124"
+oracle = "0xa55d6358c22cdfe8d469c5703621052e8ff9ef1b"
+pool_data_provider = "0xa8Ca6a4A485485910aA4023b9963Dfd2f3A5aeb0"

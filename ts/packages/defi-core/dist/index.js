@@ -313,9 +313,13 @@ var __dirname = fileURLToPath(new URL(".", import.meta.url));
 function findConfigDir() {
   const candidates = [
     resolve(__dirname, "../../../config"),
-    // from dist/registry/
-    resolve(__dirname, "../../../../config")
-    // from src/registry/
+    // from dist/registry/ (monorepo build)
+    resolve(__dirname, "../../../../config"),
+    // from src/registry/ (vitest)
+    resolve(__dirname, "../config"),
+    // from dist/ (npm bundle — config at package root)
+    resolve(__dirname, "../../config")
+    // from dist/subdir (npm bundle variant)
   ];
   for (const dir of candidates) {
     if (existsSync(resolve(dir, "chains.toml"))) return dir;

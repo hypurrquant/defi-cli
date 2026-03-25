@@ -10,11 +10,13 @@ import { existsSync } from "fs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
-// Resolve config dir: works from both src/ (vitest) and dist/ (built output)
+// Resolve config dir: works from src/ (vitest), dist/ (built), and npm bundle (npx)
 function findConfigDir(): string {
   const candidates = [
-    resolve(__dirname, "../../../config"),   // from dist/registry/
-    resolve(__dirname, "../../../../config"), // from src/registry/
+    resolve(__dirname, "../../../config"),   // from dist/registry/ (monorepo build)
+    resolve(__dirname, "../../../../config"), // from src/registry/ (vitest)
+    resolve(__dirname, "../config"),          // from dist/ (npm bundle — config at package root)
+    resolve(__dirname, "../../config"),       // from dist/subdir (npm bundle variant)
   ];
   for (const dir of candidates) {
     if (existsSync(resolve(dir, "chains.toml"))) return dir;

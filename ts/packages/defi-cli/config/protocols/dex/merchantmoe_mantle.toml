@@ -1,0 +1,21 @@
+[protocol]
+name = "Merchant Moe Mantle"
+slug = "merchantmoe-mantle"
+category = "dex"
+interface = "uniswap_v2"
+chain = "mantle"
+native = false
+description = "Merchant Moe on Mantle"
+
+[protocol.contracts]
+router = "0xeaEE7EE68874218c3558b40063c42B82D3E7232a"
+factory = "0x5bEf015CA9424A7C07B68490616a4C1F094BEdEc"
+lb_router = "0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a"
+lb_factory = "0xa6630671775c4EA2743840F9A5016dCf2A104054"
+lb_quoter = "0x501b8AFd35df20f531fF45F6f695793AC3316c85"
+masterchef = "0xA756f7D419e1A5cbd656A438443011a7dE1955b5"
+# Common intermediary tokens for LB multi-hop routing
+lb_mid_wmnt = "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+lb_mid_usdc = "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+lb_mid_usdt = "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+lb_mid_weth = "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"

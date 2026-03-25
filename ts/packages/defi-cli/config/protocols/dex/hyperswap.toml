@@ -1,0 +1,14 @@
+[protocol]
+name = "HyperSwap V3"
+slug = "hyperswap-v3"
+category = "dex"
+interface = "uniswap_v3"
+chain = "hyperevm"
+native = true
+description = "Uniswap V3 fork on HyperEVM"
+
+[protocol.contracts]
+router = "0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D"
+factory = "0xB1c0fa0B789320044A6F623cFe5eBda9562602E3"
+quoter = "0x03A918028f22D9E1473B7959C927AD7425A45C7C"
+# position_manager = "TODO: HyperSwap V3 NPM address not yet confirmed"

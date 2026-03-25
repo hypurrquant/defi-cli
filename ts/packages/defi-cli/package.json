@@ -1,26 +1,21 @@
 {
-  "name": "@hypurrquant/defi-cli",
+  "name": "defi-cli",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "license": "MIT",
   "bin": {
-    "defi": "./dist/main.js"
-  },
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+    "defi": "dist/main.js"
   },
   "files": [
-    "dist/"
+    "dist",
+    "config"
   ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "lint": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "@hypurrquant/defi-core": "workspace:*",
