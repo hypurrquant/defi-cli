@@ -1074,6 +1074,7 @@ var Executor = class _Executor {
     const [maxFeePerGas, maxPriorityFeePerGas] = await this.fetchEip1559Fees(rpcUrl);
     const approveTxHash = await walletClient.sendTransaction({
       chain: null,
+      account: walletClient.account,
       to: token,
       data: approveData,
       gas: gasLimit > 0n ? gasLimit : void 0,
