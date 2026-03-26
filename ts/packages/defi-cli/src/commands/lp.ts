@@ -117,6 +117,10 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
                     type: "EMISSION",
                     source: "lb_hooks",
                     stopped: p.stopped,
+                    moePerDay: p.moePerDay,
+                    aprPercent: p.aprPercent,
+                    rangeTvlUsd: p.rangeTvlUsd,
+                    isTopPool: p.isTopPool,
                   });
                 }
               }

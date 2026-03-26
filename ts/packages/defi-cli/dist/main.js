@@ -6966,7 +6966,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
                   pair: `${p.symbolX}/${p.symbolY}`,
                   type: "EMISSION",
                   source: "lb_hooks",
-                  stopped: p.stopped
+                  stopped: p.stopped,
+                  moePerDay: p.moePerDay,
+                  aprPercent: p.aprPercent,
+                  rangeTvlUsd: p.rangeTvlUsd,
+                  isTopPool: p.isTopPool
                 });
               }
             }
@@ -10263,7 +10267,7 @@ async function showLandingPage(isJson) {
     console.log("  Commands:");
     console.log(pc3.dim("    defi status              Protocol overview"));
     console.log(pc3.dim("    defi lending rates       Compare lending APYs"));
-    console.log(pc3.dim("    defi dex quote           Get swap quotes"));
+    console.log(pc3.dim("    defi lp discover         Find LP farming pools"));
     console.log(pc3.dim("    defi portfolio           View all positions"));
     console.log(pc3.dim("    defi scan                Exploit detection"));
     console.log(pc3.dim("    defi --help              Full command list"));

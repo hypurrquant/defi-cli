@@ -139,7 +139,7 @@ export async function showLandingPage(isJson: boolean): Promise<void> {
     console.log("  Commands:");
     console.log(pc.dim("    defi status              Protocol overview"));
     console.log(pc.dim("    defi lending rates       Compare lending APYs"));
-    console.log(pc.dim("    defi dex quote           Get swap quotes"));
+    console.log(pc.dim("    defi lp discover         Find LP farming pools"));
     console.log(pc.dim("    defi portfolio           View all positions"));
     console.log(pc.dim("    defi scan                Exploit detection"));
     console.log(pc.dim("    defi --help              Full command list"));

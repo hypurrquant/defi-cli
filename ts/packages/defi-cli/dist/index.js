@@ -6962,7 +6962,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
                   pair: `${p.symbolX}/${p.symbolY}`,
                   type: "EMISSION",
                   source: "lb_hooks",
-                  stopped: p.stopped
+                  stopped: p.stopped,
+                  moePerDay: p.moePerDay,
+                  aprPercent: p.aprPercent,
+                  rangeTvlUsd: p.rangeTvlUsd,
+                  isTopPool: p.isTopPool
                 });
               }
             }
