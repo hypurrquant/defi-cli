@@ -1,6 +1,6 @@
 {
   "name": "@hypurrquant/defi-cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Multi-chain DeFi CLI — lending, DEX, LP, bridge, vault, staking from your terminal",
   "type": "module",
   "license": "MIT",
