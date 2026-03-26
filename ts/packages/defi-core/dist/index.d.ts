@@ -238,6 +238,16 @@ interface OptionParams {
     is_call: boolean;
     amount: bigint;
 }
+/** A pool that has an active emission gauge */
+interface GaugedPool {
+    pool: Address;
+    gauge: Address;
+    token0: string;
+    token1: string;
+    type: "V2" | "CL";
+    tickSpacing?: number;
+    stable?: boolean;
+}
 interface RewardInfo {
     token: Address;
     symbol: string;
@@ -492,6 +502,8 @@ interface IGauge {
     getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
     /** Get pending rewards for a CL gauge NFT position */
     getPendingRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<bigint>;
+    /** Discover all pools that have active emission gauges */
+    discoverGaugedPools?(): Promise<GaugedPool[]>;
 }
 /** ve(3,3) Vote-escrow operations — lock tokens for veNFT */
 interface IVoteEscrow {
@@ -679,4 +691,4 @@ declare class Registry {
     resolvePool(protocolSlug: string, poolName: string): PoolInfo;
 }
 
-export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type Slippage, type StakeParams, type StakingInfo, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };
+export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type GaugedPool, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type Slippage, type StakeParams, type StakingInfo, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };

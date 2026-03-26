@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import type { DeFiTx, RewardInfo } from "../types.js";
+import type { DeFiTx, GaugedPool, RewardInfo } from "../types.js";
 
 /** ve(3,3) Gauge operations — stake LP tokens to earn emissions */
 export interface IGauge {
@@ -18,6 +18,8 @@ export interface IGauge {
   getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
   /** Get pending rewards for a CL gauge NFT position */
   getPendingRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<bigint>;
+  /** Discover all pools that have active emission gauges */
+  discoverGaugedPools?(): Promise<GaugedPool[]>;
 }
 
 /** ve(3,3) Vote-escrow operations — lock tokens for veNFT */

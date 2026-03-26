@@ -1401,8 +1401,8 @@ var WooFiAdapter = class {
 };
 
 // src/dex/solidly_gauge.ts
-import { createPublicClient as createPublicClient6, encodeFunctionData as encodeFunctionData10, http as http6, parseAbi as parseAbi10, zeroAddress as zeroAddress6 } from "viem";
-import { DefiError as DefiError10 } from "@hypurrquant/defi-core";
+import { createPublicClient as createPublicClient6, decodeFunctionResult as decodeFunctionResult2, encodeFunctionData as encodeFunctionData10, http as http6, parseAbi as parseAbi10, zeroAddress as zeroAddress6 } from "viem";
+import { DefiError as DefiError10, multicallRead as multicallRead2 } from "@hypurrquant/defi-core";
 var gaugeAbi = parseAbi10([
   "function deposit(uint256 amount) external",
   "function depositFor(uint256 amount, uint256 tokenId) external",
@@ -1437,11 +1437,50 @@ var voterAbi2 = parseAbi10([
   "function gaugeForPool(address pool) external view returns (address)",
   "function poolToGauge(address pool) external view returns (address)"
 ]);
+var _addressDecodeAbi = parseAbi10(["function f() external view returns (address)"]);
+function decodeAddress(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult2({ abi: _addressDecodeAbi, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
+var _symbolDecodeAbi = parseAbi10(["function symbol() external view returns (string)"]);
+function decodeSymbol(data) {
+  if (!data) return "?";
+  try {
+    return decodeFunctionResult2({ abi: _symbolDecodeAbi, functionName: "symbol", data });
+  } catch {
+    return "?";
+  }
+}
+var _boolDecodeAbi = parseAbi10(["function f() external view returns (bool)"]);
+function decodeBoolean(data) {
+  try {
+    return decodeFunctionResult2({ abi: _boolDecodeAbi, functionName: "f", data });
+  } catch {
+    return false;
+  }
+}
+var HYPEREVM_TOKENS = {
+  WHYPE: "0x5555555555555555555555555555555555555555",
+  USDC: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+  USDT0: "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+  WETH: "0xBE6427B974c51B8CACc3F2F3b0f2e1AD01b37C34",
+  mETH: "0x9ebA3E5a4B3B58C0e54fa8bad13eC6f5D3A7E3b2",
+  UBTC: "0x9FdBceda8F3030dC7Eb4dB9F70FA6451d2Fb5E81",
+  RAM: "0xAAA6C1E32C55A7Bfa8066A6FAE9b42650F262418",
+  hyperRAM: "0xAAAE8378809bb8815c08D3C59Eb0c7D1529aD769"
+};
+var CL_TICK_SPACINGS = [1, 10, 50, 100, 200];
 var SolidlyGaugeAdapter = class {
   protocolName;
   voter;
   veToken;
   rpcUrl;
+  clFactory;
+  v2Factory;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
     const voter = entry.contracts?.["voter"];
@@ -1455,9 +1494,200 @@ var SolidlyGaugeAdapter = class {
     this.voter = voter;
     this.veToken = veToken;
     this.rpcUrl = rpcUrl;
+    this.clFactory = entry.contracts?.["cl_factory"] ?? entry.contracts?.["factory"];
+    this.v2Factory = entry.contracts?.["pair_factory"] ?? entry.contracts?.["factory"];
   }
   name() {
     return this.protocolName;
+  }
+  /** Scan V2 and CL factories for pools that have active emission gauges. */
+  async discoverGaugedPools() {
+    if (!this.rpcUrl) throw DefiError10.rpcError("RPC URL required for gauge discovery");
+    const results = [];
+    await Promise.all([
+      this._discoverV2GaugedPools(results),
+      this._discoverCLGaugedPools(results)
+    ]);
+    return results;
+  }
+  async _discoverV2GaugedPools(out) {
+    if (!this.rpcUrl || !this.v2Factory) return;
+    const v2FactoryAbi = parseAbi10([
+      "function allPairsLength() external view returns (uint256)",
+      "function allPairs(uint256) external view returns (address)"
+    ]);
+    const pairAbi = parseAbi10([
+      "function token0() external view returns (address)",
+      "function token1() external view returns (address)",
+      "function stable() external view returns (bool)"
+    ]);
+    const erc20SymbolAbi = parseAbi10(["function symbol() external view returns (string)"]);
+    const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+    let pairCount;
+    try {
+      pairCount = await client.readContract({
+        address: this.v2Factory,
+        abi: v2FactoryAbi,
+        functionName: "allPairsLength"
+      });
+    } catch {
+      return;
+    }
+    const count = Number(pairCount);
+    if (count === 0) return;
+    const pairAddressCalls = [];
+    for (let i = 0; i < count; i++) {
+      pairAddressCalls.push([
+        this.v2Factory,
+        encodeFunctionData10({ abi: v2FactoryAbi, functionName: "allPairs", args: [BigInt(i)] })
+      ]);
+    }
+    const pairAddressResults = await multicallRead2(this.rpcUrl, pairAddressCalls);
+    const pairs = pairAddressResults.map((r) => decodeAddress(r)).filter((a) => a !== null && a !== zeroAddress6);
+    if (pairs.length === 0) return;
+    const gaugeForPoolAbi = parseAbi10(["function gaugeForPool(address) external view returns (address)"]);
+    const gaugeCalls = pairs.map((pair) => [
+      this.voter,
+      encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pair] })
+    ]);
+    const gaugeResults = await multicallRead2(this.rpcUrl, gaugeCalls);
+    const gaugedPairs = [];
+    for (let i = 0; i < pairs.length; i++) {
+      const gauge = decodeAddress(gaugeResults[i] ?? null);
+      if (gauge && gauge !== zeroAddress6) {
+        gaugedPairs.push({ pair: pairs[i], gauge });
+      }
+    }
+    if (gaugedPairs.length === 0) return;
+    const metaCalls = [];
+    for (const { pair } of gaugedPairs) {
+      metaCalls.push([pair, encodeFunctionData10({ abi: pairAbi, functionName: "token0" })]);
+      metaCalls.push([pair, encodeFunctionData10({ abi: pairAbi, functionName: "token1" })]);
+      metaCalls.push([pair, encodeFunctionData10({ abi: pairAbi, functionName: "stable" })]);
+    }
+    const metaResults = await multicallRead2(this.rpcUrl, metaCalls);
+    const tokenAddrs = /* @__PURE__ */ new Set();
+    for (let i = 0; i < gaugedPairs.length; i++) {
+      const t0 = decodeAddress(metaResults[i * 3] ?? null);
+      const t1 = decodeAddress(metaResults[i * 3 + 1] ?? null);
+      if (t0 && t0 !== zeroAddress6) tokenAddrs.add(t0);
+      if (t1 && t1 !== zeroAddress6) tokenAddrs.add(t1);
+    }
+    const uniqueTokens = Array.from(tokenAddrs);
+    const symbolCalls = uniqueTokens.map((t) => [
+      t,
+      encodeFunctionData10({ abi: erc20SymbolAbi, functionName: "symbol" })
+    ]);
+    const symbolResults = await multicallRead2(this.rpcUrl, symbolCalls);
+    const symbolMap = /* @__PURE__ */ new Map();
+    for (let i = 0; i < uniqueTokens.length; i++) {
+      symbolMap.set(uniqueTokens[i], decodeSymbol(symbolResults[i] ?? null));
+    }
+    for (let i = 0; i < gaugedPairs.length; i++) {
+      const { pair, gauge } = gaugedPairs[i];
+      const t0 = decodeAddress(metaResults[i * 3] ?? null);
+      const t1 = decodeAddress(metaResults[i * 3 + 1] ?? null);
+      const stableRaw = metaResults[i * 3 + 2];
+      const stable = stableRaw ? decodeBoolean(stableRaw) : false;
+      out.push({
+        pool: pair,
+        gauge,
+        token0: t0 ? symbolMap.get(t0) ?? t0.slice(0, 10) : "?",
+        token1: t1 ? symbolMap.get(t1) ?? t1.slice(0, 10) : "?",
+        type: "V2",
+        stable
+      });
+    }
+  }
+  async _discoverCLGaugedPools(out) {
+    if (!this.rpcUrl || !this.clFactory) return;
+    const clFactoryAbi = parseAbi10([
+      "function getPool(address tokenA, address tokenB, int24 tickSpacing) external view returns (address pool)"
+    ]);
+    const poolAbi2 = parseAbi10([
+      "function token0() external view returns (address)",
+      "function token1() external view returns (address)"
+    ]);
+    const erc20SymbolAbi = parseAbi10(["function symbol() external view returns (string)"]);
+    const gaugeForPoolAbi = parseAbi10(["function gaugeForPool(address) external view returns (address)"]);
+    const tokenEntries = Object.entries(HYPEREVM_TOKENS);
+    const tokenAddresses = tokenEntries.map(([, addr]) => addr);
+    const pairs = [];
+    for (let i = 0; i < tokenAddresses.length; i++) {
+      for (let j = i + 1; j < tokenAddresses.length; j++) {
+        pairs.push([tokenAddresses[i], tokenAddresses[j]]);
+      }
+    }
+    const getPoolCalls = [];
+    for (const [tokenA, tokenB] of pairs) {
+      for (const ts of CL_TICK_SPACINGS) {
+        getPoolCalls.push([
+          this.clFactory,
+          encodeFunctionData10({ abi: clFactoryAbi, functionName: "getPool", args: [tokenA, tokenB, ts] })
+        ]);
+      }
+    }
+    const getPoolResults = await multicallRead2(this.rpcUrl, getPoolCalls);
+    const candidatePools = [];
+    for (let i = 0; i < getPoolCalls.length; i++) {
+      const pool = decodeAddress(getPoolResults[i] ?? null);
+      if (pool && pool !== zeroAddress6) {
+        const pairIdx = Math.floor(i / CL_TICK_SPACINGS.length);
+        const tsIdx = i % CL_TICK_SPACINGS.length;
+        const [tokenA, tokenB] = pairs[pairIdx];
+        candidatePools.push({ pool, tokenA, tokenB, tickSpacing: CL_TICK_SPACINGS[tsIdx] });
+      }
+    }
+    if (candidatePools.length === 0) return;
+    const gaugeCalls = candidatePools.map(({ pool }) => [
+      this.voter,
+      encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pool] })
+    ]);
+    const gaugeResults = await multicallRead2(this.rpcUrl, gaugeCalls);
+    const gaugedCL = [];
+    for (let i = 0; i < candidatePools.length; i++) {
+      const gauge = decodeAddress(gaugeResults[i] ?? null);
+      if (gauge && gauge !== zeroAddress6) {
+        gaugedCL.push({ ...candidatePools[i], gauge });
+      }
+    }
+    if (gaugedCL.length === 0) return;
+    const tokenAddrsInPools = /* @__PURE__ */ new Set();
+    for (const { tokenA, tokenB } of gaugedCL) {
+      tokenAddrsInPools.add(tokenA);
+      tokenAddrsInPools.add(tokenB);
+    }
+    const uniqueTokens = Array.from(tokenAddrsInPools);
+    const symbolCalls = uniqueTokens.map((t) => [
+      t,
+      encodeFunctionData10({ abi: erc20SymbolAbi, functionName: "symbol" })
+    ]);
+    const symbolResults = await multicallRead2(this.rpcUrl, symbolCalls);
+    const symbolMap = /* @__PURE__ */ new Map();
+    for (let i = 0; i < uniqueTokens.length; i++) {
+      symbolMap.set(uniqueTokens[i], decodeSymbol(symbolResults[i] ?? null));
+    }
+    const poolTokenCalls = [];
+    for (const { pool } of gaugedCL) {
+      poolTokenCalls.push([pool, encodeFunctionData10({ abi: poolAbi2, functionName: "token0" })]);
+      poolTokenCalls.push([pool, encodeFunctionData10({ abi: poolAbi2, functionName: "token1" })]);
+    }
+    const poolTokenResults = await multicallRead2(this.rpcUrl, poolTokenCalls);
+    for (let i = 0; i < gaugedCL.length; i++) {
+      const { pool, gauge, tokenA, tokenB, tickSpacing } = gaugedCL[i];
+      const rawT0 = decodeAddress(poolTokenResults[i * 2] ?? null);
+      const rawT1 = decodeAddress(poolTokenResults[i * 2 + 1] ?? null);
+      const t0 = rawT0 && rawT0 !== zeroAddress6 ? rawT0 : tokenA;
+      const t1 = rawT1 && rawT1 !== zeroAddress6 ? rawT1 : tokenB;
+      out.push({
+        pool,
+        gauge,
+        token0: symbolMap.get(t0) ?? t0.slice(0, 10),
+        token1: symbolMap.get(t1) ?? t1.slice(0, 10),
+        type: "CL",
+        tickSpacing
+      });
+    }
   }
   // IGauge
   async buildDeposit(gauge, amount, tokenId, lpToken) {
@@ -1929,12 +2159,12 @@ var MasterChefAdapter = class {
 // src/dex/merchant_moe_lb.ts
 import {
   encodeFunctionData as encodeFunctionData12,
-  decodeFunctionResult as decodeFunctionResult2,
+  decodeFunctionResult as decodeFunctionResult3,
   parseAbi as parseAbi12,
   createPublicClient as createPublicClient8,
   http as http8
 } from "viem";
-import { DefiError as DefiError12, multicallRead as multicallRead2 } from "@hypurrquant/defi-core";
+import { DefiError as DefiError12, multicallRead as multicallRead3 } from "@hypurrquant/defi-core";
 var lbRouterAbi = parseAbi12([
   "struct LiquidityParameters { address tokenX; address tokenY; uint256 binStep; uint256 amountX; uint256 amountY; uint256 amountXMin; uint256 amountYMin; uint256 activeIdDesired; uint256 idSlippage; int256[] deltaIds; uint256[] distributionX; uint256[] distributionY; address to; address refundTo; uint256 deadline; }",
   "function addLiquidity(LiquidityParameters calldata liquidityParameters) external returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] memory depositIds, uint256[] memory liquidityMinted)",
@@ -1988,7 +2218,7 @@ var _addressAbi = parseAbi12(["function f() external view returns (address)"]);
 function decodeAddressResult(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult2({ abi: _addressAbi, functionName: "f", data });
+    return decodeFunctionResult3({ abi: _addressAbi, functionName: "f", data });
   } catch {
     return null;
   }
@@ -1997,7 +2227,7 @@ var _uint256Abi = parseAbi12(["function f() external view returns (uint256)"]);
 function decodeUint256Result(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult2({ abi: _uint256Abi, functionName: "f", data });
+    return decodeFunctionResult3({ abi: _uint256Abi, functionName: "f", data });
   } catch {
     return null;
   }
@@ -2006,7 +2236,7 @@ var _boolAbi = parseAbi12(["function f() external view returns (bool)"]);
 function decodeBoolResult(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult2({ abi: _boolAbi, functionName: "f", data });
+    return decodeFunctionResult3({ abi: _boolAbi, functionName: "f", data });
   } catch {
     return null;
   }
@@ -2014,7 +2244,7 @@ function decodeBoolResult(data) {
 function decodeStringResult(data) {
   if (!data) return "?";
   try {
-    return decodeFunctionResult2({ abi: erc20Abi, functionName: "symbol", data });
+    return decodeFunctionResult3({ abi: erc20Abi, functionName: "symbol", data });
   } catch {
     return "?";
   }
@@ -2023,7 +2253,7 @@ var _rangeAbi = parseAbi12(["function f() external view returns (uint256 minBinI
 function decodeRangeResult(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult2({ abi: _rangeAbi, functionName: "f", data });
+    return decodeFunctionResult3({ abi: _rangeAbi, functionName: "f", data });
   } catch {
     return null;
   }
@@ -2032,7 +2262,7 @@ var _binAbi = parseAbi12(["function f() external view returns (uint128 reserveX,
 function decodeBinResult(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult2({ abi: _binAbi, functionName: "f", data });
+    return decodeFunctionResult3({ abi: _binAbi, functionName: "f", data });
   } catch {
     return null;
   }
@@ -2041,7 +2271,7 @@ var _uint256ArrayAbi = parseAbi12(["function f() external view returns (uint256[
 function decodeUint256ArrayResult(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult2({ abi: _uint256ArrayAbi, functionName: "f", data });
+    return decodeFunctionResult3({ abi: _uint256ArrayAbi, functionName: "f", data });
   } catch {
     return null;
   }
@@ -2355,14 +2585,14 @@ var MerchantMoeLBAdapter = class {
       this.lbFactory,
       encodeFunctionData12({ abi: lbFactoryAbi, functionName: "getLBPairAtIndex", args: [BigInt(i)] })
     ]);
-    const batch1Results = await multicallRead2(rpcUrl, batch1Calls);
+    const batch1Results = await multicallRead3(rpcUrl, batch1Calls);
     const pairAddresses = batch1Results.map((r) => decodeAddressResult(r)).filter((a) => a !== null);
     if (pairAddresses.length === 0) return [];
     const batch2Calls = pairAddresses.map((pair) => [
       pair,
       encodeFunctionData12({ abi: lbPairAbi, functionName: "getLBHooksParameters" })
     ]);
-    const batch2Results = await multicallRead2(rpcUrl, batch2Calls);
+    const batch2Results = await multicallRead3(rpcUrl, batch2Calls);
     const rewardedPairs = [];
     for (let i = 0; i < pairAddresses.length; i++) {
       const raw = batch2Results[i];
@@ -2370,7 +2600,7 @@ var MerchantMoeLBAdapter = class {
       let hooksBytes;
       try {
         const _bytes32Abi = parseAbi12(["function f() external view returns (bytes32)"]);
-        hooksBytes = decodeFunctionResult2({ abi: _bytes32Abi, functionName: "f", data: raw });
+        hooksBytes = decodeFunctionResult3({ abi: _bytes32Abi, functionName: "f", data: raw });
       } catch {
         continue;
       }
@@ -2388,13 +2618,13 @@ var MerchantMoeLBAdapter = class {
       batch3Calls.push([rewarder, encodeFunctionData12({ abi: lbRewarderAbi, functionName: "getPid" })]);
       batch3Calls.push([rewarder, encodeFunctionData12({ abi: lbRewarderAbi, functionName: "getMasterChef" })]);
     }
-    const batch3Results = await multicallRead2(rpcUrl, batch3Calls);
+    const batch3Results = await multicallRead3(rpcUrl, batch3Calls);
     const batch4aCalls = [];
     for (const { pool } of rewardedPairs) {
       batch4aCalls.push([pool, encodeFunctionData12({ abi: lbPairAbi, functionName: "getTokenX" })]);
       batch4aCalls.push([pool, encodeFunctionData12({ abi: lbPairAbi, functionName: "getTokenY" })]);
     }
-    const batch4aResults = await multicallRead2(rpcUrl, batch4aCalls);
+    const batch4aResults = await multicallRead3(rpcUrl, batch4aCalls);
     const tokenXAddresses = [];
     const tokenYAddresses = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
@@ -2408,7 +2638,7 @@ var MerchantMoeLBAdapter = class {
       token,
       encodeFunctionData12({ abi: erc20Abi, functionName: "symbol" })
     ]);
-    const batch4bResults = await multicallRead2(rpcUrl, batch4bCalls);
+    const batch4bResults = await multicallRead3(rpcUrl, batch4bCalls);
     const symbolMap = /* @__PURE__ */ new Map();
     for (let i = 0; i < uniqueTokens.length; i++) {
       symbolMap.set(uniqueTokens[i], decodeStringResult(batch4bResults[i] ?? null));
@@ -2443,7 +2673,7 @@ var MerchantMoeLBAdapter = class {
         [veMoeAddr, encodeFunctionData12({ abi: veMoeAbi, functionName: "getTotalWeight" })],
         [veMoeAddr, encodeFunctionData12({ abi: veMoeAbi, functionName: "getTopPoolIds" })]
       ];
-      const batch5Results = await multicallRead2(rpcUrl, batch5Calls);
+      const batch5Results = await multicallRead3(rpcUrl, batch5Calls);
       const moePerSecRaw = decodeUint256Result(batch5Results[0] ?? null) ?? 0n;
       const treasuryShareRaw = decodeUint256Result(batch5Results[1] ?? null) ?? 0n;
       const staticShareRaw = decodeUint256Result(batch5Results[2] ?? null) ?? 0n;
@@ -2460,7 +2690,7 @@ var MerchantMoeLBAdapter = class {
         veMoeAddr,
         encodeFunctionData12({ abi: veMoeAbi, functionName: "getWeight", args: [BigInt(d.pid)] })
       ]);
-      const batch6Results = await multicallRead2(rpcUrl, batch6Calls);
+      const batch6Results = await multicallRead3(rpcUrl, batch6Calls);
       for (let i = 0; i < poolData.length; i++) {
         weightByPid.set(poolData[i].pid, decodeUint256Result(batch6Results[i] ?? null) ?? 0n);
       }
@@ -2507,7 +2737,7 @@ var MerchantMoeLBAdapter = class {
         rewardedPairs[poolIdx].pool,
         encodeFunctionData12({ abi: lbPairBinAbi, functionName: "getBin", args: [binId] })
       ]);
-      const batch7Results = await multicallRead2(rpcUrl, batch7Calls);
+      const batch7Results = await multicallRead3(rpcUrl, batch7Calls);
       for (let j = 0; j < binRequests.length; j++) {
         const { poolIdx, binId } = binRequests[j];
         const decoded = decodeBinResult(batch7Results[j] ?? null);
@@ -2961,10 +3191,10 @@ var KittenSwapFarmingAdapter = class {
 };
 
 // src/lending/aave_v3.ts
-import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult3, zeroAddress as zeroAddress7 } from "viem";
+import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult4, zeroAddress as zeroAddress7 } from "viem";
 import {
   DefiError as DefiError14,
-  multicallRead as multicallRead3,
+  multicallRead as multicallRead4,
   decodeU256,
   InterestRateMode
 } from "@hypurrquant/defi-core";
@@ -3004,14 +3234,14 @@ function u256ToF64(v) {
   if (v > MAX_U128) return Infinity;
   return Number(v);
 }
-function decodeAddress(data) {
+function decodeAddress2(data) {
   if (!data || data.length < 66) return null;
   return `0x${data.slice(26, 66)}`;
 }
 function decodeAddressArray(data) {
   if (!data) return [];
   try {
-    return decodeFunctionResult3({
+    return decodeFunctionResult4({
       abi: REWARDS_CONTROLLER_ABI,
       functionName: "getRewardsByAsset",
       data
@@ -3023,7 +3253,7 @@ function decodeAddressArray(data) {
 function decodeReserveData(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult3({
+    return decodeFunctionResult4({
       abi: POOL_ABI,
       functionName: "getReserveData",
       data
@@ -3035,7 +3265,7 @@ function decodeReserveData(data) {
 function decodeRewardsData(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult3({
+    return decodeFunctionResult4({
       abi: REWARDS_CONTROLLER_ABI,
       functionName: "getRewardsData",
       data
@@ -3125,7 +3355,7 @@ var AaveV3Adapter = class {
       functionName: "getReserveData",
       args: [asset]
     });
-    const [reserveRaw] = await multicallRead3(this.rpcUrl, [
+    const [reserveRaw] = await multicallRead4(this.rpcUrl, [
       [this.pool, reserveCallData]
     ]).catch((e) => {
       throw DefiError14.rpcError(`[${this.protocolName}] getReserveData failed: ${e}`);
@@ -3146,7 +3376,7 @@ var AaveV3Adapter = class {
     const stableRate = toApy(result[5]);
     const aTokenAddress = result[8];
     const variableDebtTokenAddress = result[10];
-    const [supplyRaw, borrowRaw] = await multicallRead3(this.rpcUrl, [
+    const [supplyRaw, borrowRaw] = await multicallRead4(this.rpcUrl, [
       [aTokenAddress, encodeFunctionData14({ abi: ERC20_ABI, functionName: "totalSupply" })],
       [variableDebtTokenAddress, encodeFunctionData14({ abi: ERC20_ABI, functionName: "totalSupply" })]
     ]);
@@ -3158,12 +3388,12 @@ var AaveV3Adapter = class {
     const supplyEmissions = [];
     const borrowEmissions = [];
     try {
-      const [controllerRaw] = await multicallRead3(this.rpcUrl, [
+      const [controllerRaw] = await multicallRead4(this.rpcUrl, [
         [aTokenAddress, encodeFunctionData14({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
       ]);
-      const controllerAddr = decodeAddress(controllerRaw ?? null);
+      const controllerAddr = decodeAddress2(controllerRaw ?? null);
       if (controllerAddr && controllerAddr !== zeroAddress7) {
-        const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead3(this.rpcUrl, [
+        const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead4(this.rpcUrl, [
           [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
           [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
         ]);
@@ -3180,7 +3410,7 @@ var AaveV3Adapter = class {
           ])
         ];
         if (rewardsDataCalls.length > 0) {
-          const rewardsDataResults = await multicallRead3(this.rpcUrl, rewardsDataCalls);
+          const rewardsDataResults = await multicallRead4(this.rpcUrl, rewardsDataCalls);
           const supplyDataResults = rewardsDataResults.slice(0, supplyRewards.length);
           const borrowDataResults = rewardsDataResults.slice(supplyRewards.length);
           for (let i = 0; i < supplyRewards.length; i++) {
@@ -3207,17 +3437,17 @@ var AaveV3Adapter = class {
     const hasBorrowRewards = borrowRewardTokens.length > 0;
     if ((hasSupplyRewards || hasBorrowRewards) && totalSupply > 0n) {
       try {
-        const [providerRaw] = await multicallRead3(this.rpcUrl, [
+        const [providerRaw] = await multicallRead4(this.rpcUrl, [
           [this.pool, encodeFunctionData14({ abi: POOL_PROVIDER_ABI, functionName: "ADDRESSES_PROVIDER" })]
         ]);
-        const providerAddr = decodeAddress(providerRaw ?? null);
+        const providerAddr = decodeAddress2(providerRaw ?? null);
         if (!providerAddr) throw new Error("No provider address");
-        const [oracleRaw] = await multicallRead3(this.rpcUrl, [
+        const [oracleRaw] = await multicallRead4(this.rpcUrl, [
           [providerAddr, encodeFunctionData14({ abi: ADDRESSES_PROVIDER_ABI, functionName: "getPriceOracle" })]
         ]);
-        const oracleAddr = decodeAddress(oracleRaw ?? null);
+        const oracleAddr = decodeAddress2(oracleRaw ?? null);
         if (!oracleAddr) throw new Error("No oracle address");
-        const [assetPriceRaw, baseCurrencyUnitRaw, assetDecimalsRaw] = await multicallRead3(this.rpcUrl, [
+        const [assetPriceRaw, baseCurrencyUnitRaw, assetDecimalsRaw] = await multicallRead4(this.rpcUrl, [
           [oracleAddr, encodeFunctionData14({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] })],
           [oracleAddr, encodeFunctionData14({ abi: ORACLE_ABI, functionName: "BASE_CURRENCY_UNIT" })],
           [asset, encodeFunctionData14({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
@@ -3233,7 +3463,7 @@ var AaveV3Adapter = class {
           [oracleAddr, encodeFunctionData14({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [token] })],
           [token, encodeFunctionData14({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
         ]);
-        const rewardPriceResults = rewardPriceCalls.length > 0 ? await multicallRead3(this.rpcUrl, rewardPriceCalls) : [];
+        const rewardPriceResults = rewardPriceCalls.length > 0 ? await multicallRead4(this.rpcUrl, rewardPriceCalls) : [];
         const rewardPriceMap = /* @__PURE__ */ new Map();
         for (let i = 0; i < allRewardTokens.length; i++) {
           const priceRaw = rewardPriceResults[i * 2] ?? null;
@@ -3966,10 +4196,10 @@ var EulerV2Adapter = class {
 };
 
 // src/lending/morpho.ts
-import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult4, zeroAddress as zeroAddress9 } from "viem";
+import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult5, zeroAddress as zeroAddress9 } from "viem";
 import {
   DefiError as DefiError20,
-  multicallRead as multicallRead4,
+  multicallRead as multicallRead5,
   decodeU256 as decodeU2562
 } from "@hypurrquant/defi-core";
 var MORPHO_ABI = parseAbi20([
@@ -4002,7 +4232,7 @@ function defaultMarketParams(loanToken = zeroAddress9) {
 function decodeMarket(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult4({
+    return decodeFunctionResult5({
       abi: MORPHO_ABI,
       functionName: "market",
       data
@@ -4014,7 +4244,7 @@ function decodeMarket(data) {
 function decodeMarketParams(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult4({
+    return decodeFunctionResult5({
       abi: MORPHO_ABI,
       functionName: "idToMarketParams",
       data
@@ -4105,7 +4335,7 @@ var MorphoBlueAdapter = class {
     if (!this.defaultVault) {
       throw DefiError20.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
     }
-    const [queueLenRaw] = await multicallRead4(this.rpcUrl, [
+    const [queueLenRaw] = await multicallRead5(this.rpcUrl, [
       [this.defaultVault, encodeFunctionData19({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })]
     ]).catch((e) => {
       throw DefiError20.rpcError(`[${this.protocolName}] supplyQueueLength failed: ${e}`);
@@ -4122,7 +4352,7 @@ var MorphoBlueAdapter = class {
         total_borrow: 0n
       };
     }
-    const [marketIdRaw] = await multicallRead4(this.rpcUrl, [
+    const [marketIdRaw] = await multicallRead5(this.rpcUrl, [
       [this.defaultVault, encodeFunctionData19({ abi: META_MORPHO_ABI, functionName: "supplyQueue", args: [0n] })]
     ]).catch((e) => {
       throw DefiError20.rpcError(`[${this.protocolName}] supplyQueue(0) failed: ${e}`);
@@ -4131,7 +4361,7 @@ var MorphoBlueAdapter = class {
       throw DefiError20.rpcError(`[${this.protocolName}] supplyQueue(0) returned no data`);
     }
     const marketId = marketIdRaw.slice(0, 66);
-    const [marketRaw, paramsRaw] = await multicallRead4(this.rpcUrl, [
+    const [marketRaw, paramsRaw] = await multicallRead5(this.rpcUrl, [
       [this.morpho, encodeFunctionData19({ abi: MORPHO_ABI, functionName: "market", args: [marketId] })],
       [this.morpho, encodeFunctionData19({ abi: MORPHO_ABI, functionName: "idToMarketParams", args: [marketId] })]
     ]).catch((e) => {
@@ -4149,7 +4379,7 @@ var MorphoBlueAdapter = class {
     const irmMarketParams = { loanToken, collateralToken, oracle, irm, lltv };
     const irmMarket = { totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee };
     const borrowRatePerSec = await (async () => {
-      const [borrowRateRaw] = await multicallRead4(this.rpcUrl, [
+      const [borrowRateRaw] = await multicallRead5(this.rpcUrl, [
         [irm, encodeFunctionData19({ abi: IRM_ABI, functionName: "borrowRateView", args: [irmMarketParams, irmMarket] })]
       ]).catch((e) => {
         throw DefiError20.rpcError(`[${this.protocolName}] borrowRateView failed: ${e}`);

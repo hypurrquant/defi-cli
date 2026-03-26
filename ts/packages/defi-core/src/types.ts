@@ -304,6 +304,17 @@ export interface OptionParams {
 
 // === ve(3,3) Types ===
 
+/** A pool that has an active emission gauge */
+export interface GaugedPool {
+  pool: Address;
+  gauge: Address;
+  token0: string;  // symbol
+  token1: string;  // symbol
+  type: "V2" | "CL";
+  tickSpacing?: number;  // for CL pools
+  stable?: boolean;      // for V2 pools
+}
+
 export interface RewardInfo {
   token: Address;
   symbol: string;

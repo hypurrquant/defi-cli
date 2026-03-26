@@ -18,6 +18,20 @@ function resolveAccount(): Address | undefined {
 export function registerGauge(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const gauge = parent.command("gauge").description("Gauge operations: find, deposit, withdraw, claim, earned");
 
+  gauge.command("discover")
+    .description("Find all pools with emission gauges (scans V2 + CL factories)")
+    .requiredOption("--protocol <protocol>", "Protocol slug")
+    .action(async (opts) => {
+      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const registry = Registry.loadEmbedded();
+      const chain = registry.getChain(chainName);
+      const protocol = registry.getProtocol(opts.protocol);
+      const adapter = createGauge(protocol, chain.effectiveRpcUrl());
+      if (!adapter.discoverGaugedPools) throw new Error(`${protocol.name} does not support gauge discovery`);
+      const pools = await adapter.discoverGaugedPools();
+      printOutput(pools, getOpts());
+    });
+
   gauge.command("find")
     .description("Find gauge address for a pool via voter contract")
     .requiredOption("--protocol <protocol>", "Protocol slug")

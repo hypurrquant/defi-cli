@@ -1,4 +1,4 @@
-import { ProtocolEntry, DeFiTx, RewardInfo, ICdp, IDerivatives, IDex, IGaugeSystem, ILending, ILiquidStaking, IGauge, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
+import { ProtocolEntry, DeFiTx, RewardInfo, ICdp, IDerivatives, IDex, IGaugeSystem, ILending, ILiquidStaking, IGauge, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, GaugedPool, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
 import { Address } from 'viem';
 
 interface LBAddLiquidityParams {
@@ -309,8 +309,14 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
     private readonly voter;
     private readonly veToken;
     private readonly rpcUrl;
+    private readonly clFactory;
+    private readonly v2Factory;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
+    /** Scan V2 and CL factories for pools that have active emission gauges. */
+    discoverGaugedPools(): Promise<GaugedPool[]>;
+    private _discoverV2GaugedPools;
+    private _discoverCLGaugedPools;
     buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx>;
     buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
     /**
