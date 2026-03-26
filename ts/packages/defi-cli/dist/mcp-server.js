@@ -3177,7 +3177,7 @@ var init_dist3 = __esm({
       RAM: "0xAAA6C1E32C55A7Bfa8066A6FAE9b42650F262418",
       hyperRAM: "0xAAAE8378809bb8815c08D3C59Eb0c7D1529aD769"
     };
-    CL_TICK_SPACINGS = [1, 10, 50, 100, 200];
+    CL_TICK_SPACINGS = [1, 5, 10, 50, 100, 200];
     SolidlyGaugeAdapter = class {
       protocolName;
       voter;

@@ -89,7 +89,7 @@ const HYPEREVM_TOKENS: Record<string, Address> = {
   hyperRAM: "0xAAAE8378809bb8815c08D3C59Eb0c7D1529aD769",
 };
 
-const CL_TICK_SPACINGS = [1, 10, 50, 100, 200];
+const CL_TICK_SPACINGS = [1, 5, 10, 50, 100, 200];
 
 export class SolidlyGaugeAdapter implements IGaugeSystem {
   private readonly protocolName: string;
