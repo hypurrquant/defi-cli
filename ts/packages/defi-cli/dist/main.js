@@ -1907,6 +1907,9 @@ function registerSchema(parent, getOpts) {
   });
 }
 
+// src/commands/lp.ts
+import { privateKeyToAccount as privateKeyToAccount2 } from "viem/accounts";
+
 // ../defi-protocols/dist/index.js
 import { encodeFunctionData as encodeFunctionData4, parseAbi as parseAbi4, createPublicClient as createPublicClient4, http as http4, decodeAbiParameters } from "viem";
 import { encodeFunctionData as encodeFunctionData22, parseAbi as parseAbi22, createPublicClient as createPublicClient22, http as http22, decodeFunctionResult as decodeFunctionResult2, decodeAbiParameters as decodeAbiParameters2 } from "viem";
@@ -6896,10 +6899,89 @@ var DexSpotPrice = class {
   }
 };
 
-// src/commands/dex.ts
-function registerDex(parent, getOpts, makeExecutor2) {
-  const dex = parent.command("dex").description("DEX LP operations: add/remove liquidity");
-  dex.command("lp-add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2 for \xB12%)").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").action(async (opts) => {
+// src/commands/lp.ts
+function resolveAccount(optOwner) {
+  if (optOwner) return optOwner;
+  const walletAddr = process.env["DEFI_WALLET_ADDRESS"];
+  if (walletAddr) return walletAddr;
+  const privateKey = process.env["DEFI_PRIVATE_KEY"];
+  if (privateKey) return privateKeyToAccount2(privateKey).address;
+  throw new Error("--address, DEFI_WALLET_ADDRESS, or DEFI_PRIVATE_KEY is required");
+}
+function resolvePoolAddress(registry, protocolSlug, pool) {
+  if (pool.startsWith("0x")) return pool;
+  return registry.resolvePool(protocolSlug, pool).address;
+}
+function registerLP(parent, getOpts, makeExecutor2) {
+  const lp = parent.command("lp").description("Unified LP operations: discover, add, farm, claim, remove, positions");
+  lp.command("discover").description("Scan all protocols for fee + emission pools (gauges, farming, LB rewards)").option("--protocol <protocol>", "Filter to a single protocol slug").option("--emission-only", "Only show emission (gauge/farming) pools, skip fee-only").action(async (opts) => {
+    const chainName = parent.opts().chain ?? "hyperevm";
+    const registry = Registry.loadEmbedded();
+    const chain = registry.getChain(chainName);
+    const rpcUrl = chain.effectiveRpcUrl();
+    const allProtocols = registry.getProtocolsForChain(chainName);
+    const protocols = opts.protocol ? [registry.getProtocol(opts.protocol)] : allProtocols;
+    const results = [];
+    await Promise.allSettled(
+      protocols.map(async (protocol) => {
+        try {
+          if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(protocol.interface)) {
+            const adapter = createGauge(protocol, rpcUrl);
+            if (adapter.discoverGaugedPools) {
+              const pools = await adapter.discoverGaugedPools();
+              for (const p of pools) {
+                results.push({
+                  protocol: protocol.slug,
+                  pool: p.pool,
+                  pair: `${p.token0}/${p.token1}`,
+                  type: "EMISSION",
+                  source: "gauge"
+                });
+              }
+            }
+          }
+          if (protocol.interface === "algebra_v3" && protocol.contracts?.["farming_center"]) {
+            const adapter = createKittenSwapFarming(protocol, rpcUrl);
+            const pools = await adapter.discoverFarmingPools();
+            for (const p of pools) {
+              results.push({
+                protocol: protocol.slug,
+                pool: p.pool,
+                type: "EMISSION",
+                source: "farming",
+                total_reward: p.totalReward.toString(),
+                bonus_reward: p.bonusReward.toString(),
+                active: p.active
+              });
+            }
+          }
+          if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
+            const adapter = createMerchantMoeLB(protocol, rpcUrl);
+            const pools = await adapter.discoverRewardedPools();
+            for (const p of pools) {
+              if (!opts.emissionOnly || !p.stopped) {
+                results.push({
+                  protocol: protocol.slug,
+                  pool: p.pool,
+                  pair: `${p.symbolX}/${p.symbolY}`,
+                  type: "EMISSION",
+                  source: "lb_hooks",
+                  stopped: p.stopped
+                });
+              }
+            }
+          }
+        } catch {
+        }
+      })
+    );
+    if (opts.emissionOnly) {
+      printOutput(results.filter((r) => r.type === "EMISSION"), getOpts());
+    } else {
+      printOutput(results, getOpts());
+    }
+  });
+  lp.command("add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2)").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry.loadEmbedded();
@@ -6908,16 +6990,8 @@ function registerDex(parent, getOpts, makeExecutor2) {
     const adapter = createDex(protocol, chain.effectiveRpcUrl());
     const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
     const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
-    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
-    let poolAddr;
-    if (opts.pool) {
-      if (opts.pool.startsWith("0x")) {
-        poolAddr = opts.pool;
-      } else {
-        const poolInfo = registry.resolvePool(opts.protocol, opts.pool);
-        poolAddr = poolInfo.address;
-      }
-    }
+    const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+    const poolAddr = opts.pool ? resolvePoolAddress(registry, opts.protocol, opts.pool) : void 0;
     const tx = await adapter.buildAddLiquidity({
       protocol: protocol.name,
       token_a: tokenA,
@@ -6933,120 +7007,213 @@ function registerDex(parent, getOpts, makeExecutor2) {
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  dex.command("lp-remove").description("Remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--liquidity <amount>", "Liquidity amount to remove in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
+  lp.command("farm").description("Add liquidity and auto-stake into gauge/farming for emissions").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--gauge <address>", "Gauge address (required for solidly/hybra if not resolved automatically)").option("--recipient <address>", "Recipient / owner address").option("--tick-lower <tick>", "Lower tick for concentrated LP").option("--tick-upper <tick>", "Upper tick for concentrated LP").option("--range <percent>", "\xB1N% concentrated range around current price").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createDex(protocol, chain.effectiveRpcUrl());
+    const rpcUrl = chain.effectiveRpcUrl();
+    const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+    const poolAddr = opts.pool ? resolvePoolAddress(registry, opts.protocol, opts.pool) : void 0;
     const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
     const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
-    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
-    const tx = await adapter.buildRemoveLiquidity({
+    const dexAdapter = createDex(protocol, rpcUrl);
+    const addTx = await dexAdapter.buildAddLiquidity({
+      protocol: protocol.name,
+      token_a: tokenA,
+      token_b: tokenB,
+      amount_a: BigInt(opts.amountA),
+      amount_b: BigInt(opts.amountB),
+      recipient,
+      tick_lower: opts.tickLower !== void 0 ? parseInt(opts.tickLower) : void 0,
+      tick_upper: opts.tickUpper !== void 0 ? parseInt(opts.tickUpper) : void 0,
+      range_pct: opts.range !== void 0 ? parseFloat(opts.range) : void 0,
+      pool: poolAddr
+    });
+    process.stderr.write("Step 1/2: Adding liquidity...\n");
+    const addResult = await executor.execute(addTx);
+    printOutput({ step: "lp_add", ...addResult }, getOpts());
+    const mintedTokenId = addResult.details?.minted_token_id ? BigInt(addResult.details.minted_token_id) : void 0;
+    const iface = protocol.interface;
+    if (iface === "algebra_v3" && protocol.contracts?.["farming_center"]) {
+      if (!mintedTokenId) {
+        process.stderr.write("Step 2/2: Skipped staking (no tokenId \u2014 run in --broadcast mode to get minted NFT)\n");
+        return;
+      }
+      if (!poolAddr) throw new Error("--pool is required for lp farm with KittenSwap (needed for farming center)");
+      process.stderr.write("Step 2/2: Staking into KittenSwap eternal farming...\n");
+      const farmAdapter = createKittenSwapFarming(protocol, rpcUrl);
+      const stakeTx = await farmAdapter.buildEnterFarming(mintedTokenId, poolAddr, recipient);
+      const stakeResult = await executor.execute(stakeTx);
+      printOutput({ step: "stake_farming", ...stakeResult }, getOpts());
+      return;
+    }
+    if (["solidly_v2", "solidly_cl", "hybra"].includes(iface)) {
+      if (!mintedTokenId && iface !== "solidly_v2") {
+        process.stderr.write("Step 2/2: Skipped staking (no tokenId \u2014 run in --broadcast mode to get minted NFT)\n");
+        return;
+      }
+      let gaugeAddr = opts.gauge;
+      if (!gaugeAddr && poolAddr) {
+        try {
+          const gaugeAdapter2 = createGauge(protocol, rpcUrl);
+          if (gaugeAdapter2.resolveGauge) {
+            gaugeAddr = await gaugeAdapter2.resolveGauge(poolAddr);
+          }
+        } catch {
+        }
+      }
+      if (!gaugeAddr) throw new Error("--gauge <address> is required for staking (could not auto-resolve gauge)");
+      process.stderr.write("Step 2/2: Staking into gauge...\n");
+      const gaugeAdapter = createGauge(protocol, rpcUrl);
+      const tokenIdArg = mintedTokenId;
+      const amountArg = iface === "solidly_v2" ? 0n : 0n;
+      const stakeTx = await gaugeAdapter.buildDeposit(gaugeAddr, amountArg, tokenIdArg);
+      const stakeResult = await executor.execute(stakeTx);
+      printOutput({ step: "stake_gauge", ...stakeResult }, getOpts());
+      return;
+    }
+    if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
+      process.stderr.write("Step 2/2: Merchant Moe LB hooks handle rewards automatically \u2014 no staking needed.\n");
+      return;
+    }
+    process.stderr.write("Step 2/2: No staking adapter found for this protocol interface \u2014 liquidity added only.\n");
+  });
+  lp.command("claim").description("Claim rewards from a pool (fee or emission)").requiredOption("--protocol <protocol>", "Protocol slug").option("--pool <address>", "Pool address (required for farming/LB)").option("--gauge <address>", "Gauge contract address (required for solidly/hybra)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--bins <binIds>", "Comma-separated bin IDs (for Merchant Moe LB)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const chainName = parent.opts().chain ?? "hyperevm";
+    const registry = Registry.loadEmbedded();
+    const chain = registry.getChain(chainName);
+    const rpcUrl = chain.effectiveRpcUrl();
+    const protocol = registry.getProtocol(opts.protocol);
+    const account = resolveAccount(opts.address);
+    const iface = protocol.interface;
+    if (iface === "algebra_v3" && protocol.contracts?.["farming_center"]) {
+      if (!opts.pool) throw new Error("--pool is required for KittenSwap farming claim");
+      if (!opts.tokenId) throw new Error("--token-id is required for KittenSwap farming claim");
+      const adapter = createKittenSwapFarming(protocol, rpcUrl);
+      const tx = await adapter.buildCollectRewards(
+        BigInt(opts.tokenId),
+        opts.pool,
+        account
+      );
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+      return;
+    }
+    if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
+      if (!opts.pool) throw new Error("--pool is required for Merchant Moe LB claim");
+      const adapter = createMerchantMoeLB(protocol, rpcUrl);
+      const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
+      const tx = await adapter.buildClaimRewards(account, opts.pool, binIds);
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+      return;
+    }
+    if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(iface)) {
+      if (!opts.gauge) throw new Error("--gauge is required for gauge claim");
+      const adapter = createGauge(protocol, rpcUrl);
+      let tx;
+      if (opts.tokenId) {
+        if (!adapter.buildClaimRewardsByTokenId) throw new Error(`${protocol.name} does not support NFT-based claim`);
+        tx = await adapter.buildClaimRewardsByTokenId(opts.gauge, BigInt(opts.tokenId));
+      } else {
+        tx = await adapter.buildClaimRewards(opts.gauge, account);
+      }
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+      return;
+    }
+    throw new Error(`No claim method found for protocol interface '${iface}'`);
+  });
+  lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--liquidity <amount>", "Liquidity amount to remove in wei").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const chainName = parent.opts().chain ?? "hyperevm";
+    const registry = Registry.loadEmbedded();
+    const chain = registry.getChain(chainName);
+    const rpcUrl = chain.effectiveRpcUrl();
+    const protocol = registry.getProtocol(opts.protocol);
+    const iface = protocol.interface;
+    const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+    const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
+    const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
+    const poolAddr = opts.pool ? opts.pool : void 0;
+    let didUnstake = false;
+    if (iface === "algebra_v3" && protocol.contracts?.["farming_center"] && opts.tokenId && poolAddr) {
+      process.stderr.write("Step 1/2: Exiting KittenSwap farming...\n");
+      const farmAdapter = createKittenSwapFarming(protocol, rpcUrl);
+      const exitTx = await farmAdapter.buildExitFarming(BigInt(opts.tokenId), poolAddr);
+      const exitResult = await executor.execute(exitTx);
+      printOutput({ step: "unstake_farming", ...exitResult }, getOpts());
+      didUnstake = true;
+    } else if (["solidly_v2", "solidly_cl", "hybra"].includes(iface)) {
+      let gaugeAddr = opts.gauge;
+      if (!gaugeAddr && poolAddr) {
+        try {
+          const gaugeAdapter = createGauge(protocol, rpcUrl);
+          if (gaugeAdapter.resolveGauge) {
+            gaugeAddr = await gaugeAdapter.resolveGauge(poolAddr);
+          }
+        } catch {
+        }
+      }
+      if (gaugeAddr) {
+        process.stderr.write("Step 1/2: Withdrawing from gauge...\n");
+        const gaugeAdapter = createGauge(protocol, rpcUrl);
+        const tokenId = opts.tokenId ? BigInt(opts.tokenId) : void 0;
+        const withdrawTx = await gaugeAdapter.buildWithdraw(gaugeAddr, BigInt(opts.liquidity), tokenId);
+        const withdrawResult = await executor.execute(withdrawTx);
+        printOutput({ step: "unstake_gauge", ...withdrawResult }, getOpts());
+        didUnstake = true;
+      }
+    }
+    if (!didUnstake) {
+      process.stderr.write("Step 1/2: No staking detected \u2014 skipping unstake.\n");
+    }
+    process.stderr.write("Step 2/2: Removing liquidity...\n");
+    const dexAdapter = createDex(protocol, rpcUrl);
+    const removeTx = await dexAdapter.buildRemoveLiquidity({
       protocol: protocol.name,
       token_a: tokenA,
       token_b: tokenB,
       liquidity: BigInt(opts.liquidity),
       recipient
     });
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
+    const removeResult = await executor.execute(removeTx);
+    printOutput({ step: "lp_remove", ...removeResult }, getOpts());
   });
-}
-
-// src/commands/gauge.ts
-import { privateKeyToAccount as privateKeyToAccount2 } from "viem/accounts";
-function resolveAccount() {
-  const walletAddr = process.env["DEFI_WALLET_ADDRESS"];
-  if (walletAddr) return walletAddr;
-  const privateKey = process.env["DEFI_PRIVATE_KEY"];
-  if (privateKey) return privateKeyToAccount2(privateKey).address;
-  return void 0;
-}
-function registerGauge(parent, getOpts, makeExecutor2) {
-  const gauge = parent.command("gauge").description("Gauge operations: find, deposit, withdraw, claim, earned");
-  gauge.command("discover").description("Find all pools with emission gauges (scans V2 + CL factories)").requiredOption("--protocol <protocol>", "Protocol slug").action(async (opts) => {
+  lp.command("positions").description("Show all LP positions across protocols").option("--protocol <protocol>", "Filter to a single protocol slug").option("--pool <address>", "Filter to a specific pool address").option("--bins <binIds>", "Comma-separated bin IDs (for Merchant Moe LB, auto-detected if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const chainName = parent.opts().chain ?? "hyperevm";
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createGauge(protocol, chain.effectiveRpcUrl());
-    if (!adapter.discoverGaugedPools) throw new Error(`${protocol.name} does not support gauge discovery`);
-    const pools = await adapter.discoverGaugedPools();
-    printOutput(pools, getOpts());
-  });
-  gauge.command("find").description("Find gauge address for a pool via voter contract").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pool <address>", "Pool address").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createGauge(protocol, chain.effectiveRpcUrl());
-    if (!adapter.resolveGauge) throw new Error(`${protocol.name} does not support gauge lookup`);
-    const gaugeAddr = await adapter.resolveGauge(opts.pool);
-    printOutput({ pool: opts.pool, gauge: gaugeAddr, protocol: protocol.name }, getOpts());
-  });
-  gauge.command("earned").description("Check pending rewards for a gauge").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--gauge <address>", "Gauge contract address").option("--token-id <id>", "NFT tokenId (for CL gauges like Hybra)").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createGauge(protocol, chain.effectiveRpcUrl());
-    if (opts.tokenId) {
-      if (!adapter.getPendingRewardsByTokenId) throw new Error(`${protocol.name} does not support NFT rewards`);
-      const earned = await adapter.getPendingRewardsByTokenId(opts.gauge, BigInt(opts.tokenId));
-      printOutput({ gauge: opts.gauge, token_id: opts.tokenId, earned: earned.toString() }, getOpts());
-    } else {
-      const account = resolveAccount();
-      if (!account) throw new Error("DEFI_WALLET_ADDRESS or DEFI_PRIVATE_KEY required");
-      const rewards = await adapter.getPendingRewards(opts.gauge, account);
-      printOutput(rewards.map((r) => ({ token: r.token, amount: r.amount.toString() })), getOpts());
-    }
-  });
-  gauge.command("deposit").description("Deposit LP tokens or NFT into a gauge").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--gauge <address>", "Gauge contract address").option("--amount <amount>", "LP token amount in wei (for V2 gauges)").option("--token-id <id>", "NFT tokenId (for CL gauges like Hybra)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createGauge(protocol, chain.effectiveRpcUrl());
-    const amount = opts.amount ? BigInt(opts.amount) : 0n;
-    const tokenId = opts.tokenId ? BigInt(opts.tokenId) : void 0;
-    const tx = await adapter.buildDeposit(opts.gauge, amount, tokenId);
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  gauge.command("withdraw").description("Withdraw LP tokens or NFT from a gauge").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--gauge <address>", "Gauge contract address").option("--amount <amount>", "LP token amount in wei (for V2 gauges)").option("--token-id <id>", "NFT tokenId (for CL gauges like Hybra)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createGauge(protocol, chain.effectiveRpcUrl());
-    const amount = opts.amount ? BigInt(opts.amount) : 0n;
-    const tokenId = opts.tokenId ? BigInt(opts.tokenId) : void 0;
-    const tx = await adapter.buildWithdraw(opts.gauge, amount, tokenId);
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  gauge.command("claim").description("Claim earned rewards from a gauge").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--gauge <address>", "Gauge contract address").option("--token-id <id>", "NFT tokenId (for CL gauges like Hybra)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createGauge(protocol, chain.effectiveRpcUrl());
-    if (opts.tokenId) {
-      if (!adapter.buildClaimRewardsByTokenId) throw new Error(`${protocol.name} does not support NFT claim`);
-      const tx = await adapter.buildClaimRewardsByTokenId(opts.gauge, BigInt(opts.tokenId));
-      const result = await executor.execute(tx);
-      printOutput(result, getOpts());
-    } else {
-      const account = resolveAccount();
-      const tx = await adapter.buildClaimRewards(opts.gauge, account);
-      const result = await executor.execute(tx);
-      printOutput(result, getOpts());
-    }
+    const rpcUrl = chain.effectiveRpcUrl();
+    const user = resolveAccount(opts.address);
+    const allProtocols = registry.getProtocolsForChain(chainName);
+    const protocols = opts.protocol ? [registry.getProtocol(opts.protocol)] : allProtocols;
+    const results = [];
+    await Promise.allSettled(
+      protocols.map(async (protocol) => {
+        try {
+          if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
+            if (!opts.pool) return;
+            const adapter = createMerchantMoeLB(protocol, rpcUrl);
+            const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
+            const positions = await adapter.getUserPositions(user, opts.pool, binIds);
+            for (const pos of positions) {
+              results.push({
+                protocol: protocol.slug,
+                type: "lb",
+                pool: opts.pool,
+                ...pos
+              });
+            }
+          }
+        } catch {
+        }
+      })
+    );
+    printOutput(results, getOpts());
   });
 }
 
@@ -9788,124 +9955,6 @@ function registerBridge(parent, getOpts) {
   });
 }
 
-// src/commands/farming.ts
-import { privateKeyToAccount as privateKeyToAccount3 } from "viem/accounts";
-function registerFarming(parent, getOpts, makeExecutor2) {
-  const farming = parent.command("farming").description("Algebra eternal farming operations (KittenSwap): enter, exit, collect rewards, claim, discover");
-  farming.command("enter").description("Enter farming: stake an NFT position to start earning rewards").requiredOption("--protocol <protocol>", "Protocol slug (e.g. kittenswap)").requiredOption("--pool <address>", "Pool address").requiredOption("--token-id <id>", "NFT position token ID").option("--owner <address>", "Owner address to receive claimed rewards (defaults to DEFI_WALLET_ADDRESS or private key address)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createKittenSwapFarming(protocol, rpcUrl);
-    const owner = resolveOwner(opts.owner);
-    const tx = await adapter.buildEnterFarming(
-      BigInt(opts.tokenId),
-      opts.pool,
-      owner
-    );
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  farming.command("exit").description("Exit farming: unstake an NFT position").requiredOption("--protocol <protocol>", "Protocol slug (e.g. kittenswap)").requiredOption("--pool <address>", "Pool address").requiredOption("--token-id <id>", "NFT position token ID").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createKittenSwapFarming(protocol, rpcUrl);
-    const tx = await adapter.buildExitFarming(
-      BigInt(opts.tokenId),
-      opts.pool
-    );
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  farming.command("rewards").description("Collect + claim farming rewards for a staked position (collectRewards + claimReward multicall)").requiredOption("--protocol <protocol>", "Protocol slug (e.g. kittenswap)").requiredOption("--pool <address>", "Pool address").requiredOption("--token-id <id>", "NFT position token ID").option("--owner <address>", "Owner address to receive claimed rewards (defaults to DEFI_WALLET_ADDRESS or private key address)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createKittenSwapFarming(protocol, rpcUrl);
-    const owner = resolveOwner(opts.owner);
-    const tx = await adapter.buildCollectRewards(
-      BigInt(opts.tokenId),
-      opts.pool,
-      owner
-    );
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  farming.command("claim").description("Claim accumulated farming rewards (KITTEN + WHYPE) without changing position").requiredOption("--protocol <protocol>", "Protocol slug (e.g. kittenswap)").option("--owner <address>", "Owner address to receive rewards (defaults to DEFI_WALLET_ADDRESS or private key address)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createKittenSwapFarming(protocol, rpcUrl);
-    const owner = resolveOwner(opts.owner);
-    const tx = await adapter.buildClaimReward(owner);
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  farming.command("pending").description("Query pending farming rewards for a position (read-only)").requiredOption("--protocol <protocol>", "Protocol slug (e.g. kittenswap)").requiredOption("--pool <address>", "Pool address").requiredOption("--token-id <id>", "NFT position token ID").action(async (opts) => {
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createKittenSwapFarming(protocol, rpcUrl);
-    const rewards = await adapter.getPendingRewards(
-      BigInt(opts.tokenId),
-      opts.pool
-    );
-    printOutput(
-      {
-        tokenId: opts.tokenId,
-        pool: opts.pool,
-        reward_kitten: rewards.reward.toString(),
-        bonus_reward_whype: rewards.bonusReward.toString()
-      },
-      getOpts()
-    );
-  });
-  farming.command("discover").description("Discover all pools with active KittenSwap farming incentives").requiredOption("--protocol <protocol>", "Protocol slug (e.g. kittenswap)").action(async (opts) => {
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createKittenSwapFarming(protocol, rpcUrl);
-    const pools = await adapter.discoverFarmingPools();
-    const output = pools.map((p) => ({
-      pool: p.pool,
-      nonce: p.key.nonce.toString(),
-      total_reward: p.totalReward.toString(),
-      bonus_reward: p.bonusReward.toString(),
-      active: p.active
-    }));
-    printOutput(output, getOpts());
-  });
-}
-function resolveOwner(optOwner) {
-  if (optOwner) return optOwner;
-  const walletAddr = process.env["DEFI_WALLET_ADDRESS"];
-  if (walletAddr) return walletAddr;
-  const privateKey = process.env["DEFI_PRIVATE_KEY"];
-  if (privateKey) {
-    return privateKeyToAccount3(privateKey).address;
-  }
-  throw new Error(
-    "--owner, DEFI_WALLET_ADDRESS, or DEFI_PRIVATE_KEY is required to resolve reward recipient"
-  );
-}
-
 // src/commands/setup.ts
 import pc2 from "picocolors";
 import { createInterface } from "readline";
@@ -9954,8 +10003,8 @@ function isValidPrivateKey(s) {
 }
 async function deriveAddress(privateKey) {
   try {
-    const { privateKeyToAccount: privateKeyToAccount4 } = await import("viem/accounts");
-    const account = privateKeyToAccount4(privateKey);
+    const { privateKeyToAccount: privateKeyToAccount3 } = await import("viem/accounts");
+    const account = privateKeyToAccount3(privateKey);
     return account.address;
   } catch {
     return null;
@@ -10050,107 +10099,6 @@ function registerSetup(program2) {
   });
 }
 
-// src/commands/lb.ts
-function registerLB(parent, getOpts, makeExecutor2) {
-  const lb = parent.command("lb").description("Merchant Moe Liquidity Book: add/remove liquidity, rewards, positions");
-  lb.command("add").description("Add liquidity to a Liquidity Book pair").requiredOption("--protocol <protocol>", "Protocol slug (e.g. merchantmoe-mantle)").requiredOption("--pool <address>", "LB pair address").requiredOption("--token-x <address>", "Token X address").requiredOption("--token-y <address>", "Token Y address").requiredOption("--bin-step <step>", "Bin step of the pair").option("--amount-x <wei>", "Amount of token X in wei", "0").option("--amount-y <wei>", "Amount of token Y in wei", "0").option("--bins <N>", "Number of bins on each side of active bin", "5").option("--active-id <id>", "Active bin id (defaults to on-chain query)").option("--recipient <address>", "Recipient address").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "mantle");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMerchantMoeLB(protocol, rpcUrl);
-    const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
-    const tx = await adapter.buildAddLiquidity({
-      pool: opts.pool,
-      tokenX: opts.tokenX,
-      tokenY: opts.tokenY,
-      binStep: parseInt(opts.binStep),
-      amountX: BigInt(opts.amountX),
-      amountY: BigInt(opts.amountY),
-      numBins: parseInt(opts.bins),
-      activeIdDesired: opts.activeId ? parseInt(opts.activeId) : void 0,
-      recipient
-    });
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  lb.command("remove").description("Remove liquidity from Liquidity Book bins").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-x <address>", "Token X address").requiredOption("--token-y <address>", "Token Y address").requiredOption("--bin-step <step>", "Bin step of the pair").requiredOption("--bins <binIds>", "Comma-separated bin IDs to remove from").requiredOption("--amounts <amounts>", "Comma-separated LB token amounts to remove per bin (wei)").option("--recipient <address>", "Recipient address").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createMerchantMoeLB(protocol);
-    const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
-    const binIds = opts.bins.split(",").map((s) => parseInt(s.trim()));
-    const amounts = opts.amounts.split(",").map((s) => BigInt(s.trim()));
-    const tx = await adapter.buildRemoveLiquidity({
-      tokenX: opts.tokenX,
-      tokenY: opts.tokenY,
-      binStep: parseInt(opts.binStep),
-      binIds,
-      amounts,
-      recipient
-    });
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  lb.command("rewards").description("Show pending MOE rewards for a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pool <address>", "LB pair address").option("--bins <binIds>", "Comma-separated bin IDs to check (auto-detected from rewarder range if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "mantle");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMerchantMoeLB(protocol, rpcUrl);
-    const user = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
-    if (!user) throw new Error("--address or DEFI_WALLET_ADDRESS required");
-    const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
-    const rewards = await adapter.getPendingRewards(user, opts.pool, binIds);
-    printOutput(rewards, getOpts());
-  });
-  lb.command("claim").description("Claim pending MOE rewards from a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pool <address>", "LB pair address").option("--bins <binIds>", "Comma-separated bin IDs to claim from (auto-detected from rewarder range if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "mantle");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMerchantMoeLB(protocol, rpcUrl);
-    const user = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
-    if (!user) throw new Error("--address or DEFI_WALLET_ADDRESS required");
-    const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
-    const tx = await adapter.buildClaimRewards(user, opts.pool, binIds);
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  lb.command("discover").description("Find all rewarded LB pools on chain").requiredOption("--protocol <protocol>", "Protocol slug").option("--active-only", "Only show non-stopped pools").action(async (opts) => {
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "mantle");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMerchantMoeLB(protocol, rpcUrl);
-    let pools = await adapter.discoverRewardedPools();
-    if (opts.activeOnly) {
-      pools = pools.filter((p) => !p.stopped);
-    }
-    printOutput(pools, getOpts());
-  });
-  lb.command("positions").description("Show user positions per bin in a LB pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pool <address>", "LB pair address").option("--bins <binIds>", "Comma-separated bin IDs to query (auto-detected from rewarder range or active \xB1 50 if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "mantle");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMerchantMoeLB(protocol, rpcUrl);
-    const user = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
-    if (!user) throw new Error("--address or DEFI_WALLET_ADDRESS required");
-    const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
-    const positions = await adapter.getUserPositions(user, opts.pool, binIds);
-    printOutput(positions, getOpts());
-  });
-}
-
 // src/cli.ts
 var _require = createRequire(import.meta.url);
 var _pkg = _require("../package.json");
@@ -10180,8 +10128,7 @@ function makeExecutor() {
 }
 registerStatus(program, getOutputMode);
 registerSchema(program, getOutputMode);
-registerDex(program, getOutputMode, makeExecutor);
-registerGauge(program, getOutputMode, makeExecutor);
+registerLP(program, getOutputMode, makeExecutor);
 registerLending(program, getOutputMode, makeExecutor);
 registerCdp(program, getOutputMode, makeExecutor);
 registerVault(program, getOutputMode, makeExecutor);
@@ -10196,8 +10143,6 @@ registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
 registerWhales(program, getOutputMode);
 registerBridge(program, getOutputMode);
-registerFarming(program, getOutputMode, makeExecutor);
-registerLB(program, getOutputMode, makeExecutor);
 registerSetup(program);
 
 // src/landing.ts
@@ -10378,8 +10323,7 @@ async function main() {
     const knownSubcommands = /* @__PURE__ */ new Set([
       "status",
       "schema",
-      "dex",
-      "gauge",
+      "lp",
       "lending",
       "cdp",
       "vault",
@@ -10394,8 +10338,6 @@ async function main() {
       "token",
       "whales",
       "bridge",
-      "farming",
-      "lb",
       "agent",
       "setup",
       "init"

@@ -10,8 +10,7 @@ const _pkg = _require("../package.json") as { version: string };
 
 import { registerStatus } from "./commands/status.js";
 import { registerSchema } from "./commands/schema.js";
-import { registerDex } from "./commands/dex.js";
-import { registerGauge } from "./commands/gauge.js";
+import { registerLP } from "./commands/lp.js";
 import { registerLending } from "./commands/lending.js";
 import { registerCdp } from "./commands/cdp.js";
 import { registerVault } from "./commands/vault.js";
@@ -26,9 +25,7 @@ import { registerWallet } from "./commands/wallet.js";
 import { registerToken } from "./commands/token.js";
 import { registerWhales } from "./commands/whales.js";
 import { registerBridge } from "./commands/bridge.js";
-import { registerFarming } from "./commands/farming.js";
 import { registerSetup } from "./commands/setup.js";
-import { registerLB } from "./commands/lb.js";
 
 const BANNER = `
   ██████╗ ███████╗███████╗██╗     ██████╗██╗     ██╗
@@ -77,8 +74,7 @@ function makeExecutor(): Executor {
 // Register all commands
 registerStatus(program, getOutputMode);
 registerSchema(program, getOutputMode);
-registerDex(program, getOutputMode, makeExecutor);
-registerGauge(program, getOutputMode, makeExecutor);
+registerLP(program, getOutputMode, makeExecutor);
 registerLending(program, getOutputMode, makeExecutor);
 registerCdp(program, getOutputMode, makeExecutor);
 registerVault(program, getOutputMode, makeExecutor);
@@ -93,6 +89,5 @@ registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
 registerWhales(program, getOutputMode);
 registerBridge(program, getOutputMode);
-registerFarming(program, getOutputMode, makeExecutor);
-registerLB(program, getOutputMode, makeExecutor);
+
 registerSetup(program);
