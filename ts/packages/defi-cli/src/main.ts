@@ -12,10 +12,10 @@ async function main() {
     const rawArgs = process.argv.slice(2);
     // Known subcommands registered in cli.ts — everything that isn't a flag
     const knownSubcommands = new Set([
-      "status", "schema", "dex", "gauge", "lending", "cdp", "staking", "vault",
-      "yield", "portfolio", "monitor", "alert", "scan", "arb", "positions",
-      "price", "wallet", "token", "whales", "compare", "swap", "bridge", "nft",
-      "farm", "farming", "lb", "agent", "setup", "init",
+      "status", "schema", "dex", "gauge", "lending", "cdp", "vault",
+      "yield", "portfolio", "monitor", "alert", "scan", "positions",
+      "price", "wallet", "token", "whales", "bridge", 
+      "farming", "lb", "agent", "setup", "init",
     ]);
     const hasSubcommand = rawArgs.some(a => !a.startsWith("-") && knownSubcommands.has(a));
     const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");

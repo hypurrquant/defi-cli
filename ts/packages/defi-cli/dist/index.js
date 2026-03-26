@@ -4091,128 +4091,6 @@ var masterchefAbi = parseAbi11([
   "function getNumberOfFarms() view returns (uint256)",
   "function getPidByPool(address pool) view returns (uint256)"
 ]);
-var MasterChefAdapter = class {
-  protocolName;
-  masterchef;
-  rpcUrl;
-  constructor(entry, rpcUrl) {
-    this.protocolName = entry.name;
-    const masterchef = entry.contracts?.["masterchef"];
-    if (!masterchef) {
-      throw new DefiError("CONTRACT_ERROR", "Missing 'masterchef' contract");
-    }
-    this.masterchef = masterchef;
-    this.rpcUrl = rpcUrl;
-  }
-  name() {
-    return this.protocolName;
-  }
-  /**
-   * Deposit LP tokens into a MasterChef farm.
-   * `gauge` is the pool address (unused for calldata — MasterChef is the target).
-   * `tokenId` carries the farm pid.
-   */
-  async buildDeposit(gauge, amount, tokenId) {
-    const pid = tokenId ?? 0n;
-    const data = encodeFunctionData11({
-      abi: masterchefAbi,
-      functionName: "deposit",
-      args: [pid, amount]
-    });
-    return {
-      description: `[${this.protocolName}] Deposit ${amount} LP to farm pid=${pid} (pool ${gauge})`,
-      to: this.masterchef,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  /**
-   * Withdraw LP tokens from a MasterChef farm.
-   * `gauge` is used to look up the pid description only; call site should pass pid via tokenId
-   * on the deposit flow. Here pid defaults to 0 — callers should encode the pid in the gauge
-   * address slot or wrap this adapter with a pid-aware helper.
-   */
-  async buildWithdraw(gauge, amount) {
-    const pid = 0n;
-    const data = encodeFunctionData11({
-      abi: masterchefAbi,
-      functionName: "withdraw",
-      args: [pid, amount]
-    });
-    return {
-      description: `[${this.protocolName}] Withdraw ${amount} LP from farm pid=${pid} (pool ${gauge})`,
-      to: this.masterchef,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  /** Withdraw LP tokens specifying a pid explicitly (MasterChef extension beyond IGauge). */
-  async buildWithdrawPid(pid, amount) {
-    const data = encodeFunctionData11({
-      abi: masterchefAbi,
-      functionName: "withdraw",
-      args: [pid, amount]
-    });
-    return {
-      description: `[${this.protocolName}] Withdraw ${amount} LP from farm pid=${pid}`,
-      to: this.masterchef,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  /** Claim pending MOE rewards. IGauge interface provides no pid — defaults to pid=0. */
-  async buildClaimRewards(gauge) {
-    const pid = 0n;
-    const data = encodeFunctionData11({
-      abi: masterchefAbi,
-      functionName: "claim",
-      args: [[pid]]
-    });
-    return {
-      description: `[${this.protocolName}] Claim MOE rewards for farm pid=${pid} (pool ${gauge})`,
-      to: this.masterchef,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  /** Claim pending MOE rewards for a specific pid (MasterChef extension beyond IGauge). */
-  async buildClaimRewardsPid(pid) {
-    const data = encodeFunctionData11({
-      abi: masterchefAbi,
-      functionName: "claim",
-      args: [[pid]]
-    });
-    return {
-      description: `[${this.protocolName}] Claim MOE rewards for farm pid=${pid}`,
-      to: this.masterchef,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  /** Get pending MOE rewards for a user. Requires rpcUrl. */
-  async getPendingRewards(_gauge, user) {
-    if (!this.rpcUrl) {
-      throw DefiError.unsupported(`[${this.protocolName}] getPendingRewards requires RPC`);
-    }
-    const client = createPublicClient7({ transport: http7(this.rpcUrl) });
-    const rewards = await client.readContract({
-      address: this.masterchef,
-      abi: masterchefAbi,
-      functionName: "pendingRewards",
-      args: [user, [0n]]
-    });
-    return rewards.map((amount) => ({
-      token: this.masterchef,
-      symbol: "MOE",
-      amount
-    }));
-  }
-};
 var lbRouterAbi = parseAbi12([
   "struct LiquidityParameters { address tokenX; address tokenY; uint256 binStep; uint256 amountX; uint256 amountY; uint256 amountXMin; uint256 amountYMin; uint256 activeIdDesired; uint256 idSlippage; int256[] deltaIds; uint256[] distributionX; uint256[] distributionY; address to; address refundTo; uint256 deadline; }",
   "function addLiquidity(LiquidityParameters calldata liquidityParameters) external returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] memory depositIds, uint256[] memory liquidityMinted)",
@@ -6834,46 +6712,6 @@ var GENERIC_LST_ABI = parseAbi24([
   "function stake() external payable returns (uint256)",
   "function unstake(uint256 amount) external returns (uint256)"
 ]);
-var GenericLstAdapter = class {
-  protocolName;
-  staking;
-  constructor(entry, _rpcUrl) {
-    this.protocolName = entry.name;
-    const staking = entry.contracts?.["staking"];
-    if (!staking) throw DefiError.contractError("Missing 'staking' contract");
-    this.staking = staking;
-  }
-  name() {
-    return this.protocolName;
-  }
-  async buildStake(params) {
-    const data = encodeFunctionData222({ abi: GENERIC_LST_ABI, functionName: "stake" });
-    return {
-      description: `[${this.protocolName}] Stake ${params.amount} HYPE`,
-      to: this.staking,
-      data,
-      value: params.amount,
-      gas_estimate: 2e5
-    };
-  }
-  async buildUnstake(params) {
-    const data = encodeFunctionData222({
-      abi: GENERIC_LST_ABI,
-      functionName: "unstake",
-      args: [params.amount]
-    });
-    return {
-      description: `[${this.protocolName}] Unstake ${params.amount}`,
-      to: this.staking,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  async getInfo() {
-    throw DefiError.unsupported(`[${this.protocolName}] getInfo requires RPC`);
-  }
-};
 var STHYPE_ABI = parseAbi25([
   "function submit(address referral) external payable returns (uint256)",
   "function requestWithdrawals(uint256[] amounts, address owner) external returns (uint256[] requestIds)"
@@ -6881,70 +6719,6 @@ var STHYPE_ABI = parseAbi25([
 var ERC20_ABI3 = parseAbi25([
   "function totalSupply() external view returns (uint256)"
 ]);
-var StHypeAdapter = class {
-  protocolName;
-  staking;
-  sthypeToken;
-  rpcUrl;
-  constructor(entry, rpcUrl) {
-    this.protocolName = entry.name;
-    this.rpcUrl = rpcUrl;
-    const staking = entry.contracts?.["staking"];
-    if (!staking) throw DefiError.contractError("Missing 'staking' contract");
-    this.staking = staking;
-    this.sthypeToken = entry.contracts?.["sthype_token"];
-  }
-  name() {
-    return this.protocolName;
-  }
-  async buildStake(params) {
-    const data = encodeFunctionData23({
-      abi: STHYPE_ABI,
-      functionName: "submit",
-      args: [zeroAddress12]
-    });
-    return {
-      description: `[${this.protocolName}] Stake ${params.amount} HYPE for stHYPE`,
-      to: this.staking,
-      data,
-      value: params.amount,
-      gas_estimate: 2e5
-    };
-  }
-  async buildUnstake(params) {
-    const data = encodeFunctionData23({
-      abi: STHYPE_ABI,
-      functionName: "requestWithdrawals",
-      args: [[params.amount], params.recipient]
-    });
-    return {
-      description: `[${this.protocolName}] Request unstake ${params.amount} stHYPE`,
-      to: this.staking,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  async getInfo() {
-    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
-    const tokenAddr = this.sthypeToken ?? this.staking;
-    const totalSupply = await client.readContract({
-      address: tokenAddr,
-      abi: ERC20_ABI3,
-      functionName: "totalSupply"
-    }).catch((e) => {
-      throw DefiError.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
-    });
-    return {
-      protocol: this.protocolName,
-      staked_token: zeroAddress12,
-      liquid_token: tokenAddr,
-      exchange_rate: 1,
-      total_staked: totalSupply
-    };
-  }
-};
 var KINETIQ_ABI = parseAbi26([
   "function stake() external payable returns (uint256)",
   "function requestUnstake(uint256 amount) external returns (uint256)",
@@ -6953,72 +6727,6 @@ var KINETIQ_ABI = parseAbi26([
 var ORACLE_ABI3 = parseAbi26([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
-var WHYPE = "0x5555555555555555555555555555555555555555";
-var HYPERLEND_ORACLE = "0xc9fb4fbe842d57ea1df3e641a281827493a63030";
-var KinetiqAdapter = class {
-  protocolName;
-  staking;
-  liquidToken;
-  rpcUrl;
-  constructor(entry, rpcUrl) {
-    this.protocolName = entry.name;
-    this.rpcUrl = rpcUrl;
-    const staking = entry.contracts?.["staking"];
-    if (!staking) throw DefiError.contractError("Missing 'staking' contract address");
-    this.staking = staking;
-    this.liquidToken = entry.contracts?.["khype_token"] ?? staking;
-  }
-  name() {
-    return this.protocolName;
-  }
-  async buildStake(params) {
-    const data = encodeFunctionData24({ abi: KINETIQ_ABI, functionName: "stake" });
-    return {
-      description: `[${this.protocolName}] Stake ${params.amount} HYPE for kHYPE`,
-      to: this.staking,
-      data,
-      value: params.amount,
-      gas_estimate: 3e5
-    };
-  }
-  async buildUnstake(params) {
-    const data = encodeFunctionData24({
-      abi: KINETIQ_ABI,
-      functionName: "requestUnstake",
-      args: [params.amount]
-    });
-    return {
-      description: `[${this.protocolName}] Request unstake ${params.amount} kHYPE`,
-      to: this.staking,
-      data,
-      value: 0n,
-      gas_estimate: 3e5
-    };
-  }
-  async getInfo() {
-    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient20({ transport: http20(this.rpcUrl) });
-    const totalStaked = await client.readContract({
-      address: this.staking,
-      abi: KINETIQ_ABI,
-      functionName: "totalStaked"
-    }).catch((e) => {
-      throw DefiError.rpcError(`[${this.protocolName}] totalStaked failed: ${e}`);
-    });
-    const [khypePrice, hypePrice] = await Promise.all([
-      client.readContract({ address: HYPERLEND_ORACLE, abi: ORACLE_ABI3, functionName: "getAssetPrice", args: [this.liquidToken] }).catch(() => 0n),
-      client.readContract({ address: HYPERLEND_ORACLE, abi: ORACLE_ABI3, functionName: "getAssetPrice", args: [WHYPE] }).catch(() => 0n)
-    ]);
-    const rateF64 = hypePrice > 0n && khypePrice > 0n ? Number(khypePrice * 10n ** 18n / hypePrice) / 1e18 : 1;
-    return {
-      protocol: this.protocolName,
-      staked_token: zeroAddress13,
-      liquid_token: this.liquidToken,
-      exchange_rate: rateF64,
-      total_staked: totalStaked
-    };
-  }
-};
 var HLP_ABI = parseAbi27([
   "function deposit(uint256 amount) external returns (uint256)",
   "function withdraw(uint256 shares) external returns (uint256)"
@@ -7035,59 +6743,6 @@ var ERC721_ABI = parseAbi29([
   "function balanceOf(address owner) returns (uint256)",
   "function tokenURI(uint256 tokenId) returns (string)"
 ]);
-var ERC721Adapter = class {
-  protocolName;
-  rpcUrl;
-  constructor(entry, rpcUrl) {
-    this.protocolName = entry.name;
-    this.rpcUrl = rpcUrl;
-  }
-  name() {
-    return this.protocolName;
-  }
-  async getCollectionInfo(collection) {
-    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
-    const [collectionName, symbol, totalSupply] = await Promise.all([
-      client.readContract({ address: collection, abi: ERC721_ABI, functionName: "name" }).catch((e) => {
-        throw DefiError.rpcError(`[${this.protocolName}] name failed: ${e}`);
-      }),
-      client.readContract({ address: collection, abi: ERC721_ABI, functionName: "symbol" }).catch((e) => {
-        throw DefiError.rpcError(`[${this.protocolName}] symbol failed: ${e}`);
-      }),
-      client.readContract({ address: collection, abi: ERC721_ABI, functionName: "totalSupply" }).catch(() => void 0)
-    ]);
-    return {
-      address: collection,
-      name: collectionName,
-      symbol,
-      total_supply: totalSupply
-    };
-  }
-  async getTokenInfo(collection, tokenId) {
-    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
-    const [owner, tokenUri] = await Promise.all([
-      client.readContract({ address: collection, abi: ERC721_ABI, functionName: "ownerOf", args: [tokenId] }).catch((e) => {
-        throw DefiError.rpcError(`[${this.protocolName}] ownerOf failed: ${e}`);
-      }),
-      client.readContract({ address: collection, abi: ERC721_ABI, functionName: "tokenURI", args: [tokenId] }).catch(() => void 0)
-    ]);
-    return {
-      collection,
-      token_id: tokenId,
-      owner,
-      token_uri: tokenUri
-    };
-  }
-  async getBalance(owner, collection) {
-    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
-    return client.readContract({ address: collection, abi: ERC721_ABI, functionName: "balanceOf", args: [owner] }).catch((e) => {
-      throw DefiError.rpcError(`[${this.protocolName}] balanceOf failed: ${e}`);
-    });
-  }
-};
 function createDex(entry, rpcUrl) {
   switch (entry.interface) {
     case "uniswap_v3":
@@ -7151,19 +6806,6 @@ function createVault(entry, rpcUrl) {
       throw DefiError.unsupported(`Vault interface '${entry.interface}' not yet implemented`);
   }
 }
-function createLiquidStaking(entry, rpcUrl) {
-  switch (entry.interface) {
-    case "kinetiq_staking":
-      return new KinetiqAdapter(entry, rpcUrl);
-    case "sthype_staking":
-      return new StHypeAdapter(entry, rpcUrl);
-    case "hyperbeat_lst":
-    case "kintsu":
-      return new GenericLstAdapter(entry, rpcUrl);
-    default:
-      return new GenericLstAdapter(entry, rpcUrl);
-  }
-}
 function createGauge(entry, rpcUrl) {
   if (entry.interface === "hybra" || entry.contracts?.["gauge_manager"]) {
     return new HybraGaugeAdapter(entry, rpcUrl);
@@ -7175,19 +6817,6 @@ function createGauge(entry, rpcUrl) {
       return new SolidlyGaugeAdapter(entry, rpcUrl);
     default:
       throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported`);
-  }
-}
-function createMasterChef(entry, rpcUrl) {
-  return new MasterChefAdapter(entry, rpcUrl);
-}
-function createNft(entry, rpcUrl) {
-  switch (entry.interface) {
-    case "erc721":
-      return new ERC721Adapter(entry, rpcUrl);
-    case "marketplace":
-      throw DefiError.unsupported(`NFT marketplace '${entry.name}' is not queryable as ERC-721. Use a specific collection address.`);
-    default:
-      throw DefiError.unsupported(`NFT interface '${entry.interface}' not supported`);
   }
 }
 function createOracleFromLending(entry, rpcUrl) {
@@ -7265,39 +6894,7 @@ var DexSpotPrice = class {
 
 // src/commands/dex.ts
 function registerDex(parent, getOpts, makeExecutor2) {
-  const dex = parent.command("dex").description("DEX operations: swap, quote, compare");
-  dex.command("quote").description("Get a swap quote without executing").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-in <token>", "Input token symbol or address").requiredOption("--token-out <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createDex(protocol, chain.effectiveRpcUrl());
-    const tokenIn = opts.tokenIn.startsWith("0x") ? opts.tokenIn : registry.resolveToken(chainName, opts.tokenIn).address;
-    const tokenOut = opts.tokenOut.startsWith("0x") ? opts.tokenOut : registry.resolveToken(chainName, opts.tokenOut).address;
-    const result = await adapter.quote({ protocol: protocol.name, token_in: tokenIn, token_out: tokenOut, amount_in: BigInt(opts.amount) });
-    printOutput(result, getOpts());
-  });
-  dex.command("swap").description("Execute a token swap").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-in <token>", "Input token").requiredOption("--token-out <token>", "Output token").requiredOption("--amount <amount>", "Amount in wei").option("--slippage <bps>", "Slippage tolerance in bps", "50").option("--recipient <address>", "Recipient address").action(async (opts) => {
-    const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createDex(protocol, chain.effectiveRpcUrl());
-    const tokenIn = opts.tokenIn.startsWith("0x") ? opts.tokenIn : registry.resolveToken(chainName, opts.tokenIn).address;
-    const tokenOut = opts.tokenOut.startsWith("0x") ? opts.tokenOut : registry.resolveToken(chainName, opts.tokenOut).address;
-    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
-    const tx = await adapter.buildSwap({
-      protocol: protocol.name,
-      token_in: tokenIn,
-      token_out: tokenOut,
-      amount_in: BigInt(opts.amount),
-      slippage: { bps: parseInt(opts.slippage) },
-      recipient
-    });
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
+  const dex = parent.command("dex").description("DEX LP operations: add/remove liquidity");
   dex.command("lp-add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2 for \xB12%)").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain ?? "hyperevm";
@@ -7351,26 +6948,6 @@ function registerDex(parent, getOpts, makeExecutor2) {
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
-  });
-  dex.command("compare").description("Compare quotes across DEXes").requiredOption("--token-in <token>", "Input token").requiredOption("--token-out <token>", "Output token").requiredOption("--amount <amount>", "Amount in wei").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const tokenIn = opts.tokenIn.startsWith("0x") ? opts.tokenIn : registry.resolveToken(chainName, opts.tokenIn).address;
-    const tokenOut = opts.tokenOut.startsWith("0x") ? opts.tokenOut : registry.resolveToken(chainName, opts.tokenOut).address;
-    const dexProtocols = registry.getProtocolsByCategory("dex").filter((p) => p.chain === chainName);
-    const results = [];
-    await Promise.all(dexProtocols.map(async (p) => {
-      try {
-        const adapter = createDex(p, chain.effectiveRpcUrl());
-        const q = await adapter.quote({ protocol: p.name, token_in: tokenIn, token_out: tokenOut, amount_in: BigInt(opts.amount) });
-        results.push({ protocol: p.name, amount_out: q.amount_out });
-      } catch (e) {
-        results.push({ protocol: p.name, amount_out: 0n, error: e instanceof Error ? e.message : String(e) });
-      }
-    }));
-    results.sort((a, b) => b.amount_out > a.amount_out ? 1 : -1);
-    printOutput({ chain: chainName, quotes: results }, getOpts());
   });
 }
 
@@ -7624,44 +7201,6 @@ function registerCdp(parent, getOpts, makeExecutor2) {
     const tx = await adapter.buildClose({ protocol: protocol.name, cdp_id: BigInt(opts.position) });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
-  });
-}
-
-// src/commands/staking.ts
-function registerStaking(parent, getOpts, makeExecutor2) {
-  const staking = parent.command("staking").description("Liquid staking: stake, unstake, info");
-  staking.command("stake").description("Stake tokens via liquid staking").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--amount <amount>", "Amount in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
-    const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createLiquidStaking(protocol, chain.effectiveRpcUrl());
-    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
-    const tx = await adapter.buildStake({ protocol: protocol.name, amount: BigInt(opts.amount), recipient });
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  staking.command("unstake").description("Unstake tokens").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--amount <amount>", "Amount in wei").option("--recipient <address>", "Recipient address").action(async (opts) => {
-    const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createLiquidStaking(protocol, chain.effectiveRpcUrl());
-    const recipient = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
-    const tx = await adapter.buildUnstake({ protocol: protocol.name, amount: BigInt(opts.amount), recipient });
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  staking.command("info").description("Show staking info and rates").requiredOption("--protocol <protocol>", "Protocol slug").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const protocol = registry.getProtocol(opts.protocol);
-    const adapter = createLiquidStaking(protocol, chain.effectiveRpcUrl());
-    const info = await adapter.getInfo();
-    printOutput(info, getOpts());
   });
 }
 
@@ -9408,53 +8947,6 @@ async function runAllChains(registry, patterns, oracleThreshold, stableThreshold
   };
 }
 
-// src/commands/arb.ts
-function registerArb(parent, getOpts, makeExecutor2) {
-  parent.command("arb").description("Detect arbitrage opportunities across DEXes").option("--token-in <token>", "Base token (default: WHYPE)", "WHYPE").option("--token-out <token>", "Quote token (default: USDC)", "USDC").option("--amount <amount>", "Test amount in wei", "1000000000000000000").option("--execute", "Execute best arb (default: analysis only)").option("--min-profit <bps>", "Min profit in bps to execute", "10").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const rpcUrl = chain.effectiveRpcUrl();
-    const tokenIn = opts.tokenIn.startsWith("0x") ? opts.tokenIn : registry.resolveToken(chainName, opts.tokenIn).address;
-    const tokenOut = opts.tokenOut.startsWith("0x") ? opts.tokenOut : registry.resolveToken(chainName, opts.tokenOut).address;
-    const amountIn = BigInt(opts.amount);
-    const dexProtocols = registry.getProtocolsByCategory("dex").filter((p) => p.chain === chainName);
-    const quotes = [];
-    for (const p of dexProtocols) {
-      try {
-        const adapter = createDex(p, rpcUrl);
-        const buyQuote = await adapter.quote({ protocol: p.name, token_in: tokenIn, token_out: tokenOut, amount_in: amountIn });
-        if (buyQuote.amount_out === 0n) continue;
-        const sellQuote = await adapter.quote({ protocol: p.name, token_in: tokenOut, token_out: tokenIn, amount_in: buyQuote.amount_out });
-        const profitBps = Number((sellQuote.amount_out - amountIn) * 10000n / amountIn);
-        quotes.push({ protocol: p.name, buy: buyQuote.amount_out, sell: sellQuote.amount_out, profit_bps: profitBps });
-      } catch {
-      }
-    }
-    const opportunities = [];
-    for (let i = 0; i < quotes.length; i++) {
-      for (let j = 0; j < quotes.length; j++) {
-        if (i === j) continue;
-        const buyAmount = quotes[i].buy;
-        const sellAmount = quotes[j].sell;
-        if (sellAmount > amountIn) {
-          const profitBps = Number((sellAmount - amountIn) * 10000n / amountIn);
-          opportunities.push({ buy_on: quotes[i].protocol, sell_on: quotes[j].protocol, profit_bps: profitBps });
-        }
-      }
-    }
-    opportunities.sort((a, b) => b.profit_bps - a.profit_bps);
-    printOutput({
-      chain: chainName,
-      token_in: tokenIn,
-      token_out: tokenOut,
-      amount_in: amountIn,
-      single_dex: quotes,
-      cross_dex_opportunities: opportunities.slice(0, 5)
-    }, getOpts());
-  });
-}
-
 // src/commands/positions.ts
 import { encodeFunctionData as encodeFunctionData30, parseAbi as parseAbi34 } from "viem";
 var ERC20_ABI6 = parseAbi34([
@@ -10067,207 +9559,6 @@ function registerWhales(parent, getOpts) {
   });
 }
 
-// src/commands/compare.ts
-import { spawnSync } from "child_process";
-function round25(x) {
-  return Math.round(x * 100) / 100;
-}
-async function fetchPerpRates() {
-  let result = spawnSync("perp", ["--json", "arb", "scan", "--rates"], { encoding: "utf8", timeout: 3e4 });
-  if (result.error || result.status !== 0) {
-    result = spawnSync("npx", ["-y", "perp-cli@latest", "--json", "arb", "scan", "--rates"], {
-      encoding: "utf8",
-      timeout: 6e4
-    });
-  }
-  if (result.error || result.status !== 0) {
-    throw new Error("perp-cli not found or failed");
-  }
-  let data;
-  try {
-    data = JSON.parse(result.stdout);
-  } catch {
-    throw new Error("perp JSON parse error");
-  }
-  const d = data;
-  const symbolsRaw = d["data"]?.["symbols"] ?? d["symbols"];
-  const symbols = Array.isArray(symbolsRaw) ? symbolsRaw : [];
-  const results = [];
-  for (const sym of symbols) {
-    const symbol = sym["symbol"] ?? "?";
-    const maxSpread = sym["maxSpreadAnnual"] ?? 0;
-    const longEx = sym["longExchange"] ?? "?";
-    const shortEx = sym["shortExchange"] ?? "?";
-    if (Math.abs(maxSpread) > 0) {
-      results.push({
-        type: "perp_funding",
-        asset: symbol,
-        apy: round25(maxSpread),
-        detail: `long ${longEx} / short ${shortEx}`,
-        risk: Math.abs(maxSpread) > 50 ? "high" : Math.abs(maxSpread) > 20 ? "medium" : "low",
-        source: "perp-cli"
-      });
-    }
-    const rates = Array.isArray(sym["rates"]) ? sym["rates"] : [];
-    for (const rate of rates) {
-      const exchange = rate["exchange"] ?? "?";
-      const annual = rate["annualizedPct"] ?? 0;
-      if (Math.abs(annual) > 1) {
-        results.push({
-          type: "perp_rate",
-          asset: symbol,
-          apy: round25(annual),
-          detail: exchange,
-          risk: Math.abs(annual) > 50 ? "high" : Math.abs(annual) > 20 ? "medium" : "low",
-          source: "perp-cli"
-        });
-      }
-    }
-  }
-  return results;
-}
-async function fetchLendingRates(registry, asset) {
-  const chainKeys = Array.from(registry.chains.keys());
-  const tasks = chainKeys.map(async (ck) => {
-    try {
-      const chain = registry.getChain(ck);
-      const chainName = chain.name.toLowerCase();
-      let assetAddr;
-      try {
-        assetAddr = registry.resolveToken(chainName, asset).address;
-      } catch {
-        return [];
-      }
-      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
-      if (protos.length === 0) return [];
-      const rpc = chain.effectiveRpcUrl();
-      const rates = [];
-      for (const proto of protos) {
-        try {
-          const lending = createLending(proto, rpc);
-          const r = await lending.getRates(assetAddr);
-          if (r.supply_apy > 0) {
-            rates.push({
-              type: "lending_supply",
-              asset,
-              apy: round25(r.supply_apy * 100),
-              detail: `${r.protocol} (${chain.name})`,
-              risk: "low",
-              source: "defi-cli"
-            });
-          }
-        } catch {
-        }
-      }
-      return rates;
-    } catch {
-      return [];
-    }
-  });
-  const nested = await Promise.all(tasks);
-  return nested.flat();
-}
-function registerCompare(parent, getOpts) {
-  parent.command("compare").description("Compare all yield sources: perp funding vs lending APY vs staking").option("--asset <token>", "Token symbol to compare (e.g. USDC, ETH)", "USDC").option("--no-perps", "Exclude perp funding rates").option("--no-lending", "Exclude lending rates").option("--min-apy <pct>", "Minimum absolute APY to show", "1.0").action(async (opts) => {
-    try {
-      const registry = Registry.loadEmbedded();
-      const asset = opts.asset ?? "USDC";
-      const includePerps = opts.perps !== false;
-      const includeLending = opts.lending !== false;
-      const minApy = parseFloat(opts.minApy ?? "1.0");
-      const t0 = Date.now();
-      const opportunities = [];
-      if (includePerps) {
-        try {
-          const perpData = await fetchPerpRates();
-          for (const opp of perpData) {
-            const apy = Math.abs(opp["apy"] ?? 0);
-            if (apy >= minApy) opportunities.push(opp);
-          }
-        } catch {
-        }
-      }
-      if (includeLending) {
-        const lendingData = await fetchLendingRates(registry, asset);
-        for (const opp of lendingData) {
-          const apy = Math.abs(opp["apy"] ?? 0);
-          if (apy >= minApy) opportunities.push(opp);
-        }
-      }
-      opportunities.sort((a, b) => {
-        const aApy = Math.abs(a["apy"] ?? 0);
-        const bApy = Math.abs(b["apy"] ?? 0);
-        return bApy - aApy;
-      });
-      const scanMs = Date.now() - t0;
-      printOutput(
-        {
-          asset,
-          scan_duration_ms: scanMs,
-          total_opportunities: opportunities.length,
-          opportunities
-        },
-        getOpts()
-      );
-    } catch (err) {
-      printOutput({ error: String(err) }, getOpts());
-      process.exit(1);
-    }
-  });
-}
-
-// src/commands/swap.ts
-var ODOS_API = "https://api.odos.xyz";
-function registerSwap(parent, getOpts, makeExecutor2) {
-  parent.command("swap").description("Aggregator swap: best price across all DEXes (ODOS)").requiredOption("--token-in <token>", "Input token symbol or address").requiredOption("--token-out <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--slippage <bps>", "Slippage tolerance in basis points", "50").option("--recipient <address>", "Recipient address").action(async (opts) => {
-    const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const tokenIn = opts.tokenIn.startsWith("0x") ? opts.tokenIn : registry.resolveToken(chainName, opts.tokenIn).address;
-    const tokenOut = opts.tokenOut.startsWith("0x") ? opts.tokenOut : registry.resolveToken(chainName, opts.tokenOut).address;
-    const sender = opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001";
-    try {
-      const quoteRes = await fetch(`${ODOS_API}/sor/quote/v2`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chainId: chain.chain_id,
-          inputTokens: [{ tokenAddress: tokenIn, amount: opts.amount }],
-          outputTokens: [{ tokenAddress: tokenOut, proportion: 1 }],
-          slippageLimitPercent: parseInt(opts.slippage) / 100,
-          userAddr: sender
-        })
-      });
-      const quote = await quoteRes.json();
-      if (!quote.pathId) {
-        printOutput({ error: "No ODOS route found", quote }, getOpts());
-        return;
-      }
-      const assembleRes = await fetch(`${ODOS_API}/sor/assemble`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pathId: quote.pathId, userAddr: sender })
-      });
-      const assembled = await assembleRes.json();
-      if (assembled.transaction) {
-        const tx = {
-          description: `ODOS swap ${tokenIn} \u2192 ${tokenOut}`,
-          to: assembled.transaction.to,
-          data: assembled.transaction.data,
-          value: BigInt(assembled.transaction.value ?? 0)
-        };
-        const result = await executor.execute(tx);
-        printOutput({ ...result, odos_quote: quote }, getOpts());
-      } else {
-        printOutput({ error: "ODOS assembly failed", assembled }, getOpts());
-      }
-    } catch (e) {
-      printOutput({ error: `ODOS API error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
-    }
-  });
-}
-
 // src/commands/bridge.ts
 var LIFI_API = "https://li.quest/v1";
 var DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
@@ -10490,132 +9781,6 @@ function registerBridge(parent, getOpts) {
     } catch (e) {
       printOutput({ error: `LI.FI API error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
     }
-  });
-}
-
-// src/commands/nft.ts
-function registerNft(parent, getOpts) {
-  const nft = parent.command("nft").description("NFT operations: collection info, ownership, balance");
-  nft.command("info").description("Get NFT collection info (name, symbol, total supply)").requiredOption("--collection <address>", "NFT collection contract address").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const nftProtocols = registry.getProtocolsByCategory("nft").filter((p) => p.chain === chainName);
-    const entry = nftProtocols[0] ?? { name: "ERC721", slug: "erc721", category: "nft", interface: "erc721", chain: chainName, contracts: { collection: opts.collection } };
-    try {
-      const adapter = createNft(entry, chain.effectiveRpcUrl());
-      const info = await adapter.getCollectionInfo(opts.collection);
-      printOutput(info, getOpts());
-    } catch (e) {
-      printOutput({ error: e instanceof Error ? e.message : String(e) }, getOpts());
-    }
-  });
-  nft.command("owner").description("Check who owns a specific NFT token ID").requiredOption("--collection <address>", "NFT collection contract address").requiredOption("--token-id <id>", "Token ID").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const nftProtocols = registry.getProtocolsByCategory("nft").filter((p) => p.chain === chainName);
-    const entry = nftProtocols[0] ?? { name: "ERC721", slug: "erc721", category: "nft", interface: "erc721", chain: chainName, contracts: { collection: opts.collection } };
-    try {
-      const adapter = createNft(entry, chain.effectiveRpcUrl());
-      const info = await adapter.getTokenInfo(opts.collection, BigInt(opts.tokenId));
-      printOutput(info, getOpts());
-    } catch (e) {
-      printOutput({ error: e instanceof Error ? e.message : String(e) }, getOpts());
-    }
-  });
-  nft.command("balance").description("Check how many NFTs an address holds in a collection").requiredOption("--collection <address>", "NFT collection contract address").requiredOption("--owner <address>", "Owner address to query").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const nftProtocols = registry.getProtocolsByCategory("nft").filter((p) => p.chain === chainName);
-    const entry = nftProtocols[0] ?? { name: "ERC721", slug: "erc721", category: "nft", interface: "erc721", chain: chainName, contracts: { collection: opts.collection } };
-    try {
-      const adapter = createNft(entry, chain.effectiveRpcUrl());
-      const balance = await adapter.getBalance(opts.owner, opts.collection);
-      printOutput({ collection: opts.collection, owner: opts.owner, balance }, getOpts());
-    } catch (e) {
-      printOutput({ error: e instanceof Error ? e.message : String(e) }, getOpts());
-    }
-  });
-  nft.command("uri").description("Get token URI for a specific NFT").requiredOption("--collection <address>", "NFT collection contract address").requiredOption("--token-id <id>", "Token ID").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
-    const registry = Registry.loadEmbedded();
-    const chain = registry.getChain(chainName);
-    const nftProtocols = registry.getProtocolsByCategory("nft").filter((p) => p.chain === chainName);
-    const entry = nftProtocols[0] ?? { name: "ERC721", slug: "erc721", category: "nft", interface: "erc721", chain: chainName, contracts: { collection: opts.collection } };
-    try {
-      const adapter = createNft(entry, chain.effectiveRpcUrl());
-      const info = await adapter.getTokenInfo(opts.collection, BigInt(opts.tokenId));
-      printOutput({ collection: opts.collection, token_id: opts.tokenId, token_uri: info.token_uri }, getOpts());
-    } catch (e) {
-      printOutput({ error: e instanceof Error ? e.message : String(e) }, getOpts());
-    }
-  });
-}
-
-// src/commands/farm.ts
-function registerFarm(parent, getOpts, makeExecutor2) {
-  const farm = parent.command("farm").description("LP farm operations: deposit, withdraw, claim rewards (MasterChef)");
-  farm.command("deposit").description("Deposit LP tokens into a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").requiredOption("--amount <amount>", "LP token amount in wei").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMasterChef(protocol, rpcUrl);
-    const tx = await adapter.buildDeposit(
-      protocol.contracts?.["masterchef"],
-      BigInt(opts.amount),
-      BigInt(opts.pid)
-    );
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  farm.command("withdraw").description("Withdraw LP tokens from a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").requiredOption("--amount <amount>", "LP token amount in wei").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMasterChef(protocol, rpcUrl);
-    const tx = await adapter.buildWithdrawPid(
-      BigInt(opts.pid),
-      BigInt(opts.amount)
-    );
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  farm.command("claim").description("Claim pending rewards from a MasterChef farm").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--pid <pid>", "Farm pool ID").action(async (opts) => {
-    const executor = makeExecutor2();
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMasterChef(protocol, rpcUrl);
-    const tx = await adapter.buildClaimRewardsPid(
-      BigInt(opts.pid)
-    );
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  farm.command("info").description("Show pending rewards and farm info").requiredOption("--protocol <protocol>", "Protocol slug").option("--pid <pid>", "Farm pool ID (optional)").option("--address <address>", "Wallet address to query (defaults to DEFI_WALLET_ADDRESS env)").action(async (opts) => {
-    const registry = Registry.loadEmbedded();
-    const protocol = registry.getProtocol(opts.protocol);
-    const chainName = parent.opts().chain;
-    const chain = registry.getChain(chainName ?? "hyperevm");
-    const rpcUrl = chain.effectiveRpcUrl();
-    const adapter = createMasterChef(protocol, rpcUrl);
-    const walletAddress = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
-    if (!walletAddress) {
-      throw new Error("--address or DEFI_WALLET_ADDRESS required");
-    }
-    const masterchef = protocol.contracts?.["masterchef"];
-    const rewards = await adapter.getPendingRewards(masterchef, walletAddress);
-    printOutput(rewards, getOpts());
   });
 }
 
@@ -10995,8 +10160,8 @@ var BANNER = `
 
   2 chains \xB7 21 protocols \xB7 by HypurrQuant
 
-  Scan exploits, swap tokens, bridge assets, track whales,
-  compare yields \u2014 all from your terminal.
+  Lending, LP provision, farming, gauges, vaults,
+  yield comparison \u2014 all from your terminal.
 `;
 var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version(_pkg.version).addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain", "hyperevm").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
 function getOutputMode() {
@@ -11015,33 +10180,21 @@ registerDex(program, getOutputMode, makeExecutor);
 registerGauge(program, getOutputMode, makeExecutor);
 registerLending(program, getOutputMode, makeExecutor);
 registerCdp(program, getOutputMode, makeExecutor);
-registerStaking(program, getOutputMode, makeExecutor);
 registerVault(program, getOutputMode, makeExecutor);
 registerYield(program, getOutputMode, makeExecutor);
 registerPortfolio(program, getOutputMode);
 registerMonitor(program, getOutputMode);
 registerAlert(program, getOutputMode);
 registerScan(program, getOutputMode);
-registerArb(program, getOutputMode, makeExecutor);
 registerPositions(program, getOutputMode);
 registerPrice(program, getOutputMode);
 registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
 registerWhales(program, getOutputMode);
-registerCompare(program, getOutputMode);
-registerSwap(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
-registerNft(program, getOutputMode);
-registerFarm(program, getOutputMode, makeExecutor);
 registerFarming(program, getOutputMode, makeExecutor);
 registerLB(program, getOutputMode, makeExecutor);
 registerSetup(program);
-program.command("agent").description("Agent mode: read JSON commands from stdin (for AI agents)").action(async () => {
-  const executor = makeExecutor();
-  process.stderr.write("Agent mode: reading JSON commands from stdin...\n");
-  process.stderr.write("Agent mode not yet fully implemented in TS port.\n");
-  process.exit(1);
-});
 export {
   program
 };
