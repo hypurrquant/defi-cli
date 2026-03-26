@@ -7073,7 +7073,7 @@ var Executor = class _Executor {
       const [maxFee, priorityFee] = await this.fetchEip1559Fees(rpcUrl);
       return {
         tx_hash: void 0,
-        status: "simulated",
+        status: TxStatus.Simulated,
         gas_used: gasEstimate > 0n ? Number(gasEstimate) : void 0,
         description: tx.description,
         details: {
@@ -7093,7 +7093,7 @@ var Executor = class _Executor {
       const revertReason = extractRevertReason(errMsg);
       return {
         tx_hash: void 0,
-        status: "simulation_failed",
+        status: TxStatus.SimulationFailed,
         gas_used: tx.gas_estimate,
         description: tx.description,
         details: {
@@ -7115,7 +7115,7 @@ var Executor = class _Executor {
       }
       return {
         tx_hash: void 0,
-        status: "dry_run",
+        status: TxStatus.DryRun,
         gas_used: tx.gas_estimate,
         description: tx.description,
         details: {
@@ -7200,7 +7200,7 @@ var Executor = class _Executor {
 `);
     process.stderr.write("Waiting for confirmation...\n");
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-    const status = receipt.status === "success" ? "confirmed" : "failed";
+    const status = receipt.status === "success" ? TxStatus.Confirmed : TxStatus.Failed;
     let mintedTokenId;
     if (receipt.status === "success" && receipt.logs) {
       const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";

@@ -213,7 +213,7 @@ export class Executor {
 
       return {
         tx_hash: undefined,
-        status: "simulated" as TxStatus,
+        status: TxStatus.Simulated,
         gas_used: gasEstimate > 0n ? Number(gasEstimate) : undefined,
         description: tx.description,
         details: {
@@ -234,7 +234,7 @@ export class Executor {
 
       return {
         tx_hash: undefined,
-        status: "simulation_failed" as TxStatus,
+        status: TxStatus.SimulationFailed,
         gas_used: tx.gas_estimate,
         description: tx.description,
         details: {
@@ -258,7 +258,7 @@ export class Executor {
 
       return {
         tx_hash: undefined,
-        status: "dry_run" as TxStatus,
+        status: TxStatus.DryRun,
         gas_used: tx.gas_estimate,
         description: tx.description,
         details: {
@@ -353,7 +353,7 @@ export class Executor {
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-    const status = receipt.status === "success" ? "confirmed" : "failed";
+    const status = receipt.status === "success" ? TxStatus.Confirmed : TxStatus.Failed;
 
     // Extract minted NFT tokenId from Transfer(from=0x0) events
     let mintedTokenId: string | undefined;
@@ -388,7 +388,7 @@ export class Executor {
 
     return {
       tx_hash: txHash,
-      status: status as TxStatus,
+      status,
       gas_used: receipt.gasUsed ? Number(receipt.gasUsed) : undefined,
       description: tx.description,
       details,

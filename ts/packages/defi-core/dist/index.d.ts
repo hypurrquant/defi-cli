@@ -491,7 +491,7 @@ interface IGauge {
     /** Resolve gauge address from pool address via voter */
     resolveGauge?(pool: Address): Promise<Address>;
     /** Deposit LP tokens into gauge */
-    buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
+    buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx>;
     /** Withdraw LP tokens or NFT from gauge */
     buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
     /** Claim earned rewards from gauge */

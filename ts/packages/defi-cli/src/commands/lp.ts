@@ -233,6 +233,11 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const addResult = await executor.execute(addTx);
       printOutput({ step: "lp_add", ...addResult }, getOpts());
 
+      if (addResult.status !== "confirmed" && addResult.status !== "simulated") {
+        process.stderr.write("Step 2/2: Skipped — LP add did not succeed.\n");
+        return;
+      }
+
       // Extract minted tokenId from result (broadcast mode populates minted_token_id)
       const mintedTokenId = addResult.details?.minted_token_id
         ? BigInt(addResult.details.minted_token_id as string)
@@ -279,10 +284,14 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
 
         process.stderr.write("Step 2/2: Staking into gauge...\n");
         const gaugeAdapter = createGauge(protocol, rpcUrl);
-        // Hybra uses tokenId-based deposit; solidly_v2 uses amount
+        // Hybra uses tokenId-based deposit; solidly_v2 uses amount (max uint256 = deposit full balance)
         const tokenIdArg = mintedTokenId;
-        const amountArg = iface === "solidly_v2" ? 0n : 0n; // solidly_v2 LP gauge: user provides amount externally; here we use 0 as placeholder
-        const stakeTx = await gaugeAdapter.buildDeposit(gaugeAddr, amountArg, tokenIdArg);
+        const amountArg = iface === "solidly_v2"
+          ? BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935") // uint256 max
+          : 0n;
+        // For solidly_v2, the LP token is the pool itself — pass poolAddr so approve is generated
+        const lpTokenArg = iface === "solidly_v2" ? poolAddr : undefined;
+        const stakeTx = await gaugeAdapter.buildDeposit(gaugeAddr, amountArg, tokenIdArg, lpTokenArg);
         const stakeResult = await executor.execute(stakeTx);
         printOutput({ step: "stake_gauge", ...stakeResult }, getOpts());
         return;
@@ -405,6 +414,10 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         const exitTx = await farmAdapter.buildExitFarming(BigInt(opts.tokenId), poolAddr);
         const exitResult = await executor.execute(exitTx);
         printOutput({ step: "unstake_farming", ...exitResult }, getOpts());
+        if (exitResult.status !== "confirmed" && exitResult.status !== "simulated") {
+          process.stderr.write("Step 2/2: Skipped — unstake did not succeed.\n");
+          return;
+        }
         didUnstake = true;
       }
       // Solidly / Hybra gauge withdraw
@@ -427,6 +440,10 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
           const withdrawTx = await gaugeAdapter.buildWithdraw(gaugeAddr, BigInt(opts.liquidity), tokenId);
           const withdrawResult = await executor.execute(withdrawTx);
           printOutput({ step: "unstake_gauge", ...withdrawResult }, getOpts());
+          if (withdrawResult.status !== "confirmed" && withdrawResult.status !== "simulated") {
+            process.stderr.write("Step 2/2: Skipped — unstake did not succeed.\n");
+            return;
+          }
           didUnstake = true;
         }
       }

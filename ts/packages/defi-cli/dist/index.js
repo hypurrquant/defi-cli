@@ -1208,7 +1208,7 @@ var Executor = class _Executor {
       const [maxFee, priorityFee] = await this.fetchEip1559Fees(rpcUrl);
       return {
         tx_hash: void 0,
-        status: "simulated",
+        status: TxStatus.Simulated,
         gas_used: gasEstimate > 0n ? Number(gasEstimate) : void 0,
         description: tx.description,
         details: {
@@ -1228,7 +1228,7 @@ var Executor = class _Executor {
       const revertReason = extractRevertReason(errMsg);
       return {
         tx_hash: void 0,
-        status: "simulation_failed",
+        status: TxStatus.SimulationFailed,
         gas_used: tx.gas_estimate,
         description: tx.description,
         details: {
@@ -1250,7 +1250,7 @@ var Executor = class _Executor {
       }
       return {
         tx_hash: void 0,
-        status: "dry_run",
+        status: TxStatus.DryRun,
         gas_used: tx.gas_estimate,
         description: tx.description,
         details: {
@@ -1335,7 +1335,7 @@ var Executor = class _Executor {
 `);
     process.stderr.write("Waiting for confirmation...\n");
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-    const status = receipt.status === "success" ? "confirmed" : "failed";
+    const status = receipt.status === "success" ? TxStatus.Confirmed : TxStatus.Failed;
     let mintedTokenId;
     if (receipt.status === "success" && receipt.logs) {
       const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -7030,6 +7030,10 @@ function registerLP(parent, getOpts, makeExecutor2) {
     process.stderr.write("Step 1/2: Adding liquidity...\n");
     const addResult = await executor.execute(addTx);
     printOutput({ step: "lp_add", ...addResult }, getOpts());
+    if (addResult.status !== "confirmed" && addResult.status !== "simulated") {
+      process.stderr.write("Step 2/2: Skipped \u2014 LP add did not succeed.\n");
+      return;
+    }
     const mintedTokenId = addResult.details?.minted_token_id ? BigInt(addResult.details.minted_token_id) : void 0;
     const iface = protocol.interface;
     if (iface === "algebra_v3" && protocol.contracts?.["farming_center"]) {
@@ -7064,8 +7068,9 @@ function registerLP(parent, getOpts, makeExecutor2) {
       process.stderr.write("Step 2/2: Staking into gauge...\n");
       const gaugeAdapter = createGauge(protocol, rpcUrl);
       const tokenIdArg = mintedTokenId;
-      const amountArg = iface === "solidly_v2" ? 0n : 0n;
-      const stakeTx = await gaugeAdapter.buildDeposit(gaugeAddr, amountArg, tokenIdArg);
+      const amountArg = iface === "solidly_v2" ? BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935") : 0n;
+      const lpTokenArg = iface === "solidly_v2" ? poolAddr : void 0;
+      const stakeTx = await gaugeAdapter.buildDeposit(gaugeAddr, amountArg, tokenIdArg, lpTokenArg);
       const stakeResult = await executor.execute(stakeTx);
       printOutput({ step: "stake_gauge", ...stakeResult }, getOpts());
       return;
@@ -7142,6 +7147,10 @@ function registerLP(parent, getOpts, makeExecutor2) {
       const exitTx = await farmAdapter.buildExitFarming(BigInt(opts.tokenId), poolAddr);
       const exitResult = await executor.execute(exitTx);
       printOutput({ step: "unstake_farming", ...exitResult }, getOpts());
+      if (exitResult.status !== "confirmed" && exitResult.status !== "simulated") {
+        process.stderr.write("Step 2/2: Skipped \u2014 unstake did not succeed.\n");
+        return;
+      }
       didUnstake = true;
     } else if (["solidly_v2", "solidly_cl", "hybra"].includes(iface)) {
       let gaugeAddr = opts.gauge;
@@ -7161,6 +7170,10 @@ function registerLP(parent, getOpts, makeExecutor2) {
         const withdrawTx = await gaugeAdapter.buildWithdraw(gaugeAddr, BigInt(opts.liquidity), tokenId);
         const withdrawResult = await executor.execute(withdrawTx);
         printOutput({ step: "unstake_gauge", ...withdrawResult }, getOpts());
+        if (withdrawResult.status !== "confirmed" && withdrawResult.status !== "simulated") {
+          process.stderr.write("Step 2/2: Skipped \u2014 unstake did not succeed.\n");
+          return;
+        }
         didUnstake = true;
       }
     }
