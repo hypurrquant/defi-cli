@@ -293,11 +293,34 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
     .command("yield")
     .description("Yield operations: compare, scan, optimize, execute");
 
+  // yield (no subcommand) = compare with default USDC
+  yieldCmd
+    .option("--asset <token>", "Token symbol or address", "USDC")
+    .action(async (opts) => {
+      try {
+        const registry = Registry.loadEmbedded();
+        const chainName: string = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+        const chain = registry.getChain(chainName);
+        const rpc = chain.effectiveRpcUrl();
+        const assetAddr = resolveAsset(registry, chainName, opts.asset as string);
+        const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+        results.sort((a, b) => b.supply_apy - a.supply_apy);
+        const bestSupply = results[0]?.protocol ?? null;
+        const bestBorrow = results.reduce((best, r) => {
+          if (!best || r.borrow_variable_apy < best.borrow_variable_apy) return r;
+          return best;
+        }, null as LendingRates | null)?.protocol ?? null;
+        printOutput({ asset: opts.asset, chain: chainName, rates: results, best_supply: bestSupply, best_borrow: bestBorrow }, getOpts());
+      } catch (err) {
+        printOutput({ error: String(err) }, getOpts());
+      }
+    });
+
   // yield compare
   yieldCmd
     .command("compare")
     .description("Compare lending rates across protocols for an asset")
-    .requiredOption("--asset <token>", "Token symbol or address")
+    .option("--asset <token>", "Token symbol or address", "USDC")
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();

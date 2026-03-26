@@ -7919,7 +7919,26 @@ async function scanRatesForExecute(registry, asset) {
 }
 function registerYield(parent, getOpts, makeExecutor2) {
   const yieldCmd = parent.command("yield").description("Yield operations: compare, scan, optimize, execute");
-  yieldCmd.command("compare").description("Compare lending rates across protocols for an asset").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
+  yieldCmd.option("--asset <token>", "Token symbol or address", "USDC").action(async (opts) => {
+    try {
+      const registry = Registry.loadEmbedded();
+      const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+      const chain = registry.getChain(chainName);
+      const rpc = chain.effectiveRpcUrl();
+      const assetAddr = resolveAsset(registry, chainName, opts.asset);
+      const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+      results.sort((a, b) => b.supply_apy - a.supply_apy);
+      const bestSupply = results[0]?.protocol ?? null;
+      const bestBorrow = results.reduce((best, r) => {
+        if (!best || r.borrow_variable_apy < best.borrow_variable_apy) return r;
+        return best;
+      }, null)?.protocol ?? null;
+      printOutput({ asset: opts.asset, chain: chainName, rates: results, best_supply: bestSupply, best_borrow: bestBorrow }, getOpts());
+    } catch (err) {
+      printOutput({ error: String(err) }, getOpts());
+    }
+  });
+  yieldCmd.command("compare").description("Compare lending rates across protocols for an asset").option("--asset <token>", "Token symbol or address", "USDC").action(async (opts) => {
     try {
       const registry = Registry.loadEmbedded();
       const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
