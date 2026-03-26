@@ -1923,27 +1923,29 @@ import {
   http as http8
 } from "viem";
 import {
-  createPublicClient as createPublicClient9,
   decodeAbiParameters as decodeAbiParameters5,
   encodeFunctionData as encodeFunctionData13,
   encodeAbiParameters,
   http as http9,
+  createPublicClient as createPublicClient9,
   keccak256,
-  parseAbi as parseAbi13
+  parseAbi as parseAbi13,
+  decodeFunctionResult as decodeFunctionResult4,
+  zeroAddress as zeroAddress7
 } from "viem";
-import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult4, zeroAddress as zeroAddress7 } from "viem";
-import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData15, zeroAddress as zeroAddress8 } from "viem";
+import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult5, zeroAddress as zeroAddress8 } from "viem";
+import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData15, zeroAddress as zeroAddress9 } from "viem";
 import { createPublicClient as createPublicClient12, http as http12, parseAbi as parseAbi16 } from "viem";
 import { createPublicClient as createPublicClient13, http as http13, parseAbi as parseAbi17, encodeFunctionData as encodeFunctionData16 } from "viem";
 import { createPublicClient as createPublicClient14, http as http14, parseAbi as parseAbi18, encodeFunctionData as encodeFunctionData17 } from "viem";
 import { createPublicClient as createPublicClient15, http as http15, parseAbi as parseAbi19, encodeFunctionData as encodeFunctionData18 } from "viem";
-import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult5, zeroAddress as zeroAddress9 } from "viem";
-import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress10 } from "viem";
+import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult6, zeroAddress as zeroAddress10 } from "viem";
+import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress11 } from "viem";
 import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi222 } from "viem";
 import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } from "viem";
 import { parseAbi as parseAbi24, encodeFunctionData as encodeFunctionData222 } from "viem";
-import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23, zeroAddress as zeroAddress11 } from "viem";
-import { createPublicClient as createPublicClient20, http as http20, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24, zeroAddress as zeroAddress12 } from "viem";
+import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23, zeroAddress as zeroAddress12 } from "viem";
+import { createPublicClient as createPublicClient20, http as http20, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24, zeroAddress as zeroAddress13 } from "viem";
 import { parseAbi as parseAbi27, encodeFunctionData as encodeFunctionData25 } from "viem";
 import { parseAbi as parseAbi28, encodeFunctionData as encodeFunctionData26 } from "viem";
 import { createPublicClient as createPublicClient21, http as http21, parseAbi as parseAbi29 } from "viem";
@@ -3520,7 +3522,7 @@ var SolidlyGaugeAdapter = class {
     const clFactoryAbi = parseAbi10([
       "function getPool(address tokenA, address tokenB, int24 tickSpacing) external view returns (address pool)"
     ]);
-    const algebraFactoryAbi = parseAbi10([
+    const algebraFactoryAbi2 = parseAbi10([
       "function poolByPair(address tokenA, address tokenB) external view returns (address pool)"
     ]);
     const poolAbi2 = parseAbi10([
@@ -3542,7 +3544,7 @@ var SolidlyGaugeAdapter = class {
       try {
         const [result] = await multicallRead(this.rpcUrl, [[
           this.clFactory,
-          encodeFunctionData10({ abi: algebraFactoryAbi, functionName: "poolByPair", args: [tokenAddresses[0], tokenAddresses[1]] })
+          encodeFunctionData10({ abi: algebraFactoryAbi2, functionName: "poolByPair", args: [tokenAddresses[0], tokenAddresses[1]] })
         ]]);
         return result !== null && result.length >= 66;
       } catch {
@@ -3556,7 +3558,7 @@ var SolidlyGaugeAdapter = class {
         const [tokenA, tokenB] = pairs[p];
         getPoolCalls.push([
           this.clFactory,
-          encodeFunctionData10({ abi: algebraFactoryAbi, functionName: "poolByPair", args: [tokenA, tokenB] })
+          encodeFunctionData10({ abi: algebraFactoryAbi2, functionName: "poolByPair", args: [tokenA, tokenB] })
         ]);
         callMeta.push({ pairIdx: p, tickSpacing: 0 });
       }
@@ -4780,7 +4782,31 @@ var MerchantMoeLBAdapter = class {
 };
 var KITTEN_TOKEN = "0x618275f8efe54c2afa87bfb9f210a52f0ff89364";
 var WHYPE_TOKEN = "0x5555555555555555555555555555555555555555";
-var MULTICALL_BATCH = 50;
+var MAX_NONCE_SCAN = 60;
+var HYPEREVM_TOKENS2 = [
+  "0x5555555555555555555555555555555555555555",
+  // WHYPE
+  "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+  // USDC
+  "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+  // USDT0
+  "0xBe6727B535545C67d5cAa73dEa54865B92CF7907",
+  // UETH
+  "0x9FDBdA0A5e284c32744D2f17Ee5c74B284993463",
+  // UBTC
+  "0x111111a1a0667d36bD57c0A9f569b98057111111",
+  // USDH
+  "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  // USDe
+  "0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2",
+  // sUSDe
+  "0xf4D9235269a96aaDaFc9aDAe454a0618eBE37949",
+  // XAUt0
+  "0xfD739d4e423301CE9385c1fb8850539D657C296D",
+  // kHYPE
+  KITTEN_TOKEN
+  // KITTEN
+];
 var farmingCenterAbi = parseAbi13([
   "function multicall(bytes[] calldata data) external payable returns (bytes[] memory results)",
   "function enterFarming((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
@@ -4793,16 +4819,21 @@ var positionManagerAbi2 = parseAbi13([
   "function farmingApprovals(uint256 tokenId) external view returns (address)"
 ]);
 var eternalFarmingAbi = parseAbi13([
-  "function numOfIncentives() external view returns (uint256)",
   "function incentives(bytes32 incentiveId) external view returns (uint256 totalReward, uint256 bonusReward, address virtualPoolAddress, uint24 minimalPositionWidth, bool deactivated, address pluginAddress)",
   "function getRewardInfo((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external view returns (uint256 reward, uint256 bonusReward)"
 ]);
-var multicall3Abi2 = parseAbi13([
-  "struct Call3 { address target; bool allowFailure; bytes callData; }",
-  "struct Result { bool success; bytes returnData; }",
-  "function aggregate3(Call3[] calldata calls) external payable returns (Result[] memory returnData)"
+var algebraFactoryAbi = parseAbi13([
+  "function poolByPair(address tokenA, address tokenB) external view returns (address pool)"
 ]);
-var MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+var _addressDecodeAbi2 = parseAbi13(["function f() external view returns (address)"]);
+function decodeAddress2(data) {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult4({ abi: _addressDecodeAbi2, functionName: "f", data });
+  } catch {
+    return null;
+  }
+}
 function incentiveId(key) {
   return keccak256(
     encodeAbiParameters(
@@ -4852,19 +4883,21 @@ function encodeMulticall(calls) {
     args: [calls]
   });
 }
-var nonceCache = {};
+var nonceCache = /* @__PURE__ */ new Map();
 var KittenSwapFarmingAdapter = class {
   protocolName;
   farmingCenter;
   eternalFarming;
   positionManager;
   rpcUrl;
-  constructor(protocolName, farmingCenter, eternalFarming, positionManager, rpcUrl) {
+  factory;
+  constructor(protocolName, farmingCenter, eternalFarming, positionManager, rpcUrl, factory) {
     this.protocolName = protocolName;
     this.farmingCenter = farmingCenter;
     this.eternalFarming = eternalFarming;
     this.positionManager = positionManager;
     this.rpcUrl = rpcUrl;
+    this.factory = factory;
   }
   name() {
     return this.protocolName;
@@ -4872,57 +4905,44 @@ var KittenSwapFarmingAdapter = class {
   /**
    * Discover the active IncentiveKey for a given pool.
    * 1. Check runtime cache
-   * 2. Read numOfIncentives() for max nonce
-   * 3. Batch-query via Multicall3 in reverse order (newest first)
-   * 4. Return first active (non-deactivated, totalReward > 0) incentive
+   * 2. Batch-query nonces 0-60 via single multicall (61 calls)
+   * 3. Return first non-zero incentive (totalReward > 0 and not deactivated)
    */
   async discoverIncentiveKey(pool) {
     const poolLc = pool.toLowerCase();
-    if (poolLc in nonceCache) {
+    if (nonceCache.has(poolLc)) {
       return {
         rewardToken: KITTEN_TOKEN,
         bonusRewardToken: WHYPE_TOKEN,
         pool,
-        nonce: nonceCache[poolLc]
+        nonce: nonceCache.get(poolLc)
       };
     }
-    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
-    const numIncentives = await client.readContract({
-      address: this.eternalFarming,
-      abi: eternalFarmingAbi,
-      functionName: "numOfIncentives"
-    });
-    const maxNonce = Number(numIncentives) - 1;
-    if (maxNonce < 0) return null;
-    const keys = [];
-    for (let n = maxNonce; n >= 0; n--) {
-      keys.push({
+    const calls = [];
+    const nonces = [];
+    for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
+      const nonce = BigInt(n);
+      nonces.push(nonce);
+      const key = {
         rewardToken: KITTEN_TOKEN,
         bonusRewardToken: WHYPE_TOKEN,
         pool,
-        nonce: BigInt(n)
-      });
-    }
-    for (let i = 0; i < keys.length; i += MULTICALL_BATCH) {
-      const batch = keys.slice(i, i + MULTICALL_BATCH);
-      const calls = batch.map((key) => ({
-        target: this.eternalFarming,
-        allowFailure: true,
-        callData: encodeFunctionData13({
+        nonce
+      };
+      calls.push([
+        this.eternalFarming,
+        encodeFunctionData13({
           abi: eternalFarmingAbi,
           functionName: "incentives",
           args: [incentiveId(key)]
         })
-      }));
-      const results = await client.readContract({
-        address: MULTICALL3,
-        abi: multicall3Abi2,
-        functionName: "aggregate3",
-        args: [calls]
-      });
-      for (let j = 0; j < results.length; j++) {
-        const r = results[j];
-        if (!r.success || r.returnData.length < 66) continue;
+      ]);
+    }
+    const results = await multicallRead(this.rpcUrl, calls);
+    for (let i = 0; i < results.length; i++) {
+      const data = results[i];
+      if (!data || data.length < 66) continue;
+      try {
         const decoded = decodeAbiParameters5(
           [
             { name: "totalReward", type: "uint256" },
@@ -4932,15 +4952,21 @@ var KittenSwapFarmingAdapter = class {
             { name: "deactivated", type: "bool" },
             { name: "pluginAddress", type: "address" }
           ],
-          r.returnData
+          data
         );
         const totalReward = decoded[0];
         const deactivated = decoded[4];
         if (totalReward > 0n && !deactivated) {
-          const key = batch[j];
-          nonceCache[poolLc] = key.nonce;
-          return key;
+          const nonce = nonces[i];
+          nonceCache.set(poolLc, nonce);
+          return {
+            rewardToken: KITTEN_TOKEN,
+            bonusRewardToken: WHYPE_TOKEN,
+            pool,
+            nonce
+          };
         }
+      } catch {
       }
     }
     return null;
@@ -5072,45 +5098,118 @@ var KittenSwapFarmingAdapter = class {
     return { reward: result[0], bonusReward: result[1] };
   }
   /**
-   * Discover all pools with active farming incentives.
-   * Dynamically scans all nonces (0..numOfIncentives) via Multicall3 and
-   * groups results by pool. Only returns the latest active incentive per pool.
+   * Discover all KittenSwap pools with active farming incentives.
+   *
+   * Steps:
+   * 1. Generate all unique token pair combos from HYPEREVM_TOKENS (includes KITTEN)
+   * 2. Batch poolByPair calls via multicall against the Algebra factory
+   * 3. For each found pool, batch-scan nonces 0-60 via multicall
+   * 4. Return enriched FarmingPool[] for pools with active incentives
    */
   async discoverFarmingPools() {
-    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
-    const numIncentives = await client.readContract({
-      address: this.eternalFarming,
-      abi: eternalFarmingAbi,
-      functionName: "numOfIncentives"
-    });
-    const maxNonce = Number(numIncentives) - 1;
-    if (maxNonce < 0) return [];
-    const knownPools = [
-      "0x71d1fde797e1810711e4c9abcfca6ef04c266196",
-      // WHYPE/KITTEN
-      "0x3c1403335d0ca7d0a73c9e775b25514537c2b809",
-      // WHYPE/USDT0
-      "0x12df9913e9e08453440e3c4b1ae73819160b513e"
-      // WHYPE/USDC
-    ];
+    if (!this.factory) {
+      return [];
+    }
+    const pairs = [];
+    for (let i = 0; i < HYPEREVM_TOKENS2.length; i++) {
+      for (let j = i + 1; j < HYPEREVM_TOKENS2.length; j++) {
+        pairs.push([HYPEREVM_TOKENS2[i], HYPEREVM_TOKENS2[j]]);
+      }
+    }
+    const poolByPairCalls = pairs.map(([tokenA, tokenB]) => [
+      this.factory,
+      encodeFunctionData13({
+        abi: algebraFactoryAbi,
+        functionName: "poolByPair",
+        args: [tokenA, tokenB]
+      })
+    ]);
+    const poolResults = await multicallRead(this.rpcUrl, poolByPairCalls);
+    const poolSet = /* @__PURE__ */ new Set();
+    for (const data of poolResults) {
+      const addr = decodeAddress2(data);
+      if (addr && addr !== zeroAddress7) {
+        poolSet.add(addr.toLowerCase());
+      }
+    }
+    if (poolSet.size === 0) return [];
+    const pools = Array.from(poolSet);
+    const NONCE_COUNT = MAX_NONCE_SCAN + 1;
+    const allNonceCalls = [];
+    for (const pool of pools) {
+      for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
+        const key = {
+          rewardToken: KITTEN_TOKEN,
+          bonusRewardToken: WHYPE_TOKEN,
+          pool,
+          nonce: BigInt(n)
+        };
+        allNonceCalls.push([
+          this.eternalFarming,
+          encodeFunctionData13({
+            abi: eternalFarmingAbi,
+            functionName: "incentives",
+            args: [incentiveId(key)]
+          })
+        ]);
+      }
+    }
+    const allNonceResults = await multicallRead(this.rpcUrl, allNonceCalls);
     const results = [];
-    for (const pool of knownPools) {
-      const key = await this.discoverIncentiveKey(pool);
-      if (!key) continue;
-      const iid = incentiveId(key);
-      const incentive = await client.readContract({
-        address: this.eternalFarming,
-        abi: eternalFarmingAbi,
-        functionName: "incentives",
-        args: [iid]
-      });
-      results.push({
-        pool,
-        key,
-        totalReward: incentive[0],
-        bonusReward: incentive[1],
-        active: !incentive[4] && incentive[0] > 0n
-      });
+    for (let pi = 0; pi < pools.length; pi++) {
+      const pool = pools[pi];
+      const poolLc = pool.toLowerCase();
+      const base = pi * NONCE_COUNT;
+      let bestKey = null;
+      let bestTotalReward = 0n;
+      let bestBonusReward = 0n;
+      let bestActive = false;
+      for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
+        const data = allNonceResults[base + n];
+        if (!data || data.length < 66) continue;
+        try {
+          const decoded = decodeAbiParameters5(
+            [
+              { name: "totalReward", type: "uint256" },
+              { name: "bonusReward", type: "uint256" },
+              { name: "virtualPoolAddress", type: "address" },
+              { name: "minimalPositionWidth", type: "uint24" },
+              { name: "deactivated", type: "bool" },
+              { name: "pluginAddress", type: "address" }
+            ],
+            data
+          );
+          const totalReward = decoded[0];
+          const bonusReward = decoded[1];
+          const deactivated = decoded[4];
+          if (totalReward > 0n) {
+            const nonce = BigInt(n);
+            const isActive = !deactivated;
+            if (!bestKey || isActive && !bestActive || isActive === bestActive && nonce > bestKey.nonce) {
+              bestKey = {
+                rewardToken: KITTEN_TOKEN,
+                bonusRewardToken: WHYPE_TOKEN,
+                pool,
+                nonce
+              };
+              bestTotalReward = totalReward;
+              bestBonusReward = bonusReward;
+              bestActive = isActive;
+            }
+          }
+        } catch {
+        }
+      }
+      if (bestKey) {
+        nonceCache.set(poolLc, bestKey.nonce);
+        results.push({
+          pool,
+          key: bestKey,
+          totalReward: bestTotalReward,
+          bonusReward: bestBonusReward,
+          active: bestActive
+        });
+      }
     }
     return results;
   }
@@ -5151,14 +5250,14 @@ function u256ToF64(v) {
   if (v > MAX_U128) return Infinity;
   return Number(v);
 }
-function decodeAddress2(data) {
+function decodeAddress3(data) {
   if (!data || data.length < 66) return null;
   return `0x${data.slice(26, 66)}`;
 }
 function decodeAddressArray(data) {
   if (!data) return [];
   try {
-    return decodeFunctionResult4({
+    return decodeFunctionResult5({
       abi: REWARDS_CONTROLLER_ABI,
       functionName: "getRewardsByAsset",
       data
@@ -5170,7 +5269,7 @@ function decodeAddressArray(data) {
 function decodeReserveData(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult4({
+    return decodeFunctionResult5({
       abi: POOL_ABI,
       functionName: "getReserveData",
       data
@@ -5182,7 +5281,7 @@ function decodeReserveData(data) {
 function decodeRewardsData(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult4({
+    return decodeFunctionResult5({
       abi: REWARDS_CONTROLLER_ABI,
       functionName: "getRewardsData",
       data
@@ -5308,8 +5407,8 @@ var AaveV3Adapter = class {
       const [controllerRaw] = await multicallRead(this.rpcUrl, [
         [aTokenAddress, encodeFunctionData14({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
       ]);
-      const controllerAddr = decodeAddress2(controllerRaw ?? null);
-      if (controllerAddr && controllerAddr !== zeroAddress7) {
+      const controllerAddr = decodeAddress3(controllerRaw ?? null);
+      if (controllerAddr && controllerAddr !== zeroAddress8) {
         const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead(this.rpcUrl, [
           [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
           [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
@@ -5357,12 +5456,12 @@ var AaveV3Adapter = class {
         const [providerRaw] = await multicallRead(this.rpcUrl, [
           [this.pool, encodeFunctionData14({ abi: POOL_PROVIDER_ABI, functionName: "ADDRESSES_PROVIDER" })]
         ]);
-        const providerAddr = decodeAddress2(providerRaw ?? null);
+        const providerAddr = decodeAddress3(providerRaw ?? null);
         if (!providerAddr) throw new Error("No provider address");
         const [oracleRaw] = await multicallRead(this.rpcUrl, [
           [providerAddr, encodeFunctionData14({ abi: ADDRESSES_PROVIDER_ABI, functionName: "getPriceOracle" })]
         ]);
-        const oracleAddr = decodeAddress2(oracleRaw ?? null);
+        const oracleAddr = decodeAddress3(oracleRaw ?? null);
         if (!oracleAddr) throw new Error("No oracle address");
         const [assetPriceRaw, baseCurrencyUnitRaw, assetDecimalsRaw] = await multicallRead(this.rpcUrl, [
           [oracleAddr, encodeFunctionData14({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] })],
@@ -5466,8 +5565,8 @@ var AaveV3Adapter = class {
     const collateralUsd = u256ToF64(totalCollateralBase) / 1e8;
     const debtUsd = u256ToF64(totalDebtBase) / 1e8;
     const ltvBps = u256ToF64(ltv);
-    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress7, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-    const borrows = debtUsd > 0 ? [{ asset: zeroAddress7, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
+    const borrows = debtUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
     return {
       protocol: this.protocolName,
       user,
@@ -5636,8 +5735,8 @@ var AaveV2Adapter = class {
     const collateralUsd = u256ToF642(totalCollateralBase) / 1e18;
     const debtUsd = u256ToF642(totalDebtBase) / 1e18;
     const ltvBps = u256ToF642(ltv);
-    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-    const borrows = debtUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress9, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
+    const borrows = debtUsd > 0 ? [{ asset: zeroAddress9, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
     return {
       protocol: this.protocolName,
       user,
@@ -6100,19 +6199,19 @@ var IRM_ABI = parseAbi20([
   "function borrowRateView((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee) market) external view returns (uint256)"
 ]);
 var SECONDS_PER_YEAR3 = 365.25 * 24 * 3600;
-function defaultMarketParams(loanToken = zeroAddress9) {
+function defaultMarketParams(loanToken = zeroAddress10) {
   return {
     loanToken,
-    collateralToken: zeroAddress9,
-    oracle: zeroAddress9,
-    irm: zeroAddress9,
+    collateralToken: zeroAddress10,
+    oracle: zeroAddress10,
+    irm: zeroAddress10,
     lltv: 0n
   };
 }
 function decodeMarket(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult5({
+    return decodeFunctionResult6({
       abi: MORPHO_ABI,
       functionName: "market",
       data
@@ -6124,7 +6223,7 @@ function decodeMarket(data) {
 function decodeMarketParams(data) {
   if (!data) return null;
   try {
-    return decodeFunctionResult5({
+    return decodeFunctionResult6({
       abi: MORPHO_ABI,
       functionName: "idToMarketParams",
       data
@@ -6434,13 +6533,13 @@ var FelixCdpAdapter = class {
       protocol: this.protocolName,
       cdp_id: cdpId,
       collateral: {
-        token: zeroAddress10,
+        token: zeroAddress11,
         symbol: "WHYPE",
         amount: entireColl,
         decimals: 18
       },
       debt: {
-        token: zeroAddress10,
+        token: zeroAddress11,
         symbol: "feUSD",
         amount: entireDebt,
         decimals: 18
@@ -6694,7 +6793,7 @@ var StHypeAdapter = class {
     const data = encodeFunctionData23({
       abi: STHYPE_ABI,
       functionName: "submit",
-      args: [zeroAddress11]
+      args: [zeroAddress12]
     });
     return {
       description: `[${this.protocolName}] Stake ${params.amount} HYPE for stHYPE`,
@@ -6731,7 +6830,7 @@ var StHypeAdapter = class {
     });
     return {
       protocol: this.protocolName,
-      staked_token: zeroAddress11,
+      staked_token: zeroAddress12,
       liquid_token: tokenAddr,
       exchange_rate: 1,
       total_staked: totalSupply
@@ -6805,7 +6904,7 @@ var KinetiqAdapter = class {
     const rateF64 = hypePrice > 0n && khypePrice > 0n ? Number(khypePrice * 10n ** 18n / hypePrice) / 1e18 : 1;
     return {
       protocol: this.protocolName,
-      staked_token: zeroAddress12,
+      staked_token: zeroAddress13,
       liquid_token: this.liquidToken,
       exchange_rate: rateF64,
       total_staked: totalStaked
@@ -7016,7 +7115,8 @@ function createKittenSwapFarming(entry, rpcUrl) {
   if (!positionManager) {
     throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'position_manager' contract address`);
   }
-  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl);
+  const factory = entry.contracts?.["factory"];
+  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory);
 }
 var DexSpotPrice = class {
   /**

@@ -127,14 +127,14 @@ declare class KittenSwapFarmingAdapter {
     private readonly eternalFarming;
     private readonly positionManager;
     private readonly rpcUrl;
-    constructor(protocolName: string, farmingCenter: Address, eternalFarming: Address, positionManager: Address, rpcUrl: string);
+    private readonly factory;
+    constructor(protocolName: string, farmingCenter: Address, eternalFarming: Address, positionManager: Address, rpcUrl: string, factory?: Address);
     name(): string;
     /**
      * Discover the active IncentiveKey for a given pool.
      * 1. Check runtime cache
-     * 2. Read numOfIncentives() for max nonce
-     * 3. Batch-query via Multicall3 in reverse order (newest first)
-     * 4. Return first active (non-deactivated, totalReward > 0) incentive
+     * 2. Batch-query nonces 0-60 via single multicall (61 calls)
+     * 3. Return first non-zero incentive (totalReward > 0 and not deactivated)
      */
     discoverIncentiveKey(pool: Address): Promise<IncentiveKey | null>;
     /**
@@ -168,9 +168,13 @@ declare class KittenSwapFarmingAdapter {
         bonusReward: bigint;
     }>;
     /**
-     * Discover all pools with active farming incentives.
-     * Dynamically scans all nonces (0..numOfIncentives) via Multicall3 and
-     * groups results by pool. Only returns the latest active incentive per pool.
+     * Discover all KittenSwap pools with active farming incentives.
+     *
+     * Steps:
+     * 1. Generate all unique token pair combos from HYPEREVM_TOKENS (includes KITTEN)
+     * 2. Batch poolByPair calls via multicall against the Algebra factory
+     * 3. For each found pool, batch-scan nonces 0-60 via multicall
+     * 4. Return enriched FarmingPool[] for pools with active incentives
      */
     discoverFarmingPools(): Promise<FarmingPool[]>;
 }

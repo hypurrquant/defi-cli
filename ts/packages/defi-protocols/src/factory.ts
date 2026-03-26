@@ -312,5 +312,6 @@ export function createKittenSwapFarming(entry: ProtocolEntry, rpcUrl: string): K
   if (!positionManager) {
     throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'position_manager' contract address`);
   }
-  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl);
+  const factory = entry.contracts?.["factory"] as Address | undefined;
+  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory);
 }

@@ -1,15 +1,17 @@
 import {
-  createPublicClient,
   decodeAbiParameters,
   encodeFunctionData,
   encodeAbiParameters,
   http,
+  createPublicClient,
   keccak256,
   parseAbi,
+  decodeFunctionResult,
+  zeroAddress,
 } from "viem";
 import type { Address, Hex } from "viem";
 
-import { DefiError } from "@hypurrquant/defi-core";
+import { DefiError, multicallRead } from "@hypurrquant/defi-core";
 import type { DeFiTx } from "@hypurrquant/defi-core";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -20,8 +22,23 @@ const KITTEN_TOKEN: Address = "0x618275f8efe54c2afa87bfb9f210a52f0ff89364";
 /** WHYPE bonus reward token */
 const WHYPE_TOKEN: Address = "0x5555555555555555555555555555555555555555";
 
-/** Batch size for multicall incentive scanning */
-const MULTICALL_BATCH = 50;
+/** Max nonce to scan when discovering incentive keys */
+const MAX_NONCE_SCAN = 60;
+
+/** HyperEVM well-known token addresses for pool discovery (matches solidly_gauge.ts) */
+const HYPEREVM_TOKENS: Address[] = [
+  "0x5555555555555555555555555555555555555555", // WHYPE
+  "0xb88339CB7199b77E23DB6E890353E22632Ba630f", // USDC
+  "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb", // USDT0
+  "0xBe6727B535545C67d5cAa73dEa54865B92CF7907", // UETH
+  "0x9FDBdA0A5e284c32744D2f17Ee5c74B284993463", // UBTC
+  "0x111111a1a0667d36bD57c0A9f569b98057111111", // USDH
+  "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34", // USDe
+  "0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2", // sUSDe
+  "0xf4D9235269a96aaDaFc9aDAe454a0618eBE37949", // XAUt0
+  "0xfD739d4e423301CE9385c1fb8850539D657C296D", // kHYPE
+  KITTEN_TOKEN,                                  // KITTEN
+];
 
 // ─── ABIs ─────────────────────────────────────────────────────────────────────
 
@@ -39,18 +56,24 @@ const positionManagerAbi = parseAbi([
 ]);
 
 const eternalFarmingAbi = parseAbi([
-  "function numOfIncentives() external view returns (uint256)",
   "function incentives(bytes32 incentiveId) external view returns (uint256 totalReward, uint256 bonusReward, address virtualPoolAddress, uint24 minimalPositionWidth, bool deactivated, address pluginAddress)",
   "function getRewardInfo((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external view returns (uint256 reward, uint256 bonusReward)",
 ]);
 
-const multicall3Abi = parseAbi([
-  "struct Call3 { address target; bool allowFailure; bytes callData; }",
-  "struct Result { bool success; bytes returnData; }",
-  "function aggregate3(Call3[] calldata calls) external payable returns (Result[] memory returnData)",
+const algebraFactoryAbi = parseAbi([
+  "function poolByPair(address tokenA, address tokenB) external view returns (address pool)",
 ]);
 
-const MULTICALL3: Address = "0xcA11bde05977b3631167028862bE2a173976CA11";
+// Decode helpers
+const _addressDecodeAbi = parseAbi(["function f() external view returns (address)"]);
+function decodeAddress(data: Hex | null): Address | null {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult({ abi: _addressDecodeAbi, functionName: "f", data }) as Address;
+  } catch {
+    return null;
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -134,7 +157,7 @@ function encodeMulticall(calls: Hex[]): Hex {
 // ─── Runtime cache ───────────────────────────────────────────────────────────
 
 /** Runtime cache: pool (lowercased) → discovered nonce. Avoids repeated scans within a session. */
-const nonceCache: Record<string, bigint> = {};
+const nonceCache = new Map<string, bigint>();
 
 // ─── Adapter ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +167,7 @@ export class KittenSwapFarmingAdapter {
   private readonly eternalFarming: Address;
   private readonly positionManager: Address;
   private readonly rpcUrl: string;
+  private readonly factory: Address | undefined;
 
   constructor(
     protocolName: string,
@@ -151,12 +175,14 @@ export class KittenSwapFarmingAdapter {
     eternalFarming: Address,
     positionManager: Address,
     rpcUrl: string,
+    factory?: Address,
   ) {
     this.protocolName = protocolName;
     this.farmingCenter = farmingCenter;
     this.eternalFarming = eternalFarming;
     this.positionManager = positionManager;
     this.rpcUrl = rpcUrl;
+    this.factory = factory;
   }
 
   name(): string {
@@ -166,70 +192,51 @@ export class KittenSwapFarmingAdapter {
   /**
    * Discover the active IncentiveKey for a given pool.
    * 1. Check runtime cache
-   * 2. Read numOfIncentives() for max nonce
-   * 3. Batch-query via Multicall3 in reverse order (newest first)
-   * 4. Return first active (non-deactivated, totalReward > 0) incentive
+   * 2. Batch-query nonces 0-60 via single multicall (61 calls)
+   * 3. Return first non-zero incentive (totalReward > 0 and not deactivated)
    */
   async discoverIncentiveKey(pool: Address): Promise<IncentiveKey | null> {
     const poolLc = pool.toLowerCase();
 
     // Fast path: runtime cache
-    if (poolLc in nonceCache) {
+    if (nonceCache.has(poolLc)) {
       return {
         rewardToken: KITTEN_TOKEN,
         bonusRewardToken: WHYPE_TOKEN,
         pool,
-        nonce: nonceCache[poolLc]!,
+        nonce: nonceCache.get(poolLc)!,
       };
     }
 
-    const client = createPublicClient({ transport: http(this.rpcUrl) });
-
-    // Get total number of incentives ever created
-    const numIncentives = await client.readContract({
-      address: this.eternalFarming,
-      abi: eternalFarmingAbi,
-      functionName: "numOfIncentives",
-    }) as bigint;
-
-    const maxNonce = Number(numIncentives) - 1;
-    if (maxNonce < 0) return null;
-
-    // Build incentive hash queries for all nonces, scan in reverse (newest first)
-    const keys: IncentiveKey[] = [];
-    for (let n = maxNonce; n >= 0; n--) {
-      keys.push({
+    // Build 61 multicall calls for nonces 0-60
+    const calls: Array<[Address, Hex]> = [];
+    const nonces: bigint[] = [];
+    for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
+      const nonce = BigInt(n);
+      nonces.push(nonce);
+      const key: IncentiveKey = {
         rewardToken: KITTEN_TOKEN,
         bonusRewardToken: WHYPE_TOKEN,
         pool,
-        nonce: BigInt(n),
-      });
-    }
-
-    // Batch via Multicall3
-    for (let i = 0; i < keys.length; i += MULTICALL_BATCH) {
-      const batch = keys.slice(i, i + MULTICALL_BATCH);
-      const calls = batch.map((key) => ({
-        target: this.eternalFarming,
-        allowFailure: true,
-        callData: encodeFunctionData({
+        nonce,
+      };
+      calls.push([
+        this.eternalFarming,
+        encodeFunctionData({
           abi: eternalFarmingAbi,
           functionName: "incentives",
           args: [incentiveId(key)],
         }),
-      }));
+      ]);
+    }
 
-      const results = await client.readContract({
-        address: MULTICALL3,
-        abi: multicall3Abi,
-        functionName: "aggregate3",
-        args: [calls],
-      }) as readonly { success: boolean; returnData: Hex }[];
+    const results = await multicallRead(this.rpcUrl, calls);
 
-      for (let j = 0; j < results.length; j++) {
-        const r = results[j]!;
-        if (!r.success || r.returnData.length < 66) continue;
+    for (let i = 0; i < results.length; i++) {
+      const data = results[i];
+      if (!data || data.length < 66) continue;
 
+      try {
         const decoded = decodeAbiParameters(
           [
             { name: "totalReward", type: "uint256" },
@@ -239,17 +246,24 @@ export class KittenSwapFarmingAdapter {
             { name: "deactivated", type: "bool" },
             { name: "pluginAddress", type: "address" },
           ],
-          r.returnData,
+          data,
         );
 
         const totalReward = decoded[0] as bigint;
         const deactivated = decoded[4] as boolean;
 
         if (totalReward > 0n && !deactivated) {
-          const key = batch[j]!;
-          nonceCache[poolLc] = key.nonce;
-          return key;
+          const nonce = nonces[i]!;
+          nonceCache.set(poolLc, nonce);
+          return {
+            rewardToken: KITTEN_TOKEN,
+            bonusRewardToken: WHYPE_TOKEN,
+            pool,
+            nonce,
+          };
         }
+      } catch {
+        // skip decode errors
       }
     }
 
@@ -411,55 +425,144 @@ export class KittenSwapFarmingAdapter {
   }
 
   /**
-   * Discover all pools with active farming incentives.
-   * Dynamically scans all nonces (0..numOfIncentives) via Multicall3 and
-   * groups results by pool. Only returns the latest active incentive per pool.
+   * Discover all KittenSwap pools with active farming incentives.
+   *
+   * Steps:
+   * 1. Generate all unique token pair combos from HYPEREVM_TOKENS (includes KITTEN)
+   * 2. Batch poolByPair calls via multicall against the Algebra factory
+   * 3. For each found pool, batch-scan nonces 0-60 via multicall
+   * 4. Return enriched FarmingPool[] for pools with active incentives
    */
   async discoverFarmingPools(): Promise<FarmingPool[]> {
-    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    if (!this.factory) {
+      return [];
+    }
 
-    // Known pool addresses to check (extend as new pools are listed)
-    // We discover by scanning all nonces with known reward tokens
-    const numIncentives = await client.readContract({
-      address: this.eternalFarming,
-      abi: eternalFarmingAbi,
-      functionName: "numOfIncentives",
-    }) as bigint;
+    // Step 1: generate all unique token pairs
+    const pairs: Array<[Address, Address]> = [];
+    for (let i = 0; i < HYPEREVM_TOKENS.length; i++) {
+      for (let j = i + 1; j < HYPEREVM_TOKENS.length; j++) {
+        pairs.push([HYPEREVM_TOKENS[i]!, HYPEREVM_TOKENS[j]!]);
+      }
+    }
 
-    const maxNonce = Number(numIncentives) - 1;
-    if (maxNonce < 0) return [];
+    // Step 2: batch poolByPair calls
+    const poolByPairCalls: Array<[Address, Hex]> = pairs.map(([tokenA, tokenB]) => [
+      this.factory!,
+      encodeFunctionData({
+        abi: algebraFactoryAbi,
+        functionName: "poolByPair",
+        args: [tokenA, tokenB],
+      }),
+    ]);
 
-    // To discover pools, we need to know pool addresses upfront or scan events.
-    // Since the incentiveId is hash(rewardToken, bonusRewardToken, pool, nonce),
-    // we can't reverse it. Use known pool list + any pools from the Algebra factory.
-    // For now, use the KittenSwap known pools from the factory config.
-    const knownPools: Address[] = [
-      "0x71d1fde797e1810711e4c9abcfca6ef04c266196", // WHYPE/KITTEN
-      "0x3c1403335d0ca7d0a73c9e775b25514537c2b809", // WHYPE/USDT0
-      "0x12df9913e9e08453440e3c4b1ae73819160b513e", // WHYPE/USDC
-    ];
+    const poolResults = await multicallRead(this.rpcUrl, poolByPairCalls);
 
+    // Collect unique non-zero pool addresses
+    const poolSet = new Set<string>();
+    for (const data of poolResults) {
+      const addr = decodeAddress(data);
+      if (addr && addr !== zeroAddress) {
+        poolSet.add(addr.toLowerCase());
+      }
+    }
+
+    if (poolSet.size === 0) return [];
+
+    const pools = Array.from(poolSet) as Address[];
+
+    // Step 3: for each pool, batch-scan nonces 0-60 via a single multicall per pool.
+    // We build all nonce calls for all pools in one big multicall to minimize RPC round-trips.
+    const NONCE_COUNT = MAX_NONCE_SCAN + 1; // 61
+    const allNonceCalls: Array<[Address, Hex]> = [];
+    for (const pool of pools) {
+      for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
+        const key: IncentiveKey = {
+          rewardToken: KITTEN_TOKEN,
+          bonusRewardToken: WHYPE_TOKEN,
+          pool: pool as Address,
+          nonce: BigInt(n),
+        };
+        allNonceCalls.push([
+          this.eternalFarming,
+          encodeFunctionData({
+            abi: eternalFarmingAbi,
+            functionName: "incentives",
+            args: [incentiveId(key)],
+          }),
+        ]);
+      }
+    }
+
+    const allNonceResults = await multicallRead(this.rpcUrl, allNonceCalls);
+
+    // Step 4: find best active incentive per pool and build result
     const results: FarmingPool[] = [];
 
-    for (const pool of knownPools) {
-      const key = await this.discoverIncentiveKey(pool);
-      if (!key) continue;
+    for (let pi = 0; pi < pools.length; pi++) {
+      const pool = pools[pi]! as Address;
+      const poolLc = pool.toLowerCase();
+      const base = pi * NONCE_COUNT;
 
-      const iid = incentiveId(key);
-      const incentive = await client.readContract({
-        address: this.eternalFarming,
-        abi: eternalFarmingAbi,
-        functionName: "incentives",
-        args: [iid],
-      }) as readonly [bigint, bigint, Address, number, boolean, Address];
+      let bestKey: IncentiveKey | null = null;
+      let bestTotalReward = 0n;
+      let bestBonusReward = 0n;
+      let bestActive = false;
 
-      results.push({
-        pool,
-        key,
-        totalReward: incentive[0],
-        bonusReward: incentive[1],
-        active: !incentive[4] && incentive[0] > 0n,
-      });
+      for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
+        const data = allNonceResults[base + n];
+        if (!data || data.length < 66) continue;
+
+        try {
+          const decoded = decodeAbiParameters(
+            [
+              { name: "totalReward", type: "uint256" },
+              { name: "bonusReward", type: "uint256" },
+              { name: "virtualPoolAddress", type: "address" },
+              { name: "minimalPositionWidth", type: "uint24" },
+              { name: "deactivated", type: "bool" },
+              { name: "pluginAddress", type: "address" },
+            ],
+            data,
+          );
+
+          const totalReward = decoded[0] as bigint;
+          const bonusReward = decoded[1] as bigint;
+          const deactivated = decoded[4] as boolean;
+
+          if (totalReward > 0n) {
+            const nonce = BigInt(n);
+            const isActive = !deactivated;
+
+            // Prefer active incentives; among active ones, prefer higher nonce (newer)
+            if (!bestKey || (isActive && !bestActive) || (isActive === bestActive && nonce > bestKey.nonce)) {
+              bestKey = {
+                rewardToken: KITTEN_TOKEN,
+                bonusRewardToken: WHYPE_TOKEN,
+                pool,
+                nonce,
+              };
+              bestTotalReward = totalReward;
+              bestBonusReward = bonusReward;
+              bestActive = isActive;
+            }
+          }
+        } catch {
+          // skip decode errors
+        }
+      }
+
+      if (bestKey) {
+        // Cache the discovered nonce
+        nonceCache.set(poolLc, bestKey.nonce);
+        results.push({
+          pool,
+          key: bestKey,
+          totalReward: bestTotalReward,
+          bonusReward: bestBonusReward,
+          active: bestActive,
+        });
+      }
     }
 
     return results;
