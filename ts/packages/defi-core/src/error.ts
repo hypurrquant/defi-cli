@@ -15,6 +15,7 @@ export type DefiErrorCode =
   | "CONTRACT_ERROR"
   | "INVALID_PARAM"
   | "UNSUPPORTED"
+  | "TX_FAILED"
   | "INTERNAL";
 
 export class DefiError extends Error {
