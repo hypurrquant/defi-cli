@@ -15,7 +15,7 @@ function resolveAsset(registry: Registry, chain: string, asset: string): Address
   return registry.resolveToken(chain, asset).address;
 }
 
-/** Collect lending rates for aave_v3 and aave_v3_isolated protocols */
+/** Collect lending rates for all lending protocols */
 async function collectLendingRates(
   registry: Registry,
   chainName: string,
@@ -24,11 +24,7 @@ async function collectLendingRates(
 ): Promise<LendingRates[]> {
   const protos = registry
     .getProtocolsForChain(chainName)
-    .filter(
-      (p) =>
-        p.category === ProtocolCategory.Lending &&
-        (p.interface === "aave_v3" || p.interface === "aave_v3_isolated"),
-    );
+    .filter((p) => p.category === ProtocolCategory.Lending);
 
   const results: LendingRates[] = [];
   let first = true;
@@ -146,7 +142,7 @@ async function runYieldScan(registry: Registry, asset: string, output: OutputMod
 
       const protos = registry
         .getProtocolsForChain(chainName)
-        .filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+        .filter((p) => p.category === ProtocolCategory.Lending);
 
       if (protos.length === 0) return [];
 
@@ -259,7 +255,7 @@ async function scanRatesForExecute(registry: Registry, asset: string): Promise<S
       }
       const protos = registry
         .getProtocolsForChain(chainName)
-        .filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+        .filter((p) => p.category === ProtocolCategory.Lending);
       if (protos.length === 0) return [];
       const rpc = chain.effectiveRpcUrl();
       const rates: ScanRate[] = [];
@@ -532,7 +528,7 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
           // Pick the aave_v3 protocol on the target chain with highest supply APY
           const candidates = registry
             .getProtocolsForChain(chainName)
-            .filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+            .filter((p) => p.category === ProtocolCategory.Lending);
           if (candidates.length === 0) {
             printOutput({ error: `No aave_v3 lending protocol found on ${chainName}` }, getOpts());
             process.exit(1);

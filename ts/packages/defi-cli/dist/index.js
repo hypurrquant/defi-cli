@@ -7712,9 +7712,7 @@ function resolveAsset(registry, chain, asset) {
   return registry.resolveToken(chain, asset).address;
 }
 async function collectLendingRates(registry, chainName, rpc, assetAddr) {
-  const protos = registry.getProtocolsForChain(chainName).filter(
-    (p) => p.category === ProtocolCategory.Lending && (p.interface === "aave_v3" || p.interface === "aave_v3_isolated")
-  );
+  const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending);
   const results = [];
   let first = true;
   for (const proto of protos) {
@@ -7802,7 +7800,7 @@ async function runYieldScan(registry, asset, output) {
       } catch {
         return [];
       }
-      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending);
       if (protos.length === 0) return [];
       const rpc = chain.effectiveRpcUrl();
       const rates = [];
@@ -7885,7 +7883,7 @@ async function scanRatesForExecute(registry, asset) {
       } catch {
         return [];
       }
-      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+      const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending);
       if (protos.length === 0) return [];
       const rpc = chain.effectiveRpcUrl();
       const rates = [];
@@ -8093,7 +8091,7 @@ function registerYield(parent, getOpts, makeExecutor2) {
           return;
         }
       } else {
-        const candidates = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+        const candidates = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending);
         if (candidates.length === 0) {
           printOutput({ error: `No aave_v3 lending protocol found on ${chainName}` }, getOpts());
           process.exit(1);
