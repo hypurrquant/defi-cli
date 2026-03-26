@@ -179,12 +179,15 @@ export function createLiquidStaking(entry: ProtocolEntry, rpcUrl?: string): ILiq
 
 /** Create a GaugeSystem implementation from a protocol registry entry */
 export function createGauge(entry: ProtocolEntry, rpcUrl?: string): IGaugeSystem {
+  // Hybra has its own GaugeManager system
+  if (entry.interface === "hybra" || entry.contracts?.["gauge_manager"]) {
+    return new HybraGaugeAdapter(entry, rpcUrl);
+  }
   switch (entry.interface) {
     case "solidly_v2":
     case "solidly_cl":
     case "algebra_v3":
-    case "hybra":
-      return new HybraGaugeAdapter(entry, rpcUrl);
+      return new SolidlyGaugeAdapter(entry, rpcUrl);
     default:
       throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported`);
   }
