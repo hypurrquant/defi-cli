@@ -7922,18 +7922,30 @@ function registerYield(parent, getOpts, makeExecutor2) {
   yieldCmd.option("--asset <token>", "Token symbol or address", "USDC").action(async (opts) => {
     try {
       const registry = Registry.loadEmbedded();
-      const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
-      const chain = registry.getChain(chainName);
-      const rpc = chain.effectiveRpcUrl();
-      const assetAddr = resolveAsset(registry, chainName, opts.asset);
-      const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
-      results.sort((a, b) => b.supply_apy - a.supply_apy);
-      const bestSupply = results[0]?.protocol ?? null;
-      const bestBorrow = results.reduce((best, r) => {
-        if (!best || r.borrow_variable_apy < best.borrow_variable_apy) return r;
-        return best;
-      }, null)?.protocol ?? null;
-      printOutput({ asset: opts.asset, chain: chainName, rates: results, best_supply: bestSupply, best_borrow: bestBorrow }, getOpts());
+      const asset = opts.asset;
+      const allRates = [];
+      for (const [chainKey] of registry.chains) {
+        try {
+          const chain = registry.getChain(chainKey);
+          const rpc = chain.effectiveRpcUrl();
+          let assetAddr;
+          try {
+            assetAddr = resolveAsset(registry, chainKey, asset);
+          } catch {
+            continue;
+          }
+          const rates = await collectLendingRates(registry, chainKey, rpc, assetAddr);
+          for (const r of rates) {
+            if (r.supply_apy > 0) {
+              allRates.push({ chain: chain.name, protocol: r.protocol, supply_apy: r.supply_apy, borrow_variable_apy: r.borrow_variable_apy });
+            }
+          }
+        } catch {
+        }
+      }
+      allRates.sort((a, b) => b.supply_apy - a.supply_apy);
+      const best = allRates[0] ? `${allRates[0].protocol} on ${allRates[0].chain}` : null;
+      printOutput({ asset, chains_scanned: registry.chains.size, rates: allRates, best_supply: best }, getOpts());
     } catch (err) {
       printOutput({ error: String(err) }, getOpts());
     }
@@ -10985,7 +10997,7 @@ var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551     \u2588\u2588\u2551    \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551
   \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D     \u255A\u2550\u255D     \u255A\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D
 
-  2 chains \xB7 23 protocols \xB7 by HypurrQuant
+  2 chains \xB7 21 protocols \xB7 by HypurrQuant
 
   Scan exploits, swap tokens, bridge assets, track whales,
   compare yields \u2014 all from your terminal.

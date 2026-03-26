@@ -293,24 +293,35 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
     .command("yield")
     .description("Yield operations: compare, scan, optimize, execute");
 
-  // yield (no subcommand) = compare with default USDC
+  // yield (no subcommand) = cross-chain scan with default USDC
   yieldCmd
     .option("--asset <token>", "Token symbol or address", "USDC")
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();
-        const chainName: string = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
-        const chain = registry.getChain(chainName);
-        const rpc = chain.effectiveRpcUrl();
-        const assetAddr = resolveAsset(registry, chainName, opts.asset as string);
-        const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
-        results.sort((a, b) => b.supply_apy - a.supply_apy);
-        const bestSupply = results[0]?.protocol ?? null;
-        const bestBorrow = results.reduce((best, r) => {
-          if (!best || r.borrow_variable_apy < best.borrow_variable_apy) return r;
-          return best;
-        }, null as LendingRates | null)?.protocol ?? null;
-        printOutput({ asset: opts.asset, chain: chainName, rates: results, best_supply: bestSupply, best_borrow: bestBorrow }, getOpts());
+        const asset = opts.asset as string;
+        const allRates: Array<{ chain: string; protocol: string; supply_apy: number; borrow_variable_apy: number }> = [];
+
+        for (const [chainKey] of registry.chains) {
+          try {
+            const chain = registry.getChain(chainKey);
+            const rpc = chain.effectiveRpcUrl();
+            let assetAddr: Address;
+            try {
+              assetAddr = resolveAsset(registry, chainKey, asset);
+            } catch { continue; }
+            const rates = await collectLendingRates(registry, chainKey, rpc, assetAddr);
+            for (const r of rates) {
+              if (r.supply_apy > 0) {
+                allRates.push({ chain: chain.name, protocol: r.protocol, supply_apy: r.supply_apy, borrow_variable_apy: r.borrow_variable_apy });
+              }
+            }
+          } catch { /* skip chain */ }
+        }
+
+        allRates.sort((a, b) => b.supply_apy - a.supply_apy);
+        const best = allRates[0] ? `${allRates[0].protocol} on ${allRates[0].chain}` : null;
+        printOutput({ asset, chains_scanned: registry.chains.size, rates: allRates, best_supply: best }, getOpts());
       } catch (err) {
         printOutput({ error: String(err) }, getOpts());
       }
