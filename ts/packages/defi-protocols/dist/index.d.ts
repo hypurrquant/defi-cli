@@ -420,9 +420,11 @@ declare class HybraGaugeAdapter implements IGaugeSystem {
     private readonly veToken;
     private readonly voter;
     private readonly positionManager;
+    private readonly poolFactory;
     private readonly rpcUrl;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
+    discoverGaugedPools(): Promise<GaugedPool[]>;
     resolveGauge(pool: Address): Promise<Address>;
     buildDeposit(gauge: Address, _amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
     buildWithdraw(gauge: Address, _amount: bigint, tokenId?: bigint): Promise<DeFiTx>;

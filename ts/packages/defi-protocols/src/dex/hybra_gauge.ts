@@ -1,13 +1,35 @@
-import { createPublicClient, encodeFunctionData, http, parseAbi, zeroAddress } from "viem";
-import type { Address } from "viem";
+import { createPublicClient, decodeFunctionResult, encodeFunctionData, http, parseAbi, zeroAddress } from "viem";
+import type { Address, Hex } from "viem";
 
-import { DefiError } from "@hypurrquant/defi-core";
+import { DefiError, multicallRead } from "@hypurrquant/defi-core";
 import type {
   IGaugeSystem,
+  GaugedPool,
   ProtocolEntry,
   RewardInfo,
   DeFiTx,
 } from "@hypurrquant/defi-core";
+
+// Multicall decode helpers
+const _addressDecodeAbi = parseAbi(["function f() external view returns (address)"]);
+function decodeAddress(data: Hex | null): Address | null {
+  if (!data) return null;
+  try {
+    return decodeFunctionResult({ abi: _addressDecodeAbi, functionName: "f", data }) as Address;
+  } catch {
+    return null;
+  }
+}
+
+const _symbolDecodeAbi = parseAbi(["function symbol() external view returns (string)"]);
+function decodeSymbol(data: Hex | null): string {
+  if (!data) return "?";
+  try {
+    return decodeFunctionResult({ abi: _symbolDecodeAbi, functionName: "symbol", data }) as string;
+  } catch {
+    return "?";
+  }
+}
 
 const gaugeManagerAbi = parseAbi([
   "function gauges(address pool) view returns (address gauge)",
@@ -52,6 +74,7 @@ export class HybraGaugeAdapter implements IGaugeSystem {
   private readonly veToken: Address;
   private readonly voter: Address;
   private readonly positionManager: Address;
+  private readonly poolFactory: Address | undefined;
   private readonly rpcUrl: string | undefined;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
@@ -64,10 +87,123 @@ export class HybraGaugeAdapter implements IGaugeSystem {
     this.veToken = ve;
     this.voter = entry.contracts?.["voter"] ?? zeroAddress as Address;
     this.positionManager = entry.contracts?.["position_manager"] ?? zeroAddress as Address;
+    this.poolFactory = entry.contracts?.["pool_factory"];
     this.rpcUrl = rpcUrl;
   }
 
   name(): string { return this.protocolName; }
+
+  // ─── Gauge Discovery ──────────────────────────────────────
+
+  async discoverGaugedPools(): Promise<GaugedPool[]> {
+    if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required for gauge discovery");
+    if (!this.poolFactory) throw new DefiError("CONTRACT_ERROR", "Missing 'pool_factory' contract");
+
+    const factoryAbi = parseAbi([
+      "function allPoolsLength() external view returns (uint256)",
+      "function allPools(uint256) external view returns (address)",
+    ]);
+    const poolAbi = parseAbi([
+      "function token0() external view returns (address)",
+      "function token1() external view returns (address)",
+    ]);
+    const erc20SymbolAbi = parseAbi(["function symbol() external view returns (string)"]);
+    const gaugesAbi = parseAbi(["function gauges(address pool) view returns (address gauge)"]);
+
+    // Step 1: get total pool count
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    let poolCount: bigint;
+    try {
+      poolCount = await client.readContract({
+        address: this.poolFactory,
+        abi: factoryAbi,
+        functionName: "allPoolsLength",
+      }) as bigint;
+    } catch {
+      return [];
+    }
+
+    const count = Number(poolCount);
+    if (count === 0) return [];
+
+    // Step 2: batch-fetch all pool addresses
+    const poolAddressCalls: Array<[Address, Hex]> = [];
+    for (let i = 0; i < count; i++) {
+      poolAddressCalls.push([
+        this.poolFactory,
+        encodeFunctionData({ abi: factoryAbi, functionName: "allPools", args: [BigInt(i)] }),
+      ]);
+    }
+    const poolAddressResults = await multicallRead(this.rpcUrl, poolAddressCalls);
+    const pools: Address[] = poolAddressResults
+      .map((r) => decodeAddress(r))
+      .filter((a): a is Address => a !== null && a !== zeroAddress);
+
+    if (pools.length === 0) return [];
+
+    // Step 3: batch GaugeManager.gauges(pool) for all pools
+    const gaugeCalls: Array<[Address, Hex]> = pools.map((pool) => [
+      this.gaugeManager,
+      encodeFunctionData({ abi: gaugesAbi, functionName: "gauges", args: [pool] }),
+    ]);
+    const gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+
+    // Filter pools that have an active gauge
+    const gaugedPools: Array<{ pool: Address; gauge: Address }> = [];
+    for (let i = 0; i < pools.length; i++) {
+      const gauge = decodeAddress(gaugeResults[i] ?? null);
+      if (gauge && gauge !== zeroAddress) {
+        gaugedPools.push({ pool: pools[i]!, gauge });
+      }
+    }
+
+    if (gaugedPools.length === 0) return [];
+
+    // Step 4: batch token0() and token1() for gauged pools
+    const tokenCalls: Array<[Address, Hex]> = [];
+    for (const { pool } of gaugedPools) {
+      tokenCalls.push([pool, encodeFunctionData({ abi: poolAbi, functionName: "token0" })]);
+      tokenCalls.push([pool, encodeFunctionData({ abi: poolAbi, functionName: "token1" })]);
+    }
+    const tokenResults = await multicallRead(this.rpcUrl, tokenCalls);
+
+    // Step 5: collect unique token addresses and fetch symbols
+    const tokenAddrs = new Set<Address>();
+    for (let i = 0; i < gaugedPools.length; i++) {
+      const t0 = decodeAddress(tokenResults[i * 2] ?? null);
+      const t1 = decodeAddress(tokenResults[i * 2 + 1] ?? null);
+      if (t0 && t0 !== zeroAddress) tokenAddrs.add(t0);
+      if (t1 && t1 !== zeroAddress) tokenAddrs.add(t1);
+    }
+
+    const uniqueTokens = Array.from(tokenAddrs);
+    const symbolCalls: Array<[Address, Hex]> = uniqueTokens.map((t) => [
+      t,
+      encodeFunctionData({ abi: erc20SymbolAbi, functionName: "symbol" }),
+    ]);
+    const symbolResults = await multicallRead(this.rpcUrl, symbolCalls);
+    const symbolMap = new Map<Address, string>();
+    for (let i = 0; i < uniqueTokens.length; i++) {
+      symbolMap.set(uniqueTokens[i]!, decodeSymbol(symbolResults[i] ?? null));
+    }
+
+    // Step 6: assemble results
+    const out: GaugedPool[] = [];
+    for (let i = 0; i < gaugedPools.length; i++) {
+      const { pool, gauge } = gaugedPools[i]!;
+      const t0 = decodeAddress(tokenResults[i * 2] ?? null);
+      const t1 = decodeAddress(tokenResults[i * 2 + 1] ?? null);
+      out.push({
+        pool,
+        gauge,
+        token0: t0 ? (symbolMap.get(t0) ?? t0.slice(0, 10)) : "?",
+        token1: t1 ? (symbolMap.get(t1) ?? t1.slice(0, 10)) : "?",
+        type: "CL",
+      });
+    }
+
+    return out;
+  }
 
   // ─── Gauge Lookup ──────────────────────────────────────────
 
