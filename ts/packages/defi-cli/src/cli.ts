@@ -45,7 +45,7 @@ const BANNER = `
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  2 chains · 23 protocols · by HypurrQuant
+  2 chains · 21 protocols · by HypurrQuant
 
   Scan exploits, swap tokens, bridge assets, track whales,
   compare yields — all from your terminal.
