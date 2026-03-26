@@ -61,6 +61,10 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         bonus_reward?: string;
         active?: boolean;
         stopped?: boolean;
+        moePerDay?: number;
+        aprPercent?: number;
+        rangeTvlUsd?: number;
+        isTopPool?: boolean;
       };
 
       const results: DiscoveredPool[] = [];
