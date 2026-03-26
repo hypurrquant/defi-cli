@@ -1,0 +1,79 @@
+[protocol]
+name = "Ramses CL"
+slug = "ramses-cl"
+category = "dex"
+interface = "uniswap_v3"
+chain = "hyperevm"
+native = false
+description = "Ramses V3 concentrated liquidity (x(3,3) model) on HyperEVM ($2.8M TVL)"
+
+[protocol.contracts]
+# V3 CL AMM
+factory = "0x07E60782535752be279929e2DFfDd136Db2e6b45"
+router = "0x76D91074B46fF76E04FE59a90526a40009943fd2"
+quoter = "0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd"
+pool_deployer = "0x301d2E3c7Db5904b3971cf9C36195e37c5a14873"
+position_manager = "0xB3F77C5134D643483253D22E0Ca24627aE42ED51"
+fee_collector = "0xA22fc9950bE328D8a32a8c1e2c92eAc4e6bADa00"
+# x(3,3) governance (shared with Ramses HL)
+voter = "0x9aab8C415aF5936b09C595B09B1ff15cbaDCD843"
+ve_token = "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
+gauge_factory = "0xE17988013E15d29B655634Da0056ba27BA4D3E27"
+fee_distributor_factory = "0xE7E05591362a74D3746F828941ec833e102a6E90"
+vote_module = "0x6736102621f7c0dbB0E2989e3ad7A8793e71930b"
+
+# CL gauged pools
+[[protocol.pools]]
+name = "WHYPE/USDT0"
+address = "0xeE02e3A3034e9EF3bD569B140bc9911fcf1Ba067"
+token0 = "WHYPE"
+token1 = "USDT0"
+tick_spacing = 10
+gauge = "0x46e8936e83d6f3a3078D49F8C47b6EE0d078078c"
+
+[[protocol.pools]]
+name = "USDC/USDT0"
+address = "0x46abBdfC675ffa9dDf032c64FEE363745204E63e"
+token0 = "USDC"
+token1 = "USDT0"
+tick_spacing = 1
+gauge = "0xF2A1DE75c65ad0f590E1F18d5D8E3Cc65e7ed836"
+
+[[protocol.pools]]
+name = "WHYPE/RAM"
+address = "0x1Bd9646f3dd9008338323C3C310F63f15077Fa58"
+token0 = "WHYPE"
+token1 = "RAM"
+tick_spacing = 50
+gauge = "0xa00B42702fC1cF24A8cd96F0Af21AeFB543E5405"
+
+[[protocol.pools]]
+name = "WHYPE/UBTC"
+address = "0x8326507ed1195b00Ee36B585c8f085A279DF96A1"
+token0 = "WHYPE"
+token1 = "UBTC"
+tick_spacing = 100
+gauge = "0x9072ee98D4481Cfe48f8F3D51B4b4bfef8d0d130"
+
+[[protocol.pools]]
+name = "USDH/USDC"
+address = "0x04183b7F588Fa69D4C6aE17a54C93fe953AFd032"
+token0 = "USDH"
+token1 = "USDC"
+tick_spacing = 1
+gauge = "0x5ed429050D97c9E12f71Aee8F8bB3E2A5e67bB77"
+
+# CL pools (no gauge)
+[[protocol.pools]]
+name = "WHYPE/USDC"
+address = "0x56422A142589c1321c02F4Cd8883931bA616BEe7"
+token0 = "WHYPE"
+token1 = "USDC"
+tick_spacing = 100
+
+[[protocol.pools]]
+name = "WHYPE/USDT0-50"
+address = "0x62bD1e01Ebf7739FAEfCd28F57949565C4e94047"
+token0 = "WHYPE"
+token1 = "USDT0"
+tick_spacing = 50

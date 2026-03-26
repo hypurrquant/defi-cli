@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import { parse } from "smol-toml";
 import { ChainConfig } from "./chain.js";
 import type { TokenEntry } from "./token.js";
-import { type ProtocolEntry, ProtocolCategory } from "./protocol.js";
+import { type ProtocolEntry, type PoolInfo, ProtocolCategory } from "./protocol.js";
 
 import { existsSync } from "fs";
 
@@ -147,5 +147,24 @@ export class Registry {
     );
     if (!token) throw new Error(`Token not found: ${symbol}`);
     return token;
+  }
+
+  /**
+   * Resolve a pool by name (e.g. "WHYPE/USDC") from a protocol's pool list.
+   * Returns the pool info or throws if not found.
+   */
+  resolvePool(protocolSlug: string, poolName: string): PoolInfo {
+    const protocol = this.getProtocol(protocolSlug);
+    if (!protocol.pools || protocol.pools.length === 0) {
+      throw new Error(`Protocol ${protocol.name} has no pools configured`);
+    }
+    const pool = protocol.pools.find(
+      (p) => p.name.toLowerCase() === poolName.toLowerCase(),
+    );
+    if (!pool) {
+      const available = protocol.pools.map(p => p.name).join(", ");
+      throw new Error(`Pool '${poolName}' not found in ${protocol.name}. Available: ${available}`);
+    }
+    return pool;
   }
 }

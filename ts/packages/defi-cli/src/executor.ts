@@ -142,9 +142,12 @@ export class Executor {
         return buffered > MAX_GAS_LIMIT ? MAX_GAS_LIMIT : buffered;
       }
     } catch {
-      // fallback
+      // fallback: apply buffer to the hint too
+      if (tx.gas_estimate) {
+        return Executor.applyGasBuffer(BigInt(tx.gas_estimate));
+      }
     }
-    return tx.gas_estimate ? BigInt(tx.gas_estimate) : 0n;
+    return 0n;
   }
 
   /** Simulate a transaction via eth_call + eth_estimateGas */
@@ -285,6 +288,29 @@ export class Executor {
     const publicClient = createPublicClient({ transport: http(rpcUrl) });
     const walletClient = createWalletClient({ account, transport: http(rpcUrl) });
 
+    // Execute pre-transactions (e.g. farming approval)
+    if (tx.pre_txs && tx.pre_txs.length > 0) {
+      for (const preTx of tx.pre_txs) {
+        process.stderr.write(`  Pre-tx: ${preTx.description}...\n`);
+        const preGas = await this.estimateGasWithBuffer(rpcUrl, preTx, account.address);
+        const preTxHash = await walletClient.sendTransaction({
+          chain: null,
+          to: preTx.to,
+          data: preTx.data,
+          value: preTx.value,
+          gas: preGas > 0n ? preGas : undefined,
+        });
+        const preTxUrl = this.explorerUrl ? `${this.explorerUrl}/tx/${preTxHash}` : undefined;
+        process.stderr.write(`  Pre-tx sent: ${preTxHash}\n`);
+        if (preTxUrl) process.stderr.write(`  Explorer: ${preTxUrl}\n`);
+        const preReceipt = await publicClient.waitForTransactionReceipt({ hash: preTxHash });
+        if (preReceipt.status !== "success") {
+          throw new DefiError("TX_FAILED", `Pre-transaction failed: ${preTx.description}`);
+        }
+        process.stderr.write(`  Pre-tx confirmed\n`);
+      }
+    }
+
     // Auto-approve ERC20 tokens if needed
     if (tx.approvals && tx.approvals.length > 0) {
       for (const approval of tx.approvals) {
@@ -329,20 +355,43 @@ export class Executor {
 
     const status = receipt.status === "success" ? "confirmed" : "failed";
 
+    // Extract minted NFT tokenId from Transfer(from=0x0) events
+    let mintedTokenId: string | undefined;
+    if (receipt.status === "success" && receipt.logs) {
+      const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+      const ZERO_TOPIC = "0x0000000000000000000000000000000000000000000000000000000000000000";
+      for (const log of receipt.logs) {
+        if (
+          log.topics.length >= 4 &&
+          log.topics[0] === TRANSFER_TOPIC &&
+          log.topics[1] === ZERO_TOPIC // from = address(0) → mint
+        ) {
+          mintedTokenId = BigInt(log.topics[3]!).toString();
+          break;
+        }
+      }
+    }
+
+    const details: Record<string, string | undefined> = {
+      to: tx.to,
+      from: account.address,
+      block_number: receipt.blockNumber?.toString(),
+      gas_limit: gasLimit.toString(),
+      gas_used: receipt.gasUsed?.toString(),
+      explorer_url: txUrl,
+      mode: "broadcast",
+    };
+    if (mintedTokenId) {
+      details.minted_token_id = mintedTokenId;
+      process.stderr.write(`  Minted NFT tokenId: ${mintedTokenId}\n`);
+    }
+
     return {
       tx_hash: txHash,
       status: status as TxStatus,
       gas_used: receipt.gasUsed ? Number(receipt.gasUsed) : undefined,
       description: tx.description,
-      details: {
-        to: tx.to,
-        from: account.address,
-        block_number: receipt.blockNumber?.toString(),
-        gas_limit: gasLimit.toString(),
-        gas_used: receipt.gasUsed?.toString(),
-        explorer_url: txUrl,
-        mode: "broadcast",
-      },
+      details,
     };
   }
 }

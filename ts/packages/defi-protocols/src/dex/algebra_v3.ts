@@ -1,5 +1,6 @@
 import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParameters, concatHex, zeroAddress } from "viem";
 import type { Address } from "viem";
+import { rangeToTicks, alignTickUp, alignTickDown } from "./tick_math.js";
 
 import { DefiError } from "@hypurrquant/defi-core";
 import type {
@@ -31,8 +32,14 @@ const algebraSingleQuoterAbi = parseAbi([
   "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint160 limitSqrtPrice) params) external returns (uint256 amountOut, uint256 amountIn, uint160 sqrtPriceX96After)",
 ]);
 
-// Algebra NonfungiblePositionManager (no fee field, uses plugin instead)
-const algebraPositionManagerAbi = parseAbi([
+// Algebra Integral NonfungiblePositionManager (includes deployer field for pool identification)
+const algebraIntegralPmAbi = parseAbi([
+  "struct MintParams { address token0; address token1; address deployer; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
+  "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+]);
+
+// Algebra V2 / NEST-style NonfungiblePositionManager (no deployer field)
+const algebraV2PmAbi = parseAbi([
   "struct MintParams { address token0; address token1; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
   "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
 ]);
@@ -207,39 +214,73 @@ export class AlgebraV3Adapter implements IDex {
         ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
         : [params.token_b, params.token_a, params.amount_b, params.amount_a];
 
-    // Prevent liquidity=0 revert for single-side LP (same as V3)
-    const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
-    const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
+    let tickLower = params.tick_lower ?? -887220;
+    let tickUpper = params.tick_upper ?? 887220;
 
-    const data = encodeFunctionData({
-      abi: algebraPositionManagerAbi,
-      functionName: "mint",
-      args: [
-        {
-          token0,
-          token1,
-          tickLower: -887220,
-          tickUpper: 887220,
-          amount0Desired: amount0,
-          amount1Desired: amount1,
-          amount0Min: 0n,
-          amount1Min: 0n,
-          recipient: params.recipient,
-          deadline: BigInt("18446744073709551615"),
-        },
-      ],
-    });
+    // Auto tick detection: --range N% or single-side
+    const isSingleSide = rawAmount0 === 0n || rawAmount1 === 0n;
+    const needsAutoTick = (params.range_pct !== undefined) || (isSingleSide && !params.tick_lower && !params.tick_upper);
+
+    if (needsAutoTick) {
+      if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required for auto tick detection");
+      const poolAddr = params.pool as Address | undefined;
+      if (!poolAddr) throw new DefiError("CONTRACT_ERROR", "Pool address required (use --pool)");
+
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const algebraPoolAbi = parseAbi([
+        "function globalState() view returns (uint160 price, int24 tick, uint16 lastFee, uint8 pluginConfig, uint16 communityFee, bool unlocked)",
+        "function tickSpacing() view returns (int24)",
+      ]);
+      const [globalState, spacing] = await Promise.all([
+        client.readContract({ address: poolAddr, abi: algebraPoolAbi, functionName: "globalState" }),
+        client.readContract({ address: poolAddr, abi: algebraPoolAbi, functionName: "tickSpacing" }),
+      ]);
+      const currentTick = Number(globalState[1]);
+      const tickSpace = Number(spacing);
+
+      if (params.range_pct !== undefined) {
+        // ±N% concentrated range
+        const range = rangeToTicks(currentTick, params.range_pct, tickSpace);
+        tickLower = range.tickLower;
+        tickUpper = range.tickUpper;
+      } else if (rawAmount0 > 0n && rawAmount1 === 0n) {
+        tickLower = alignTickUp(currentTick + tickSpace, tickSpace);
+        tickUpper = 887220;
+      } else {
+        tickLower = -887220;
+        tickUpper = alignTickDown(currentTick - tickSpace, tickSpace);
+      }
+    }
+
+    const amount0 = rawAmount0;
+    const amount1 = rawAmount1;
+
+    // Algebra V2 (NEST-style, has pool_deployer) uses no deployer field in MintParams
+    // Algebra Integral (KittenSwap) includes deployer field
+    const data = this.useSingleQuoter
+      ? encodeFunctionData({
+          abi: algebraV2PmAbi,
+          functionName: "mint",
+          args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }],
+        })
+      : encodeFunctionData({
+          abi: algebraIntegralPmAbi,
+          functionName: "mint",
+          args: [{ token0, token1, deployer: zeroAddress as Address, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }],
+        });
+
+    // Only add approvals for non-zero amounts
+    const approvals: { token: Address; spender: Address; amount: bigint }[] = [];
+    if (amount0 > 0n) approvals.push({ token: token0, spender: pm, amount: amount0 });
+    if (amount1 > 0n) approvals.push({ token: token1, spender: pm, amount: amount1 });
 
     return {
-      description: `[${this.protocolName}] Add liquidity`,
+      description: `[${this.protocolName}] Add liquidity [${tickLower}, ${tickUpper}]`,
       to: pm,
       data,
       value: 0n,
       gas_estimate: 500_000,
-      approvals: [
-        { token: token0, spender: pm, amount: amount0 },
-        { token: token1, spender: pm, amount: amount1 },
-      ],
+      approvals,
     };
   }
 

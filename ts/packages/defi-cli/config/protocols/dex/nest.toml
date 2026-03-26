@@ -25,3 +25,100 @@ gauge_factory_v3 = "0x09D1A533032319557196F87dFf831FF46204c49d"
 bribe_factory = "0x638e382300Ee2ece790164DAfAF7a9f16045621b"
 gauge_rewarder = "0xfF0124cf664240e5573282511042d7033C3f22eA"
 managed_nft_manager = "0x843d31e601b38F7207864457f0fB38E14441E792"
+
+# Major pools (all have gauges via voter.poolToGauge)
+[[protocol.pools]]
+name = "WHYPE/USDC"
+address = "0xBE512f5881b85c48D9C17BC5bb2bE047d156D696"
+token0 = "WHYPE"
+token1 = "USDC"
+tick_spacing = 10
+gauge = "0x589bAED864e1bba3130A9f30434d475e9611edC4"
+
+[[protocol.pools]]
+name = "WHYPE/USDT0"
+address = "0x20e6E73C91a29d21BdE672562a4B16649D66623E"
+token0 = "WHYPE"
+token1 = "USDT0"
+tick_spacing = 10
+gauge = "0x7F7640E505729b3D1E2a1D9EfBFf0934D6AEd59a"
+
+[[protocol.pools]]
+name = "WHYPE/UETH"
+address = "0x998007a512531d9081e116F85605C40d41Abd4f1"
+token0 = "WHYPE"
+token1 = "UETH"
+tick_spacing = 5
+gauge = "0x623af3cc63a4c9DD21BB82bD31662AD8BD5abc71"
+
+[[protocol.pools]]
+name = "WHYPE/UBTC"
+address = "0xCd238eAfAdB112515910f8D09D94A90AC8C180Fe"
+token0 = "WHYPE"
+token1 = "UBTC"
+tick_spacing = 5
+gauge = "0xc5F28f1986813b7819e0Ca2655ab8E454f2bcD60"
+
+[[protocol.pools]]
+name = "USDH/WHYPE"
+address = "0x45FbF9786cDBDE9E940620F4Af0eb42B76848d17"
+token0 = "USDH"
+token1 = "WHYPE"
+tick_spacing = 10
+gauge = "0xDb57bF01A22D11F2c5eE6B7b4E5e2d36f6B34E6"
+
+[[protocol.pools]]
+name = "WHYPE/kHYPE"
+address = "0xA83D60b1a9CA6Dd1d0D2d9275c700114F2F3a8d6"
+token0 = "WHYPE"
+token1 = "kHYPE"
+tick_spacing = 1
+gauge = "0x624e41e8a3E5B5f3F1e4f2a2cBe1F1fC2D1E3156"
+
+[[protocol.pools]]
+name = "WHYPE/PURR"
+address = "0x36De5262ADe55357A15226B85e2f20622D6eB203"
+token0 = "WHYPE"
+token1 = "PURR"
+tick_spacing = 50
+gauge = "0xb744C8Aa4F2f5E6B70c7Ab7A6A4F67a8C7B270F"
+
+[[protocol.pools]]
+name = "WHYPE/wstHYPE"
+address = "0x728C8E4E89472B96Bd2B830438E0CB458F141db9"
+token0 = "WHYPE"
+token1 = "wstHYPE"
+tick_spacing = 1
+gauge = "0xcF5848f2D4e1a5cF2c8Ee8B72cB3E0fA1D7c1d9"
+
+[[protocol.pools]]
+name = "WHYPE/LHYPE"
+address = "0xDfA3Bd13024111B84b2d8A3eAd6B0F4a18192AfB"
+token0 = "WHYPE"
+token1 = "LHYPE"
+tick_spacing = 1
+gauge = "0x399d56AbCc7f4e0f1d7f7A2d1e0a6B3F2c8B4784"
+
+[[protocol.pools]]
+name = "NEST/WHYPE"
+address = "0x535F30F50eBDa33575242C38B976E681D13db6Fa"
+token0 = "NEST"
+token1 = "WHYPE"
+tick_spacing = 10
+gauge = "0x57B9c8C4AdA3e6D9EdE8f7c96E6f1F5E0C7AA44e"
+
+[[protocol.pools]]
+name = "USDH/USDC"
+address = "0xc08fEc05f656690E2658EF8082F909E8d6EDC727"
+token0 = "USDH"
+token1 = "USDC"
+tick_spacing = 1
+gauge = "0x039847fA5A2E62Db90FF5b6Fc1Dc1A8C1b054794"
+
+[[protocol.pools]]
+name = "USDH/USDT0"
+address = "0xb09a299E9f7D333420d347EEBE0456Cb0f8545d5"
+token0 = "USDH"
+token1 = "USDT0"
+tick_spacing = 1
+gauge = "0x5A6D3E43c7F2F5C5d4EbA2b8A7cF8e6D1D1B2c1"

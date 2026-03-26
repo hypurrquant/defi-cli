@@ -9,6 +9,8 @@ import { AlgebraV3Adapter } from "./dex/algebra_v3.js";
 import { BalancerV3Adapter } from "./dex/balancer_v3.js";
 import { CurveStableSwapAdapter } from "./dex/curve.js";
 import { SolidlyAdapter } from "./dex/solidly.js";
+import { ThenaCLAdapter } from "./dex/thena_cl.js";
+import { HybraGaugeAdapter } from "./dex/hybra_gauge.js";
 import { WooFiAdapter } from "./dex/woofi.js";
 import { SolidlyGaugeAdapter } from "./dex/solidly_gauge.js";
 import { MasterChefAdapter } from "./dex/masterchef.js";
@@ -85,6 +87,8 @@ export function createDex(entry: ProtocolEntry, rpcUrl?: string): IDex {
     case "solidly_v2":
     case "solidly_cl":
       return new SolidlyAdapter(entry, rpcUrl);
+    case "hybra":
+      return new ThenaCLAdapter(entry, rpcUrl);
     case "curve_stableswap":
       return new CurveStableSwapAdapter(entry);
     case "balancer_v3":
@@ -180,7 +184,7 @@ export function createGauge(entry: ProtocolEntry, rpcUrl?: string): IGaugeSystem
     case "solidly_cl":
     case "algebra_v3":
     case "hybra":
-      return new SolidlyGaugeAdapter(entry, rpcUrl);
+      return new HybraGaugeAdapter(entry, rpcUrl);
     default:
       throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported`);
   }
@@ -301,5 +305,9 @@ export function createKittenSwapFarming(entry: ProtocolEntry, rpcUrl: string): K
   if (!eternalFarming) {
     throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'eternal_farming' contract address`);
   }
-  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, rpcUrl);
+  const positionManager = entry.contracts?.["position_manager"];
+  if (!positionManager) {
+    throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'position_manager' contract address`);
+  }
+  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl);
 }

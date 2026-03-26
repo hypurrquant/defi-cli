@@ -4,14 +4,20 @@ import type { DeFiTx, RewardInfo } from "../types.js";
 /** ve(3,3) Gauge operations — stake LP tokens to earn emissions */
 export interface IGauge {
   name(): string;
+  /** Resolve gauge address from pool address via voter */
+  resolveGauge?(pool: Address): Promise<Address>;
   /** Deposit LP tokens into gauge */
   buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
-  /** Withdraw LP tokens from gauge */
-  buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
+  /** Withdraw LP tokens or NFT from gauge */
+  buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
   /** Claim earned rewards from gauge */
   buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
+  /** Claim rewards for a CL gauge NFT position (Hybra V4 style) */
+  buildClaimRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<DeFiTx>;
   /** Get pending rewards for a user */
   getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
+  /** Get pending rewards for a CL gauge NFT position */
+  getPendingRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<bigint>;
 }
 
 /** ve(3,3) Vote-escrow operations — lock tokens for veNFT */

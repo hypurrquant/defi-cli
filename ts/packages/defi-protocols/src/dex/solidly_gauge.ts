@@ -13,14 +13,19 @@ const gaugeAbi = parseAbi([
   "function deposit(uint256 amount) external",
   "function depositFor(uint256 amount, uint256 tokenId) external",
   "function withdraw(uint256 amount) external",
+  "function getReward() external",
   "function getReward(address account) external",
   "function getReward(address account, address[] tokens) external",
+  "function getReward(uint256 tokenId) external",
   "function earned(address account) external view returns (uint256)",
   "function earned(address token, address account) external view returns (uint256)",
+  "function earned(uint256 tokenId) external view returns (uint256)",
   "function rewardRate() external view returns (uint256)",
+  "function rewardToken() external view returns (address)",
   "function totalSupply() external view returns (uint256)",
   "function rewardsListLength() external view returns (uint256)",
-  "function isReward(address token) external view returns (bool)",
+  "function rewardData(address token) external view returns (uint256 periodFinish, uint256 rewardRate, uint256 lastUpdateTime, uint256 rewardPerTokenStored)",
+  "function nonfungiblePositionManager() external view returns (address)",
 ]);
 
 const veAbi = parseAbi([
@@ -37,6 +42,8 @@ const voterAbi = parseAbi([
   "function claimBribes(address[] calldata bribes, address[][] calldata tokens, uint256 tokenId) external",
   "function claimFees(address[] calldata fees, address[][] calldata tokens, uint256 tokenId) external",
   "function gauges(address pool) external view returns (address)",
+  "function gaugeForPool(address pool) external view returns (address)",
+  "function poolToGauge(address pool) external view returns (address)",
 ]);
 
 export class SolidlyGaugeAdapter implements IGaugeSystem {
@@ -113,61 +120,190 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     };
   }
 
-  async buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx> {
-    // Ramses V2 gauges use getReward(address account, address[] tokens)
-    // where account must equal msg.sender. Try to discover reward tokens via RPC.
-    if (account && this.rpcUrl) {
+  /**
+   * Resolve gauge address from a pool address via voter contract.
+   * Tries gaugeForPool (Ramses), poolToGauge (NEST), gauges (classic Solidly).
+   */
+  async resolveGauge(pool: Address): Promise<Address> {
+    if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required for gauge lookup");
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+
+    for (const fn of ["gaugeForPool", "poolToGauge", "gauges"] as const) {
       try {
-        const client = createPublicClient({ transport: http(this.rpcUrl) });
-        const listLen = await client.readContract({
-          address: gauge,
-          abi: gaugeAbi,
-          functionName: "rewardsListLength",
-        }) as bigint;
-        if (listLen > 0n) {
-          // Discover reward tokens by checking isReward against known tokens
-          // For Ramses V2, use the voter to find reward tokens
-          // Alternatively, scan storage: the gauge exposes earned(token, account)
-          // We'll pass empty tokens array and let the gauge figure it out,
-          // or pass a placeholder. Since we know RAM is the reward token
-          // from the gauge context, we need to enumerate them.
-          // Fallback: use getReward(account, []) — some implementations accept empty array
-          const data = encodeFunctionData({
-            abi: gaugeAbi,
-            functionName: "getReward",
-            args: [account, [] as Address[]],
-          });
-          return {
-            description: `[${this.protocolName}] Claim gauge rewards`,
-            to: gauge,
-            data,
-            value: 0n,
-            gas_estimate: 300_000,
-          };
-        }
+        const gauge = await client.readContract({
+          address: this.voter,
+          abi: voterAbi,
+          functionName: fn,
+          args: [pool],
+        }) as Address;
+        if (gauge !== zeroAddress) return gauge;
       } catch {
-        // fall through to default
+        // try next
       }
     }
+    throw new DefiError("CONTRACT_ERROR", `[${this.protocolName}] No gauge found for pool ${pool}`);
+  }
 
-    // Standard Solidly V2 gauge: getReward(address account)
-    // account param will be overridden by msg.sender in most gauge implementations
+  /**
+   * Discover reward tokens for a gauge.
+   * Returns { tokens, multiToken } where multiToken indicates getReward(account, tokens[]) support.
+   */
+  private async discoverRewardTokens(gauge: Address): Promise<{ tokens: Address[]; multiToken: boolean }> {
+    if (!this.rpcUrl) return { tokens: [], multiToken: false };
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+
+    // 1. Try rewardsListLength — multi-token gauges (Ramses style)
+    try {
+      const len = await client.readContract({
+        address: gauge,
+        abi: gaugeAbi,
+        functionName: "rewardsListLength",
+      }) as bigint;
+
+      if (Number(len) > 0) {
+        // Discover via rewardData for known HyperEVM tokens
+        const candidates: Address[] = [
+          "0x5555555555555555555555555555555555555555", // WHYPE
+          "0x555570a286F15EbDFE42B66eDE2f724Aa1AB5555", // xRAM
+          "0x067b0C72aa4C6Bd3BFEFfF443c536DCd6a25a9C8", // HYBR
+          "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035", // NEST token
+        ];
+        const found: Address[] = [];
+        for (const token of candidates) {
+          try {
+            const rd = await client.readContract({
+              address: gauge,
+              abi: gaugeAbi,
+              functionName: "rewardData",
+              args: [token],
+            }) as readonly [bigint, bigint, bigint, bigint];
+            if (rd[0] > 0n || rd[1] > 0n) found.push(token);
+          } catch { /* not a reward */ }
+        }
+        if (found.length > 0) return { tokens: found, multiToken: true };
+        return { tokens: [], multiToken: true }; // has rewards but couldn't enumerate
+      }
+    } catch {
+      // no rewardsListLength
+    }
+
+    // 2. Fallback: rewardToken() — single-reward gauges (NEST / Hybra style)
+    try {
+      const rt = await client.readContract({
+        address: gauge,
+        abi: gaugeAbi,
+        functionName: "rewardToken",
+      }) as Address;
+      if (rt !== zeroAddress) return { tokens: [rt], multiToken: false };
+    } catch { /* no rewardToken */ }
+
+    return { tokens: [], multiToken: false };
+  }
+
+  async buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx> {
+    if (!this.rpcUrl || !account) {
+      const data = encodeFunctionData({
+        abi: gaugeAbi,
+        functionName: "getReward",
+        args: [account ?? zeroAddress],
+      });
+      return { description: `[${this.protocolName}] Claim gauge rewards`, to: gauge, data, value: 0n, gas_estimate: 200_000 };
+    }
+
+    const { tokens, multiToken } = await this.discoverRewardTokens(gauge);
+
+    // Multi-token gauge (Ramses): getReward(account, tokens[])
+    if (multiToken && tokens.length > 0) {
+      const data = encodeFunctionData({
+        abi: gaugeAbi,
+        functionName: "getReward",
+        args: [account, tokens],
+      });
+      return {
+        description: `[${this.protocolName}] Claim gauge rewards (${tokens.length} tokens)`,
+        to: gauge, data, value: 0n, gas_estimate: 300_000,
+      };
+    }
+
+    // Single-token gauge (NEST / standard): getReward() with no args
+    // Some gauges use getReward(account), but NEST-style uses getReward()
     const data = encodeFunctionData({
       abi: gaugeAbi,
       functionName: "getReward",
-      args: [account ?? zeroAddress],
+      args: [],
     });
     return {
       description: `[${this.protocolName}] Claim gauge rewards`,
-      to: gauge,
-      data,
-      value: 0n,
-      gas_estimate: 200_000,
+      to: gauge, data, value: 0n, gas_estimate: 200_000,
     };
   }
 
-  async getPendingRewards(_gauge: Address, _user: Address): Promise<RewardInfo[]> {
-    throw DefiError.unsupported(`[${this.protocolName}] get_pending_rewards requires RPC`);
+  /**
+   * Claim rewards for a CL gauge by NFT tokenId (Hybra V4 style).
+   */
+  async buildClaimRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<DeFiTx> {
+    const data = encodeFunctionData({
+      abi: gaugeAbi,
+      functionName: "getReward",
+      args: [tokenId],
+    });
+    return {
+      description: `[${this.protocolName}] Claim gauge rewards for NFT #${tokenId}`,
+      to: gauge,
+      data,
+      value: 0n,
+      gas_estimate: 300_000,
+    };
+  }
+
+  async getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]> {
+    if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    const results: RewardInfo[] = [];
+
+    const { tokens, multiToken } = await this.discoverRewardTokens(gauge);
+
+    if (multiToken && tokens.length > 0) {
+      for (const token of tokens) {
+        try {
+          const earned = await client.readContract({
+            address: gauge, abi: gaugeAbi, functionName: "earned", args: [token, user],
+          }) as bigint;
+          results.push({ token, symbol: token.slice(0, 10), amount: earned });
+        } catch { /* skip */ }
+      }
+    } else if (tokens.length > 0) {
+      // Single-token gauge: earned(account)
+      try {
+        const earned = await client.readContract({
+          address: gauge, abi: gaugeAbi, functionName: "earned", args: [user],
+        }) as bigint;
+        results.push({ token: tokens[0]!, symbol: tokens[0]!.slice(0, 10), amount: earned });
+      } catch { /* skip */ }
+    } else {
+      try {
+        const earned = await client.readContract({
+          address: gauge, abi: gaugeAbi, functionName: "earned", args: [user],
+        }) as bigint;
+        results.push({ token: zeroAddress as Address, symbol: "unknown", amount: earned });
+      } catch { /* skip */ }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get pending rewards for a CL gauge NFT position (Hybra V4 style).
+   */
+  async getPendingRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<bigint> {
+    if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    return await client.readContract({
+      address: gauge,
+      abi: gaugeAbi,
+      functionName: "earned",
+      args: [tokenId],
+    }) as bigint;
   }
 
   // IVoteEscrow

@@ -1,5 +1,5 @@
 // src/factory.ts
-import { DefiError as DefiError32 } from "@hypurrquant/defi-core";
+import { DefiError as DefiError33 } from "@hypurrquant/defi-core";
 
 // src/dex/uniswap_v3.ts
 import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParameters } from "viem";
@@ -462,6 +462,26 @@ var UniswapV2Adapter = class {
 
 // src/dex/algebra_v3.ts
 import { encodeFunctionData as encodeFunctionData3, parseAbi as parseAbi3, createPublicClient as createPublicClient3, http as http3, decodeAbiParameters as decodeAbiParameters3, concatHex, zeroAddress } from "viem";
+
+// src/dex/tick_math.ts
+function pctToTickDelta(pct) {
+  return Math.round(Math.log(1 + pct / 100) / Math.log(1.0001));
+}
+function alignTickDown(tick, tickSpacing) {
+  return Math.floor(tick / tickSpacing) * tickSpacing;
+}
+function alignTickUp(tick, tickSpacing) {
+  return Math.ceil(tick / tickSpacing) * tickSpacing;
+}
+function rangeToTicks(currentTick, rangePct, tickSpacing) {
+  const delta = pctToTickDelta(rangePct);
+  return {
+    tickLower: alignTickDown(currentTick - delta, tickSpacing),
+    tickUpper: alignTickUp(currentTick + delta, tickSpacing)
+  };
+}
+
+// src/dex/algebra_v3.ts
 import { DefiError as DefiError3 } from "@hypurrquant/defi-core";
 var abi2 = parseAbi3([
   "struct ExactInputSingleParams { address tokenIn; address tokenOut; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 limitSqrtPrice; }",
@@ -473,7 +493,11 @@ var algebraQuoterAbi = parseAbi3([
 var algebraSingleQuoterAbi = parseAbi3([
   "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint160 limitSqrtPrice) params) external returns (uint256 amountOut, uint256 amountIn, uint160 sqrtPriceX96After)"
 ]);
-var algebraPositionManagerAbi = parseAbi3([
+var algebraIntegralPmAbi = parseAbi3([
+  "struct MintParams { address token0; address token1; address deployer; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
+  "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+]);
+var algebraV2PmAbi = parseAbi3([
   "struct MintParams { address token0; address token1; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
   "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
 ]);
@@ -618,36 +642,58 @@ var AlgebraV3Adapter = class {
       throw new DefiError3("CONTRACT_ERROR", "Position manager address not configured");
     }
     const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
-    const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
-    const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
-    const data = encodeFunctionData3({
-      abi: algebraPositionManagerAbi,
+    let tickLower = params.tick_lower ?? -887220;
+    let tickUpper = params.tick_upper ?? 887220;
+    const isSingleSide = rawAmount0 === 0n || rawAmount1 === 0n;
+    const needsAutoTick = params.range_pct !== void 0 || isSingleSide && !params.tick_lower && !params.tick_upper;
+    if (needsAutoTick) {
+      if (!this.rpcUrl) throw DefiError3.rpcError("RPC URL required for auto tick detection");
+      const poolAddr = params.pool;
+      if (!poolAddr) throw new DefiError3("CONTRACT_ERROR", "Pool address required (use --pool)");
+      const client = createPublicClient3({ transport: http3(this.rpcUrl) });
+      const algebraPoolAbi = parseAbi3([
+        "function globalState() view returns (uint160 price, int24 tick, uint16 lastFee, uint8 pluginConfig, uint16 communityFee, bool unlocked)",
+        "function tickSpacing() view returns (int24)"
+      ]);
+      const [globalState, spacing] = await Promise.all([
+        client.readContract({ address: poolAddr, abi: algebraPoolAbi, functionName: "globalState" }),
+        client.readContract({ address: poolAddr, abi: algebraPoolAbi, functionName: "tickSpacing" })
+      ]);
+      const currentTick = Number(globalState[1]);
+      const tickSpace = Number(spacing);
+      if (params.range_pct !== void 0) {
+        const range = rangeToTicks(currentTick, params.range_pct, tickSpace);
+        tickLower = range.tickLower;
+        tickUpper = range.tickUpper;
+      } else if (rawAmount0 > 0n && rawAmount1 === 0n) {
+        tickLower = alignTickUp(currentTick + tickSpace, tickSpace);
+        tickUpper = 887220;
+      } else {
+        tickLower = -887220;
+        tickUpper = alignTickDown(currentTick - tickSpace, tickSpace);
+      }
+    }
+    const amount0 = rawAmount0;
+    const amount1 = rawAmount1;
+    const data = this.useSingleQuoter ? encodeFunctionData3({
+      abi: algebraV2PmAbi,
       functionName: "mint",
-      args: [
-        {
-          token0,
-          token1,
-          tickLower: -887220,
-          tickUpper: 887220,
-          amount0Desired: amount0,
-          amount1Desired: amount1,
-          amount0Min: 0n,
-          amount1Min: 0n,
-          recipient: params.recipient,
-          deadline: BigInt("18446744073709551615")
-        }
-      ]
+      args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
+    }) : encodeFunctionData3({
+      abi: algebraIntegralPmAbi,
+      functionName: "mint",
+      args: [{ token0, token1, deployer: zeroAddress, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
     });
+    const approvals = [];
+    if (amount0 > 0n) approvals.push({ token: token0, spender: pm, amount: amount0 });
+    if (amount1 > 0n) approvals.push({ token: token1, spender: pm, amount: amount1 });
     return {
-      description: `[${this.protocolName}] Add liquidity`,
+      description: `[${this.protocolName}] Add liquidity [${tickLower}, ${tickUpper}]`,
       to: pm,
       data,
       value: 0n,
       gas_estimate: 5e5,
-      approvals: [
-        { token: token0, spender: pm, amount: amount0 },
-        { token: token1, spender: pm, amount: amount1 }
-      ]
+      approvals
     };
   }
   async buildRemoveLiquidity(_params) {
@@ -952,10 +998,359 @@ var SolidlyAdapter = class {
   }
 };
 
-// src/dex/woofi.ts
-import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, zeroAddress as zeroAddress3 } from "viem";
+// src/dex/thena_cl.ts
+import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, createPublicClient as createPublicClient4, http as http4, zeroAddress as zeroAddress3 } from "viem";
 import { DefiError as DefiError7 } from "@hypurrquant/defi-core";
-var abi5 = parseAbi7([
+var thenaPmAbi = parseAbi7([
+  "struct MintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
+  "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+]);
+var thenaRouterAbi = parseAbi7([
+  "struct ExactInputSingleParams { address tokenIn; address tokenOut; int24 tickSpacing; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96; }",
+  "function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut)"
+]);
+var thenaPoolAbi = parseAbi7([
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)",
+  "function tickSpacing() view returns (int24)",
+  "function token0() view returns (address)",
+  "function token1() view returns (address)"
+]);
+var thenaFactoryAbi = parseAbi7([
+  "function getPool(address tokenA, address tokenB, int24 tickSpacing) view returns (address)"
+]);
+var ThenaCLAdapter = class {
+  protocolName;
+  router;
+  positionManager;
+  factory;
+  rpcUrl;
+  defaultTickSpacing;
+  constructor(entry, rpcUrl) {
+    this.protocolName = entry.name;
+    const router = entry.contracts?.["router"];
+    if (!router) throw new DefiError7("CONTRACT_ERROR", "Missing 'router' contract address");
+    this.router = router;
+    this.positionManager = entry.contracts?.["position_manager"];
+    this.factory = entry.contracts?.["pool_factory"];
+    this.rpcUrl = rpcUrl;
+    this.defaultTickSpacing = 50;
+  }
+  name() {
+    return this.protocolName;
+  }
+  async buildSwap(params) {
+    const data = encodeFunctionData7({
+      abi: thenaRouterAbi,
+      functionName: "exactInputSingle",
+      args: [{
+        tokenIn: params.token_in,
+        tokenOut: params.token_out,
+        tickSpacing: this.defaultTickSpacing,
+        recipient: params.recipient,
+        deadline: BigInt(params.deadline ?? 18446744073709551615n),
+        amountIn: params.amount_in,
+        amountOutMinimum: 0n,
+        sqrtPriceLimitX96: 0n
+      }]
+    });
+    return {
+      description: `[${this.protocolName}] Swap`,
+      to: this.router,
+      data,
+      value: 0n,
+      gas_estimate: 3e5,
+      approvals: [{ token: params.token_in, spender: this.router, amount: params.amount_in }]
+    };
+  }
+  async quote(_params) {
+    throw DefiError7.unsupported(`[${this.protocolName}] quote not yet implemented \u2014 use swap router`);
+  }
+  async buildAddLiquidity(params) {
+    const pm = this.positionManager;
+    if (!pm) throw new DefiError7("CONTRACT_ERROR", "Position manager not configured");
+    if (!this.rpcUrl) throw DefiError7.rpcError("RPC URL required");
+    const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const client = createPublicClient4({ transport: http4(this.rpcUrl) });
+    const poolAddr = params.pool;
+    let tickSpacing = this.defaultTickSpacing;
+    let tickLower = params.tick_lower ?? 0;
+    let tickUpper = params.tick_upper ?? 0;
+    if (poolAddr || !params.tick_lower || !params.tick_upper) {
+      let pool = poolAddr;
+      if (!pool && this.factory) {
+        pool = await client.readContract({
+          address: this.factory,
+          abi: thenaFactoryAbi,
+          functionName: "getPool",
+          args: [token0, token1, tickSpacing]
+        });
+        if (pool === zeroAddress3) throw new DefiError7("CONTRACT_ERROR", "Pool not found");
+      }
+      if (pool) {
+        const [slot0, ts] = await Promise.all([
+          client.readContract({ address: pool, abi: thenaPoolAbi, functionName: "slot0" }),
+          client.readContract({ address: pool, abi: thenaPoolAbi, functionName: "tickSpacing" })
+        ]);
+        const currentTick = Number(slot0[1]);
+        tickSpacing = Number(ts);
+        if (params.range_pct !== void 0) {
+          const range = rangeToTicks(currentTick, params.range_pct, tickSpacing);
+          tickLower = range.tickLower;
+          tickUpper = range.tickUpper;
+        } else if (!params.tick_lower && !params.tick_upper) {
+          const isSingleSide = rawAmount0 === 0n || rawAmount1 === 0n;
+          if (isSingleSide) {
+            if (rawAmount0 > 0n) {
+              tickLower = alignTickUp(currentTick + tickSpacing, tickSpacing);
+              tickUpper = Math.floor(887272 / tickSpacing) * tickSpacing;
+            } else {
+              tickLower = Math.ceil(-887272 / tickSpacing) * tickSpacing;
+              tickUpper = alignTickDown(currentTick - tickSpacing, tickSpacing);
+            }
+          } else {
+            tickLower = Math.ceil(-887272 / tickSpacing) * tickSpacing;
+            tickUpper = Math.floor(887272 / tickSpacing) * tickSpacing;
+          }
+        }
+      }
+    }
+    if (params.tick_lower !== void 0) tickLower = params.tick_lower;
+    if (params.tick_upper !== void 0) tickUpper = params.tick_upper;
+    const data = encodeFunctionData7({
+      abi: thenaPmAbi,
+      functionName: "mint",
+      args: [{
+        token0,
+        token1,
+        tickSpacing,
+        tickLower,
+        tickUpper,
+        amount0Desired: rawAmount0,
+        amount1Desired: rawAmount1,
+        amount0Min: 0n,
+        amount1Min: 0n,
+        recipient: params.recipient,
+        deadline: BigInt("18446744073709551615"),
+        sqrtPriceX96: 0n
+      }]
+    });
+    const approvals = [];
+    if (rawAmount0 > 0n) approvals.push({ token: token0, spender: pm, amount: rawAmount0 });
+    if (rawAmount1 > 0n) approvals.push({ token: token1, spender: pm, amount: rawAmount1 });
+    return {
+      description: `[${this.protocolName}] Add liquidity [${tickLower}, ${tickUpper}]`,
+      to: pm,
+      data,
+      value: 0n,
+      gas_estimate: 7e5,
+      approvals
+    };
+  }
+  async buildRemoveLiquidity(_params) {
+    throw DefiError7.unsupported(`[${this.protocolName}] remove_liquidity requires tokenId`);
+  }
+};
+
+// src/dex/hybra_gauge.ts
+import { createPublicClient as createPublicClient5, encodeFunctionData as encodeFunctionData8, http as http5, parseAbi as parseAbi8, zeroAddress as zeroAddress4 } from "viem";
+import { DefiError as DefiError8 } from "@hypurrquant/defi-core";
+var gaugeManagerAbi = parseAbi8([
+  "function gauges(address pool) view returns (address gauge)",
+  "function isGauge(address gauge) view returns (bool)",
+  "function isAlive(address gauge) view returns (bool)",
+  "function claimRewards(address gauge, uint256[] tokenIds, uint8 redeemType) external"
+]);
+var gaugeCLAbi = parseAbi8([
+  "function deposit(uint256 tokenId) external",
+  "function withdraw(uint256 tokenId, uint8 redeemType) external",
+  "function earned(uint256 tokenId) view returns (uint256)",
+  "function balanceOf(uint256 tokenId) view returns (uint256)",
+  "function rewardToken() view returns (address)"
+]);
+var nfpmAbi = parseAbi8([
+  "function approve(address to, uint256 tokenId) external",
+  "function getApproved(uint256 tokenId) view returns (address)"
+]);
+var veAbi = parseAbi8([
+  "function create_lock(uint256 value, uint256 lock_duration) external returns (uint256)",
+  "function increase_amount(uint256 tokenId, uint256 value) external",
+  "function increase_unlock_time(uint256 tokenId, uint256 lock_duration) external",
+  "function withdraw(uint256 tokenId) external"
+]);
+var voterAbi = parseAbi8([
+  "function vote(uint256 tokenId, address[] pools, uint256[] weights) external",
+  "function claimBribes(address[] bribes, address[][] tokens, uint256 tokenId) external",
+  "function claimFees(address[] fees, address[][] tokens, uint256 tokenId) external"
+]);
+var HybraGaugeAdapter = class {
+  protocolName;
+  gaugeManager;
+  veToken;
+  voter;
+  positionManager;
+  rpcUrl;
+  constructor(entry, rpcUrl) {
+    this.protocolName = entry.name;
+    const gm = entry.contracts?.["gauge_manager"];
+    if (!gm) throw new DefiError8("CONTRACT_ERROR", "Missing 'gauge_manager' contract");
+    this.gaugeManager = gm;
+    const ve = entry.contracts?.["ve_token"];
+    if (!ve) throw new DefiError8("CONTRACT_ERROR", "Missing 've_token' contract");
+    this.veToken = ve;
+    this.voter = entry.contracts?.["voter"] ?? zeroAddress4;
+    this.positionManager = entry.contracts?.["position_manager"] ?? zeroAddress4;
+    this.rpcUrl = rpcUrl;
+  }
+  name() {
+    return this.protocolName;
+  }
+  // ─── Gauge Lookup ──────────────────────────────────────────
+  async resolveGauge(pool) {
+    if (!this.rpcUrl) throw DefiError8.rpcError("RPC required");
+    const client = createPublicClient5({ transport: http5(this.rpcUrl) });
+    const gauge = await client.readContract({
+      address: this.gaugeManager,
+      abi: gaugeManagerAbi,
+      functionName: "gauges",
+      args: [pool]
+    });
+    if (gauge === zeroAddress4) throw new DefiError8("CONTRACT_ERROR", `No gauge for pool ${pool}`);
+    return gauge;
+  }
+  // ─── CL Gauge: NFT Deposit/Withdraw ──────────────────────────
+  async buildDeposit(gauge, _amount, tokenId) {
+    if (tokenId === void 0) throw new DefiError8("CONTRACT_ERROR", "tokenId required for CL gauge deposit");
+    const approveTx = {
+      description: `[${this.protocolName}] Approve NFT #${tokenId} to gauge`,
+      to: this.positionManager,
+      data: encodeFunctionData8({ abi: nfpmAbi, functionName: "approve", args: [gauge, tokenId] }),
+      value: 0n,
+      gas_estimate: 8e4
+    };
+    return {
+      description: `[${this.protocolName}] Deposit NFT #${tokenId} to gauge`,
+      to: gauge,
+      data: encodeFunctionData8({ abi: gaugeCLAbi, functionName: "deposit", args: [tokenId] }),
+      value: 0n,
+      gas_estimate: 5e5,
+      pre_txs: [approveTx]
+    };
+  }
+  async buildWithdraw(gauge, _amount, tokenId) {
+    if (tokenId === void 0) throw new DefiError8("CONTRACT_ERROR", "tokenId required for CL gauge withdraw");
+    return {
+      description: `[${this.protocolName}] Withdraw NFT #${tokenId} from gauge`,
+      to: gauge,
+      data: encodeFunctionData8({ abi: gaugeCLAbi, functionName: "withdraw", args: [tokenId, 1] }),
+      value: 0n,
+      gas_estimate: 1e6
+    };
+  }
+  // ─── Claim: via GaugeManager ──────────────────────────────────
+  async buildClaimRewards(gauge, _account) {
+    throw DefiError8.unsupported(`[${this.protocolName}] Use buildClaimRewardsByTokenId for CL gauges`);
+  }
+  async buildClaimRewardsByTokenId(gauge, tokenId) {
+    return {
+      description: `[${this.protocolName}] Claim rewards for NFT #${tokenId}`,
+      to: this.gaugeManager,
+      data: encodeFunctionData8({
+        abi: gaugeManagerAbi,
+        functionName: "claimRewards",
+        args: [gauge, [tokenId], 1]
+        // redeemType=1
+      }),
+      value: 0n,
+      gas_estimate: 1e6
+    };
+  }
+  // ─── Pending Rewards ──────────────────────────────────────────
+  async getPendingRewards(gauge, _user) {
+    throw DefiError8.unsupported(`[${this.protocolName}] Use getPendingRewardsByTokenId for CL gauges`);
+  }
+  async getPendingRewardsByTokenId(gauge, tokenId) {
+    if (!this.rpcUrl) throw DefiError8.rpcError("RPC required");
+    const client = createPublicClient5({ transport: http5(this.rpcUrl) });
+    return await client.readContract({
+      address: gauge,
+      abi: gaugeCLAbi,
+      functionName: "earned",
+      args: [tokenId]
+    });
+  }
+  // ─── VoteEscrow ──────────────────────────────────────────────
+  async buildCreateLock(amount, lockDuration) {
+    return {
+      description: `[${this.protocolName}] Create veNFT lock`,
+      to: this.veToken,
+      data: encodeFunctionData8({ abi: veAbi, functionName: "create_lock", args: [amount, BigInt(lockDuration)] }),
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+  async buildIncreaseAmount(tokenId, amount) {
+    return {
+      description: `[${this.protocolName}] Increase veNFT #${tokenId}`,
+      to: this.veToken,
+      data: encodeFunctionData8({ abi: veAbi, functionName: "increase_amount", args: [tokenId, amount] }),
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  async buildIncreaseUnlockTime(tokenId, lockDuration) {
+    return {
+      description: `[${this.protocolName}] Extend veNFT #${tokenId} lock`,
+      to: this.veToken,
+      data: encodeFunctionData8({ abi: veAbi, functionName: "increase_unlock_time", args: [tokenId, BigInt(lockDuration)] }),
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  async buildWithdrawExpired(tokenId) {
+    return {
+      description: `[${this.protocolName}] Withdraw expired veNFT #${tokenId}`,
+      to: this.veToken,
+      data: encodeFunctionData8({ abi: veAbi, functionName: "withdraw", args: [tokenId] }),
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  // ─── Voter ──────────────────────────────────────────────────
+  async buildVote(tokenId, pools, weights) {
+    return {
+      description: `[${this.protocolName}] Vote with veNFT #${tokenId}`,
+      to: this.voter,
+      data: encodeFunctionData8({ abi: voterAbi, functionName: "vote", args: [tokenId, pools, weights] }),
+      value: 0n,
+      gas_estimate: 5e5
+    };
+  }
+  async buildClaimBribes(bribes, tokenId) {
+    const tokensPerBribe = bribes.map(() => []);
+    return {
+      description: `[${this.protocolName}] Claim bribes for veNFT #${tokenId}`,
+      to: this.voter,
+      data: encodeFunctionData8({ abi: voterAbi, functionName: "claimBribes", args: [bribes, tokensPerBribe, tokenId] }),
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+  async buildClaimFees(fees, tokenId) {
+    const tokensPerFee = fees.map(() => []);
+    return {
+      description: `[${this.protocolName}] Claim fees for veNFT #${tokenId}`,
+      to: this.voter,
+      data: encodeFunctionData8({ abi: voterAbi, functionName: "claimFees", args: [fees, tokensPerFee, tokenId] }),
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+};
+
+// src/dex/woofi.ts
+import { encodeFunctionData as encodeFunctionData9, parseAbi as parseAbi9, zeroAddress as zeroAddress5 } from "viem";
+import { DefiError as DefiError9 } from "@hypurrquant/defi-core";
+var abi5 = parseAbi9([
   "function swap(address fromToken, address toToken, uint256 fromAmount, uint256 minToAmount, address to, address rebateTo) external payable returns (uint256 realToAmount)"
 ]);
 var WooFiAdapter = class {
@@ -965,7 +1360,7 @@ var WooFiAdapter = class {
     this.protocolName = entry.name;
     const router = entry.contracts?.["router"];
     if (!router) {
-      throw new DefiError7("CONTRACT_ERROR", "Missing 'router' contract");
+      throw new DefiError9("CONTRACT_ERROR", "Missing 'router' contract");
     }
     this.router = router;
   }
@@ -974,7 +1369,7 @@ var WooFiAdapter = class {
   }
   async buildSwap(params) {
     const minToAmount = 0n;
-    const data = encodeFunctionData7({
+    const data = encodeFunctionData9({
       abi: abi5,
       functionName: "swap",
       args: [
@@ -983,7 +1378,7 @@ var WooFiAdapter = class {
         params.amount_in,
         minToAmount,
         params.recipient,
-        zeroAddress3
+        zeroAddress5
       ]
     });
     return {
@@ -995,263 +1390,20 @@ var WooFiAdapter = class {
     };
   }
   async quote(_params) {
-    throw DefiError7.unsupported(`[${this.protocolName}] quote requires RPC`);
+    throw DefiError9.unsupported(`[${this.protocolName}] quote requires RPC`);
   }
   async buildAddLiquidity(_params) {
-    throw DefiError7.unsupported(`[${this.protocolName}] WOOFi does not support LP positions via router`);
+    throw DefiError9.unsupported(`[${this.protocolName}] WOOFi does not support LP positions via router`);
   }
   async buildRemoveLiquidity(_params) {
-    throw DefiError7.unsupported(`[${this.protocolName}] WOOFi does not support LP positions via router`);
-  }
-};
-
-// src/dex/solidly_gauge.ts
-import { createPublicClient as createPublicClient4, encodeFunctionData as encodeFunctionData8, http as http4, parseAbi as parseAbi8, zeroAddress as zeroAddress4 } from "viem";
-import { DefiError as DefiError8 } from "@hypurrquant/defi-core";
-var gaugeAbi = parseAbi8([
-  "function deposit(uint256 amount) external",
-  "function depositFor(uint256 amount, uint256 tokenId) external",
-  "function withdraw(uint256 amount) external",
-  "function getReward(address account) external",
-  "function getReward(address account, address[] tokens) external",
-  "function earned(address account) external view returns (uint256)",
-  "function earned(address token, address account) external view returns (uint256)",
-  "function rewardRate() external view returns (uint256)",
-  "function totalSupply() external view returns (uint256)",
-  "function rewardsListLength() external view returns (uint256)",
-  "function isReward(address token) external view returns (bool)"
-]);
-var veAbi = parseAbi8([
-  "function create_lock(uint256 value, uint256 lock_duration) external returns (uint256)",
-  "function increase_amount(uint256 tokenId, uint256 value) external",
-  "function increase_unlock_time(uint256 tokenId, uint256 lock_duration) external",
-  "function withdraw(uint256 tokenId) external",
-  "function balanceOfNFT(uint256 tokenId) external view returns (uint256)",
-  "function locked(uint256 tokenId) external view returns (uint256 amount, uint256 end)"
-]);
-var voterAbi = parseAbi8([
-  "function vote(uint256 tokenId, address[] calldata pools, uint256[] calldata weights) external",
-  "function claimBribes(address[] calldata bribes, address[][] calldata tokens, uint256 tokenId) external",
-  "function claimFees(address[] calldata fees, address[][] calldata tokens, uint256 tokenId) external",
-  "function gauges(address pool) external view returns (address)"
-]);
-var SolidlyGaugeAdapter = class {
-  protocolName;
-  voter;
-  veToken;
-  rpcUrl;
-  constructor(entry, rpcUrl) {
-    this.protocolName = entry.name;
-    const voter = entry.contracts?.["voter"];
-    if (!voter) {
-      throw new DefiError8("CONTRACT_ERROR", "Missing 'voter' contract");
-    }
-    const veToken = entry.contracts?.["ve_token"];
-    if (!veToken) {
-      throw new DefiError8("CONTRACT_ERROR", "Missing 've_token' contract");
-    }
-    this.voter = voter;
-    this.veToken = veToken;
-    this.rpcUrl = rpcUrl;
-  }
-  name() {
-    return this.protocolName;
-  }
-  // IGauge
-  async buildDeposit(gauge, amount, tokenId, lpToken) {
-    if (tokenId !== void 0) {
-      const data2 = encodeFunctionData8({
-        abi: gaugeAbi,
-        functionName: "depositFor",
-        args: [amount, tokenId]
-      });
-      return {
-        description: `[${this.protocolName}] Deposit ${amount} LP to gauge (boost veNFT #${tokenId})`,
-        to: gauge,
-        data: data2,
-        value: 0n,
-        gas_estimate: 2e5,
-        approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
-      };
-    }
-    const data = encodeFunctionData8({
-      abi: gaugeAbi,
-      functionName: "deposit",
-      args: [amount]
-    });
-    return {
-      description: `[${this.protocolName}] Deposit ${amount} LP to gauge`,
-      to: gauge,
-      data,
-      value: 0n,
-      gas_estimate: 2e5,
-      approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
-    };
-  }
-  async buildWithdraw(gauge, amount) {
-    const data = encodeFunctionData8({
-      abi: gaugeAbi,
-      functionName: "withdraw",
-      args: [amount]
-    });
-    return {
-      description: `[${this.protocolName}] Withdraw ${amount} LP from gauge`,
-      to: gauge,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  async buildClaimRewards(gauge, account) {
-    if (account && this.rpcUrl) {
-      try {
-        const client = createPublicClient4({ transport: http4(this.rpcUrl) });
-        const listLen = await client.readContract({
-          address: gauge,
-          abi: gaugeAbi,
-          functionName: "rewardsListLength"
-        });
-        if (listLen > 0n) {
-          const data2 = encodeFunctionData8({
-            abi: gaugeAbi,
-            functionName: "getReward",
-            args: [account, []]
-          });
-          return {
-            description: `[${this.protocolName}] Claim gauge rewards`,
-            to: gauge,
-            data: data2,
-            value: 0n,
-            gas_estimate: 3e5
-          };
-        }
-      } catch {
-      }
-    }
-    const data = encodeFunctionData8({
-      abi: gaugeAbi,
-      functionName: "getReward",
-      args: [account ?? zeroAddress4]
-    });
-    return {
-      description: `[${this.protocolName}] Claim gauge rewards`,
-      to: gauge,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  async getPendingRewards(_gauge, _user) {
-    throw DefiError8.unsupported(`[${this.protocolName}] get_pending_rewards requires RPC`);
-  }
-  // IVoteEscrow
-  async buildCreateLock(amount, lockDuration) {
-    const data = encodeFunctionData8({
-      abi: veAbi,
-      functionName: "create_lock",
-      args: [amount, BigInt(lockDuration)]
-    });
-    return {
-      description: `[${this.protocolName}] Create veNFT lock: ${amount} tokens for ${lockDuration}s`,
-      to: this.veToken,
-      data,
-      value: 0n,
-      gas_estimate: 3e5
-    };
-  }
-  async buildIncreaseAmount(tokenId, amount) {
-    const data = encodeFunctionData8({
-      abi: veAbi,
-      functionName: "increase_amount",
-      args: [tokenId, amount]
-    });
-    return {
-      description: `[${this.protocolName}] Increase veNFT #${tokenId} by ${amount}`,
-      to: this.veToken,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  async buildIncreaseUnlockTime(tokenId, lockDuration) {
-    const data = encodeFunctionData8({
-      abi: veAbi,
-      functionName: "increase_unlock_time",
-      args: [tokenId, BigInt(lockDuration)]
-    });
-    return {
-      description: `[${this.protocolName}] Extend veNFT #${tokenId} lock by ${lockDuration}s`,
-      to: this.veToken,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  async buildWithdrawExpired(tokenId) {
-    const data = encodeFunctionData8({
-      abi: veAbi,
-      functionName: "withdraw",
-      args: [tokenId]
-    });
-    return {
-      description: `[${this.protocolName}] Withdraw expired veNFT #${tokenId}`,
-      to: this.veToken,
-      data,
-      value: 0n,
-      gas_estimate: 2e5
-    };
-  }
-  // IVoter
-  async buildVote(tokenId, pools, weights) {
-    const data = encodeFunctionData8({
-      abi: voterAbi,
-      functionName: "vote",
-      args: [tokenId, pools, weights]
-    });
-    return {
-      description: `[${this.protocolName}] Vote with veNFT #${tokenId}`,
-      to: this.voter,
-      data,
-      value: 0n,
-      gas_estimate: 5e5
-    };
-  }
-  async buildClaimBribes(bribes, tokenId) {
-    const tokensPerBribe = bribes.map(() => []);
-    const data = encodeFunctionData8({
-      abi: voterAbi,
-      functionName: "claimBribes",
-      args: [bribes, tokensPerBribe, tokenId]
-    });
-    return {
-      description: `[${this.protocolName}] Claim bribes for veNFT #${tokenId}`,
-      to: this.voter,
-      data,
-      value: 0n,
-      gas_estimate: 3e5
-    };
-  }
-  async buildClaimFees(fees, tokenId) {
-    const tokensPerFee = fees.map(() => []);
-    const data = encodeFunctionData8({
-      abi: voterAbi,
-      functionName: "claimFees",
-      args: [fees, tokensPerFee, tokenId]
-    });
-    return {
-      description: `[${this.protocolName}] Claim trading fees for veNFT #${tokenId}`,
-      to: this.voter,
-      data,
-      value: 0n,
-      gas_estimate: 3e5
-    };
+    throw DefiError9.unsupported(`[${this.protocolName}] WOOFi does not support LP positions via router`);
   }
 };
 
 // src/dex/masterchef.ts
-import { encodeFunctionData as encodeFunctionData9, parseAbi as parseAbi9, createPublicClient as createPublicClient5, http as http5 } from "viem";
-import { DefiError as DefiError9 } from "@hypurrquant/defi-core";
-var masterchefAbi = parseAbi9([
+import { encodeFunctionData as encodeFunctionData10, parseAbi as parseAbi10, createPublicClient as createPublicClient6, http as http6 } from "viem";
+import { DefiError as DefiError10 } from "@hypurrquant/defi-core";
+var masterchefAbi = parseAbi10([
   "function deposit(uint256 pid, uint256 amount) external",
   "function withdraw(uint256 pid, uint256 amount) external",
   "function claim(uint256[] calldata pids) external",
@@ -1267,7 +1419,7 @@ var MasterChefAdapter = class {
     this.protocolName = entry.name;
     const masterchef = entry.contracts?.["masterchef"];
     if (!masterchef) {
-      throw new DefiError9("CONTRACT_ERROR", "Missing 'masterchef' contract");
+      throw new DefiError10("CONTRACT_ERROR", "Missing 'masterchef' contract");
     }
     this.masterchef = masterchef;
     this.rpcUrl = rpcUrl;
@@ -1282,7 +1434,7 @@ var MasterChefAdapter = class {
    */
   async buildDeposit(gauge, amount, tokenId) {
     const pid = tokenId ?? 0n;
-    const data = encodeFunctionData9({
+    const data = encodeFunctionData10({
       abi: masterchefAbi,
       functionName: "deposit",
       args: [pid, amount]
@@ -1303,7 +1455,7 @@ var MasterChefAdapter = class {
    */
   async buildWithdraw(gauge, amount) {
     const pid = 0n;
-    const data = encodeFunctionData9({
+    const data = encodeFunctionData10({
       abi: masterchefAbi,
       functionName: "withdraw",
       args: [pid, amount]
@@ -1318,7 +1470,7 @@ var MasterChefAdapter = class {
   }
   /** Withdraw LP tokens specifying a pid explicitly (MasterChef extension beyond IGauge). */
   async buildWithdrawPid(pid, amount) {
-    const data = encodeFunctionData9({
+    const data = encodeFunctionData10({
       abi: masterchefAbi,
       functionName: "withdraw",
       args: [pid, amount]
@@ -1334,7 +1486,7 @@ var MasterChefAdapter = class {
   /** Claim pending MOE rewards. IGauge interface provides no pid — defaults to pid=0. */
   async buildClaimRewards(gauge) {
     const pid = 0n;
-    const data = encodeFunctionData9({
+    const data = encodeFunctionData10({
       abi: masterchefAbi,
       functionName: "claim",
       args: [[pid]]
@@ -1349,7 +1501,7 @@ var MasterChefAdapter = class {
   }
   /** Claim pending MOE rewards for a specific pid (MasterChef extension beyond IGauge). */
   async buildClaimRewardsPid(pid) {
-    const data = encodeFunctionData9({
+    const data = encodeFunctionData10({
       abi: masterchefAbi,
       functionName: "claim",
       args: [[pid]]
@@ -1365,9 +1517,9 @@ var MasterChefAdapter = class {
   /** Get pending MOE rewards for a user. Requires rpcUrl. */
   async getPendingRewards(_gauge, user) {
     if (!this.rpcUrl) {
-      throw DefiError9.unsupported(`[${this.protocolName}] getPendingRewards requires RPC`);
+      throw DefiError10.unsupported(`[${this.protocolName}] getPendingRewards requires RPC`);
     }
-    const client = createPublicClient5({ transport: http5(this.rpcUrl) });
+    const client = createPublicClient6({ transport: http6(this.rpcUrl) });
     const rewards = await client.readContract({
       address: this.masterchef,
       abi: masterchefAbi,
@@ -1384,23 +1536,23 @@ var MasterChefAdapter = class {
 
 // src/dex/merchant_moe_lb.ts
 import {
-  encodeFunctionData as encodeFunctionData10,
+  encodeFunctionData as encodeFunctionData11,
   decodeFunctionResult as decodeFunctionResult2,
-  parseAbi as parseAbi10,
-  createPublicClient as createPublicClient6,
-  http as http6
+  parseAbi as parseAbi11,
+  createPublicClient as createPublicClient7,
+  http as http7
 } from "viem";
-import { DefiError as DefiError10, multicallRead as multicallRead2 } from "@hypurrquant/defi-core";
-var lbRouterAbi = parseAbi10([
+import { DefiError as DefiError11, multicallRead as multicallRead2 } from "@hypurrquant/defi-core";
+var lbRouterAbi = parseAbi11([
   "struct LiquidityParameters { address tokenX; address tokenY; uint256 binStep; uint256 amountX; uint256 amountY; uint256 amountXMin; uint256 amountYMin; uint256 activeIdDesired; uint256 idSlippage; int256[] deltaIds; uint256[] distributionX; uint256[] distributionY; address to; address refundTo; uint256 deadline; }",
   "function addLiquidity(LiquidityParameters calldata liquidityParameters) external returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] memory depositIds, uint256[] memory liquidityMinted)",
   "function removeLiquidity(address tokenX, address tokenY, uint16 binStep, uint256 amountXMin, uint256 amountYMin, uint256[] memory ids, uint256[] memory amounts, address to, uint256 deadline) external returns (uint256 amountX, uint256 amountY)"
 ]);
-var lbFactoryAbi = parseAbi10([
+var lbFactoryAbi = parseAbi11([
   "function getNumberOfLBPairs() external view returns (uint256)",
   "function getLBPairAtIndex(uint256 index) external view returns (address)"
 ]);
-var lbPairAbi = parseAbi10([
+var lbPairAbi = parseAbi11([
   "function getLBHooksParameters() external view returns (bytes32)",
   "function getActiveId() external view returns (uint24)",
   "function getBinStep() external view returns (uint16)",
@@ -1409,7 +1561,7 @@ var lbPairAbi = parseAbi10([
   "function balanceOf(address account, uint256 id) external view returns (uint256)",
   "function balanceOfBatch(address[] calldata accounts, uint256[] calldata ids) external view returns (uint256[] memory)"
 ]);
-var lbRewarderAbi = parseAbi10([
+var lbRewarderAbi = parseAbi11([
   "function getRewardToken() external view returns (address)",
   "function getRewardedRange() external view returns (uint256 minBinId, uint256 maxBinId)",
   "function getPendingRewards(address user, uint256[] calldata ids) external view returns (uint256 pendingRewards)",
@@ -1419,28 +1571,28 @@ var lbRewarderAbi = parseAbi10([
   "function getLBPair() external view returns (address)",
   "function getMasterChef() external view returns (address)"
 ]);
-var masterChefAbi = parseAbi10([
+var masterChefAbi = parseAbi11([
   "function getMoePerSecond() external view returns (uint256)",
   "function getTreasuryShare() external view returns (uint256)",
   "function getStaticShare() external view returns (uint256)",
   "function getVeMoe() external view returns (address)"
 ]);
-var veMoeAbi = parseAbi10([
+var veMoeAbi = parseAbi11([
   "function getWeight(uint256 pid) external view returns (uint256)",
   "function getTotalWeight() external view returns (uint256)",
   "function getTopPoolIds() external view returns (uint256[] memory)"
 ]);
-var lbPairBinAbi = parseAbi10([
+var lbPairBinAbi = parseAbi11([
   "function getBin(uint24 id) external view returns (uint128 reserveX, uint128 reserveY)",
   "function getActiveId() external view returns (uint24)"
 ]);
-var lbQuoterAbi2 = parseAbi10([
+var lbQuoterAbi2 = parseAbi11([
   "function findBestPathFromAmountIn(address[] calldata route, uint128 amountIn) external view returns ((address[] route, address[] pairs, uint256[] binSteps, uint256[] versions, uint128[] amounts, uint128[] virtualAmountsWithoutSlippage, uint128[] fees))"
 ]);
-var erc20Abi = parseAbi10([
+var erc20Abi = parseAbi11([
   "function symbol() external view returns (string)"
 ]);
-var _addressAbi = parseAbi10(["function f() external view returns (address)"]);
+var _addressAbi = parseAbi11(["function f() external view returns (address)"]);
 function decodeAddressResult(data) {
   if (!data) return null;
   try {
@@ -1449,7 +1601,7 @@ function decodeAddressResult(data) {
     return null;
   }
 }
-var _uint256Abi = parseAbi10(["function f() external view returns (uint256)"]);
+var _uint256Abi = parseAbi11(["function f() external view returns (uint256)"]);
 function decodeUint256Result(data) {
   if (!data) return null;
   try {
@@ -1458,7 +1610,7 @@ function decodeUint256Result(data) {
     return null;
   }
 }
-var _boolAbi = parseAbi10(["function f() external view returns (bool)"]);
+var _boolAbi = parseAbi11(["function f() external view returns (bool)"]);
 function decodeBoolResult(data) {
   if (!data) return null;
   try {
@@ -1475,7 +1627,7 @@ function decodeStringResult(data) {
     return "?";
   }
 }
-var _rangeAbi = parseAbi10(["function f() external view returns (uint256 minBinId, uint256 maxBinId)"]);
+var _rangeAbi = parseAbi11(["function f() external view returns (uint256 minBinId, uint256 maxBinId)"]);
 function decodeRangeResult(data) {
   if (!data) return null;
   try {
@@ -1484,7 +1636,7 @@ function decodeRangeResult(data) {
     return null;
   }
 }
-var _binAbi = parseAbi10(["function f() external view returns (uint128 reserveX, uint128 reserveY)"]);
+var _binAbi = parseAbi11(["function f() external view returns (uint128 reserveX, uint128 reserveY)"]);
 function decodeBinResult(data) {
   if (!data) return null;
   try {
@@ -1493,7 +1645,7 @@ function decodeBinResult(data) {
     return null;
   }
 }
-var _uint256ArrayAbi = parseAbi10(["function f() external view returns (uint256[] memory)"]);
+var _uint256ArrayAbi = parseAbi11(["function f() external view returns (uint256[] memory)"]);
 function decodeUint256ArrayResult(data) {
   if (!data) return null;
   try {
@@ -1551,11 +1703,11 @@ var MerchantMoeLBAdapter = class {
     this.protocolName = entry.name;
     const lbRouter = entry.contracts?.["lb_router"];
     if (!lbRouter) {
-      throw new DefiError10("CONTRACT_ERROR", "Missing 'lb_router' contract address");
+      throw new DefiError11("CONTRACT_ERROR", "Missing 'lb_router' contract address");
     }
     const lbFactory = entry.contracts?.["lb_factory"];
     if (!lbFactory) {
-      throw new DefiError10("CONTRACT_ERROR", "Missing 'lb_factory' contract address");
+      throw new DefiError11("CONTRACT_ERROR", "Missing 'lb_factory' contract address");
     }
     this.lbRouter = lbRouter;
     this.lbFactory = lbFactory;
@@ -1569,7 +1721,7 @@ var MerchantMoeLBAdapter = class {
   }
   requireRpc() {
     if (!this.rpcUrl) {
-      throw DefiError10.rpcError(`[${this.protocolName}] RPC URL required`);
+      throw DefiError11.rpcError(`[${this.protocolName}] RPC URL required`);
     }
     return this.rpcUrl;
   }
@@ -1583,7 +1735,7 @@ var MerchantMoeLBAdapter = class {
     let activeIdDesired = params.activeIdDesired;
     if (activeIdDesired === void 0) {
       const rpcUrl = this.requireRpc();
-      const client = createPublicClient6({ transport: http6(rpcUrl) });
+      const client = createPublicClient7({ transport: http7(rpcUrl) });
       const activeId = await client.readContract({
         address: params.pool,
         abi: lbPairAbi,
@@ -1596,7 +1748,7 @@ var MerchantMoeLBAdapter = class {
       deltaIds.push(d);
     }
     const { distributionX, distributionY } = buildUniformDistribution(deltaIds);
-    const data = encodeFunctionData10({
+    const data = encodeFunctionData11({
       abi: lbRouterAbi,
       functionName: "addLiquidity",
       args: [
@@ -1636,7 +1788,7 @@ var MerchantMoeLBAdapter = class {
    */
   async buildRemoveLiquidity(params) {
     const deadline = params.deadline ?? BigInt("18446744073709551615");
-    const data = encodeFunctionData10({
+    const data = encodeFunctionData11({
       abi: lbRouterAbi,
       functionName: "removeLiquidity",
       args: [
@@ -1665,7 +1817,7 @@ var MerchantMoeLBAdapter = class {
    */
   async autoDetectBins(pool) {
     const rpcUrl = this.requireRpc();
-    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const client = createPublicClient7({ transport: http7(rpcUrl) });
     const hooksParams = await client.readContract({
       address: pool,
       abi: lbPairAbi,
@@ -1700,7 +1852,7 @@ var MerchantMoeLBAdapter = class {
    */
   async getPendingRewards(user, pool, binIds) {
     const rpcUrl = this.requireRpc();
-    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const client = createPublicClient7({ transport: http7(rpcUrl) });
     const hooksParams = await client.readContract({
       address: pool,
       abi: lbPairAbi,
@@ -1749,7 +1901,7 @@ var MerchantMoeLBAdapter = class {
    */
   async buildClaimRewards(user, pool, binIds) {
     const rpcUrl = this.requireRpc();
-    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const client = createPublicClient7({ transport: http7(rpcUrl) });
     const hooksParams = await client.readContract({
       address: pool,
       abi: lbPairAbi,
@@ -1757,7 +1909,7 @@ var MerchantMoeLBAdapter = class {
     });
     const rewarder = extractRewarderAddress(hooksParams);
     if (!rewarder) {
-      throw new DefiError10("CONTRACT_ERROR", `[${this.protocolName}] Pool ${pool} has no active rewarder`);
+      throw new DefiError11("CONTRACT_ERROR", `[${this.protocolName}] Pool ${pool} has no active rewarder`);
     }
     let resolvedBinIds = binIds;
     if (!resolvedBinIds || resolvedBinIds.length === 0) {
@@ -1771,7 +1923,7 @@ var MerchantMoeLBAdapter = class {
       resolvedBinIds = [];
       for (let b = min; b <= max; b++) resolvedBinIds.push(b);
     }
-    const data = encodeFunctionData10({
+    const data = encodeFunctionData11({
       abi: lbRewarderAbi,
       functionName: "claim",
       args: [user, resolvedBinIds.map(BigInt)]
@@ -1799,7 +1951,7 @@ var MerchantMoeLBAdapter = class {
    */
   async discoverRewardedPools() {
     const rpcUrl = this.requireRpc();
-    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const client = createPublicClient7({ transport: http7(rpcUrl) });
     const pairCount = await client.readContract({
       address: this.lbFactory,
       abi: lbFactoryAbi,
@@ -1809,14 +1961,14 @@ var MerchantMoeLBAdapter = class {
     if (count === 0) return [];
     const batch1Calls = Array.from({ length: count }, (_, i) => [
       this.lbFactory,
-      encodeFunctionData10({ abi: lbFactoryAbi, functionName: "getLBPairAtIndex", args: [BigInt(i)] })
+      encodeFunctionData11({ abi: lbFactoryAbi, functionName: "getLBPairAtIndex", args: [BigInt(i)] })
     ]);
     const batch1Results = await multicallRead2(rpcUrl, batch1Calls);
     const pairAddresses = batch1Results.map((r) => decodeAddressResult(r)).filter((a) => a !== null);
     if (pairAddresses.length === 0) return [];
     const batch2Calls = pairAddresses.map((pair) => [
       pair,
-      encodeFunctionData10({ abi: lbPairAbi, functionName: "getLBHooksParameters" })
+      encodeFunctionData11({ abi: lbPairAbi, functionName: "getLBHooksParameters" })
     ]);
     const batch2Results = await multicallRead2(rpcUrl, batch2Calls);
     const rewardedPairs = [];
@@ -1825,7 +1977,7 @@ var MerchantMoeLBAdapter = class {
       if (!raw) continue;
       let hooksBytes;
       try {
-        const _bytes32Abi = parseAbi10(["function f() external view returns (bytes32)"]);
+        const _bytes32Abi = parseAbi11(["function f() external view returns (bytes32)"]);
         hooksBytes = decodeFunctionResult2({ abi: _bytes32Abi, functionName: "f", data: raw });
       } catch {
         continue;
@@ -1838,17 +1990,17 @@ var MerchantMoeLBAdapter = class {
     if (rewardedPairs.length === 0) return [];
     const batch3Calls = [];
     for (const { rewarder } of rewardedPairs) {
-      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "isStopped" })]);
-      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getRewardedRange" })]);
-      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getRewardToken" })]);
-      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getPid" })]);
-      batch3Calls.push([rewarder, encodeFunctionData10({ abi: lbRewarderAbi, functionName: "getMasterChef" })]);
+      batch3Calls.push([rewarder, encodeFunctionData11({ abi: lbRewarderAbi, functionName: "isStopped" })]);
+      batch3Calls.push([rewarder, encodeFunctionData11({ abi: lbRewarderAbi, functionName: "getRewardedRange" })]);
+      batch3Calls.push([rewarder, encodeFunctionData11({ abi: lbRewarderAbi, functionName: "getRewardToken" })]);
+      batch3Calls.push([rewarder, encodeFunctionData11({ abi: lbRewarderAbi, functionName: "getPid" })]);
+      batch3Calls.push([rewarder, encodeFunctionData11({ abi: lbRewarderAbi, functionName: "getMasterChef" })]);
     }
     const batch3Results = await multicallRead2(rpcUrl, batch3Calls);
     const batch4aCalls = [];
     for (const { pool } of rewardedPairs) {
-      batch4aCalls.push([pool, encodeFunctionData10({ abi: lbPairAbi, functionName: "getTokenX" })]);
-      batch4aCalls.push([pool, encodeFunctionData10({ abi: lbPairAbi, functionName: "getTokenY" })]);
+      batch4aCalls.push([pool, encodeFunctionData11({ abi: lbPairAbi, functionName: "getTokenX" })]);
+      batch4aCalls.push([pool, encodeFunctionData11({ abi: lbPairAbi, functionName: "getTokenY" })]);
     }
     const batch4aResults = await multicallRead2(rpcUrl, batch4aCalls);
     const tokenXAddresses = [];
@@ -1862,7 +2014,7 @@ var MerchantMoeLBAdapter = class {
     );
     const batch4bCalls = uniqueTokens.map((token) => [
       token,
-      encodeFunctionData10({ abi: erc20Abi, functionName: "symbol" })
+      encodeFunctionData11({ abi: erc20Abi, functionName: "symbol" })
     ]);
     const batch4bResults = await multicallRead2(rpcUrl, batch4bCalls);
     const symbolMap = /* @__PURE__ */ new Map();
@@ -1893,11 +2045,11 @@ var MerchantMoeLBAdapter = class {
         functionName: "getVeMoe"
       });
       const batch5Calls = [
-        [masterChefAddr, encodeFunctionData10({ abi: masterChefAbi, functionName: "getMoePerSecond" })],
-        [masterChefAddr, encodeFunctionData10({ abi: masterChefAbi, functionName: "getTreasuryShare" })],
-        [masterChefAddr, encodeFunctionData10({ abi: masterChefAbi, functionName: "getStaticShare" })],
-        [veMoeAddr, encodeFunctionData10({ abi: veMoeAbi, functionName: "getTotalWeight" })],
-        [veMoeAddr, encodeFunctionData10({ abi: veMoeAbi, functionName: "getTopPoolIds" })]
+        [masterChefAddr, encodeFunctionData11({ abi: masterChefAbi, functionName: "getMoePerSecond" })],
+        [masterChefAddr, encodeFunctionData11({ abi: masterChefAbi, functionName: "getTreasuryShare" })],
+        [masterChefAddr, encodeFunctionData11({ abi: masterChefAbi, functionName: "getStaticShare" })],
+        [veMoeAddr, encodeFunctionData11({ abi: veMoeAbi, functionName: "getTotalWeight" })],
+        [veMoeAddr, encodeFunctionData11({ abi: veMoeAbi, functionName: "getTopPoolIds" })]
       ];
       const batch5Results = await multicallRead2(rpcUrl, batch5Calls);
       const moePerSecRaw = decodeUint256Result(batch5Results[0] ?? null) ?? 0n;
@@ -1914,7 +2066,7 @@ var MerchantMoeLBAdapter = class {
     if (veMoeAddr && rewardedPairs.length > 0) {
       const batch6Calls = poolData.map((d) => [
         veMoeAddr,
-        encodeFunctionData10({ abi: veMoeAbi, functionName: "getWeight", args: [BigInt(d.pid)] })
+        encodeFunctionData11({ abi: veMoeAbi, functionName: "getWeight", args: [BigInt(d.pid)] })
       ]);
       const batch6Results = await multicallRead2(rpcUrl, batch6Calls);
       for (let i = 0; i < poolData.length; i++) {
@@ -1961,7 +2113,7 @@ var MerchantMoeLBAdapter = class {
     if (binRequests.length > 0) {
       const batch7Calls = binRequests.map(({ poolIdx, binId }) => [
         rewardedPairs[poolIdx].pool,
-        encodeFunctionData10({ abi: lbPairBinAbi, functionName: "getBin", args: [binId] })
+        encodeFunctionData11({ abi: lbPairBinAbi, functionName: "getBin", args: [binId] })
       ]);
       const batch7Results = await multicallRead2(rpcUrl, batch7Calls);
       for (let j = 0; j < binRequests.length; j++) {
@@ -2053,7 +2205,7 @@ var MerchantMoeLBAdapter = class {
    */
   async getUserPositions(user, pool, binIds) {
     const rpcUrl = this.requireRpc();
-    const client = createPublicClient6({ transport: http6(rpcUrl) });
+    const client = createPublicClient7({ transport: http7(rpcUrl) });
     const resolvedBinIds = binIds && binIds.length > 0 ? binIds : await this.autoDetectBins(pool);
     const accounts = resolvedBinIds.map(() => user);
     const ids = resolvedBinIds.map(BigInt);
@@ -2069,28 +2221,40 @@ var MerchantMoeLBAdapter = class {
 
 // src/dex/kittenswap_farming.ts
 import {
-  createPublicClient as createPublicClient7,
-  encodeFunctionData as encodeFunctionData11,
+  createPublicClient as createPublicClient8,
+  decodeAbiParameters as decodeAbiParameters5,
+  encodeFunctionData as encodeFunctionData12,
   encodeAbiParameters,
-  http as http7,
+  http as http8,
   keccak256,
-  parseAbi as parseAbi11
+  parseAbi as parseAbi12
 } from "viem";
-import { DefiError as DefiError11 } from "@hypurrquant/defi-core";
+import { DefiError as DefiError12 } from "@hypurrquant/defi-core";
 var KITTEN_TOKEN = "0x618275f8efe54c2afa87bfb9f210a52f0ff89364";
 var WHYPE_TOKEN = "0x5555555555555555555555555555555555555555";
-var MAX_NONCE_SCAN = 60;
-var farmingCenterAbi = parseAbi11([
+var MULTICALL_BATCH = 50;
+var farmingCenterAbi = parseAbi12([
   "function multicall(bytes[] calldata data) external payable returns (bytes[] memory results)",
   "function enterFarming((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
   "function exitFarming((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
   "function collectRewards((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
   "function claimReward(address rewardToken, address to, uint128 amountRequested) external returns (uint256 reward)"
 ]);
-var eternalFarmingAbi = parseAbi11([
+var positionManagerAbi2 = parseAbi12([
+  "function approveForFarming(uint256 tokenId, bool approve, address farmingAddress) external",
+  "function farmingApprovals(uint256 tokenId) external view returns (address)"
+]);
+var eternalFarmingAbi = parseAbi12([
+  "function numOfIncentives() external view returns (uint256)",
   "function incentives(bytes32 incentiveId) external view returns (uint256 totalReward, uint256 bonusReward, address virtualPoolAddress, uint24 minimalPositionWidth, bool deactivated, address pluginAddress)",
   "function getRewardInfo((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external view returns (uint256 reward, uint256 bonusReward)"
 ]);
+var multicall3Abi = parseAbi12([
+  "struct Call3 { address target; bool allowFailure; bytes callData; }",
+  "struct Result { bool success; bytes returnData; }",
+  "function aggregate3(Call3[] calldata calls) external payable returns (Result[] memory returnData)"
+]);
+var MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
 function incentiveId(key) {
   return keccak256(
     encodeAbiParameters(
@@ -2105,28 +2269,28 @@ function incentiveId(key) {
   );
 }
 function encodeEnterFarming(key, tokenId) {
-  return encodeFunctionData11({
+  return encodeFunctionData12({
     abi: farmingCenterAbi,
     functionName: "enterFarming",
     args: [key, tokenId]
   });
 }
 function encodeExitFarming(key, tokenId) {
-  return encodeFunctionData11({
+  return encodeFunctionData12({
     abi: farmingCenterAbi,
     functionName: "exitFarming",
     args: [key, tokenId]
   });
 }
 function encodeCollectRewards(key, tokenId) {
-  return encodeFunctionData11({
+  return encodeFunctionData12({
     abi: farmingCenterAbi,
     functionName: "collectRewards",
     args: [key, tokenId]
   });
 }
 function encodeClaimReward(rewardToken, to) {
-  return encodeFunctionData11({
+  return encodeFunctionData12({
     abi: farmingCenterAbi,
     functionName: "claimReward",
     args: [rewardToken, to, 2n ** 128n - 1n]
@@ -2134,97 +2298,152 @@ function encodeClaimReward(rewardToken, to) {
   });
 }
 function encodeMulticall(calls) {
-  return encodeFunctionData11({
+  return encodeFunctionData12({
     abi: farmingCenterAbi,
     functionName: "multicall",
     args: [calls]
   });
 }
-var KNOWN_NONCES = {
-  // WHYPE/KITTEN pool
-  "0x71d1fde797e1810711e4c9abcfca6ef04c266196": 33,
-  // WHYPE/USDT0 pool
-  "0x3c1403335d0ca7d0a73c9e775b25514537c2b809": 1,
-  // WHYPE/USDC pool
-  "0x12df9913e9e08453440e3c4b1ae73819160b513e": 43
-};
+var nonceCache = {};
 var KittenSwapFarmingAdapter = class {
   protocolName;
   farmingCenter;
   eternalFarming;
+  positionManager;
   rpcUrl;
-  constructor(protocolName, farmingCenter, eternalFarming, rpcUrl) {
+  constructor(protocolName, farmingCenter, eternalFarming, positionManager, rpcUrl) {
     this.protocolName = protocolName;
     this.farmingCenter = farmingCenter;
     this.eternalFarming = eternalFarming;
+    this.positionManager = positionManager;
     this.rpcUrl = rpcUrl;
   }
   name() {
     return this.protocolName;
   }
   /**
-   * Discover the active IncentiveKey for a given pool by scanning nonces 0–MAX_NONCE_SCAN.
-   * Checks KNOWN_NONCES first for instant resolution.
+   * Discover the active IncentiveKey for a given pool.
+   * 1. Check runtime cache
+   * 2. Read numOfIncentives() for max nonce
+   * 3. Batch-query via Multicall3 in reverse order (newest first)
+   * 4. Return first active (non-deactivated, totalReward > 0) incentive
    */
   async discoverIncentiveKey(pool) {
     const poolLc = pool.toLowerCase();
-    if (poolLc in KNOWN_NONCES) {
-      const nonce = KNOWN_NONCES[poolLc];
+    if (poolLc in nonceCache) {
       return {
         rewardToken: KITTEN_TOKEN,
         bonusRewardToken: WHYPE_TOKEN,
         pool,
-        nonce: BigInt(nonce)
+        nonce: nonceCache[poolLc]
       };
     }
-    const client = createPublicClient7({ transport: http7(this.rpcUrl) });
-    for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
-      const key = {
+    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
+    const numIncentives = await client.readContract({
+      address: this.eternalFarming,
+      abi: eternalFarmingAbi,
+      functionName: "numOfIncentives"
+    });
+    const maxNonce = Number(numIncentives) - 1;
+    if (maxNonce < 0) return null;
+    const keys = [];
+    for (let n = maxNonce; n >= 0; n--) {
+      keys.push({
         rewardToken: KITTEN_TOKEN,
         bonusRewardToken: WHYPE_TOKEN,
         pool,
         nonce: BigInt(n)
-      };
-      try {
-        const result = await client.readContract({
-          address: this.eternalFarming,
+      });
+    }
+    for (let i = 0; i < keys.length; i += MULTICALL_BATCH) {
+      const batch = keys.slice(i, i + MULTICALL_BATCH);
+      const calls = batch.map((key) => ({
+        target: this.eternalFarming,
+        allowFailure: true,
+        callData: encodeFunctionData12({
           abi: eternalFarmingAbi,
           functionName: "incentives",
           args: [incentiveId(key)]
-        });
-        const totalReward = result[0];
-        const deactivated = result[4];
+        })
+      }));
+      const results = await client.readContract({
+        address: MULTICALL3,
+        abi: multicall3Abi,
+        functionName: "aggregate3",
+        args: [calls]
+      });
+      for (let j = 0; j < results.length; j++) {
+        const r = results[j];
+        if (!r.success || r.returnData.length < 66) continue;
+        const decoded = decodeAbiParameters5(
+          [
+            { name: "totalReward", type: "uint256" },
+            { name: "bonusReward", type: "uint256" },
+            { name: "virtualPoolAddress", type: "address" },
+            { name: "minimalPositionWidth", type: "uint24" },
+            { name: "deactivated", type: "bool" },
+            { name: "pluginAddress", type: "address" }
+          ],
+          r.returnData
+        );
+        const totalReward = decoded[0];
+        const deactivated = decoded[4];
         if (totalReward > 0n && !deactivated) {
+          const key = batch[j];
+          nonceCache[poolLc] = key.nonce;
           return key;
         }
-      } catch {
       }
     }
     return null;
   }
   /**
-   * Build a multicall tx that enters farming for a position NFT.
-   * Pattern: multicall([enterFarming(key, tokenId), claimReward(KITTEN, owner, max), claimReward(WHYPE, owner, max)])
+   * Build approveForFarming tx on the PositionManager.
+   * Required before enterFarming if not already approved.
    */
-  async buildEnterFarming(tokenId, pool, owner) {
+  async buildApproveForFarming(tokenId) {
+    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
+    const currentApproval = await client.readContract({
+      address: this.positionManager,
+      abi: positionManagerAbi2,
+      functionName: "farmingApprovals",
+      args: [tokenId]
+    });
+    if (currentApproval.toLowerCase() === this.farmingCenter.toLowerCase()) {
+      return null;
+    }
+    return {
+      description: `[${this.protocolName}] Approve NFT #${tokenId} for farming`,
+      to: this.positionManager,
+      data: encodeFunctionData12({
+        abi: positionManagerAbi2,
+        functionName: "approveForFarming",
+        args: [tokenId, true, this.farmingCenter]
+      }),
+      value: 0n,
+      gas_estimate: 6e4
+    };
+  }
+  /**
+   * Build enterFarming tx for a position NFT.
+   * Checks farming approval first and returns pre_txs if needed.
+   */
+  async buildEnterFarming(tokenId, pool, _owner) {
     const key = await this.discoverIncentiveKey(pool);
     if (!key) {
-      throw new DefiError11(
+      throw new DefiError12(
         "CONTRACT_ERROR",
         `[${this.protocolName}] No active incentive found for pool ${pool}`
       );
     }
-    const calls = [
-      encodeEnterFarming(key, tokenId),
-      encodeClaimReward(KITTEN_TOKEN, owner),
-      encodeClaimReward(WHYPE_TOKEN, owner)
-    ];
+    const approveTx = await this.buildApproveForFarming(tokenId);
     return {
       description: `[${this.protocolName}] Enter farming for NFT #${tokenId} in pool ${pool}`,
       to: this.farmingCenter,
-      data: encodeMulticall(calls),
+      data: encodeEnterFarming(key, tokenId),
       value: 0n,
-      gas_estimate: 4e5
+      gas_estimate: 4e5,
+      pre_txs: approveTx ? [approveTx] : void 0
     };
   }
   /**
@@ -2233,7 +2452,7 @@ var KittenSwapFarmingAdapter = class {
   async buildExitFarming(tokenId, pool) {
     const key = await this.discoverIncentiveKey(pool);
     if (!key) {
-      throw new DefiError11(
+      throw new DefiError12(
         "CONTRACT_ERROR",
         `[${this.protocolName}] No active incentive found for pool ${pool}`
       );
@@ -2253,7 +2472,7 @@ var KittenSwapFarmingAdapter = class {
   async buildCollectRewards(tokenId, pool, owner) {
     const key = await this.discoverIncentiveKey(pool);
     if (!key) {
-      throw new DefiError11(
+      throw new DefiError12(
         "CONTRACT_ERROR",
         `[${this.protocolName}] No active incentive found for pool ${pool}`
       );
@@ -2295,7 +2514,7 @@ var KittenSwapFarmingAdapter = class {
     if (!key) {
       return { reward: 0n, bonusReward: 0n };
     }
-    const client = createPublicClient7({ transport: http7(this.rpcUrl) });
+    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
     const result = await client.readContract({
       address: this.eternalFarming,
       abi: eternalFarmingAbi,
@@ -2306,52 +2525,58 @@ var KittenSwapFarmingAdapter = class {
   }
   /**
    * Discover all pools with active farming incentives.
-   * Iterates KNOWN_NONCES pools and verifies each against the on-chain incentives mapping.
+   * Dynamically scans all nonces (0..numOfIncentives) via Multicall3 and
+   * groups results by pool. Only returns the latest active incentive per pool.
    */
   async discoverFarmingPools() {
-    const client = createPublicClient7({ transport: http7(this.rpcUrl) });
+    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
+    const numIncentives = await client.readContract({
+      address: this.eternalFarming,
+      abi: eternalFarmingAbi,
+      functionName: "numOfIncentives"
+    });
+    const maxNonce = Number(numIncentives) - 1;
+    if (maxNonce < 0) return [];
+    const knownPools = [
+      "0x71d1fde797e1810711e4c9abcfca6ef04c266196",
+      // WHYPE/KITTEN
+      "0x3c1403335d0ca7d0a73c9e775b25514537c2b809",
+      // WHYPE/USDT0
+      "0x12df9913e9e08453440e3c4b1ae73819160b513e"
+      // WHYPE/USDC
+    ];
     const results = [];
-    for (const [poolAddr, nonce] of Object.entries(KNOWN_NONCES)) {
-      const pool = poolAddr;
-      const key = {
-        rewardToken: KITTEN_TOKEN,
-        bonusRewardToken: WHYPE_TOKEN,
+    for (const pool of knownPools) {
+      const key = await this.discoverIncentiveKey(pool);
+      if (!key) continue;
+      const iid = incentiveId(key);
+      const incentive = await client.readContract({
+        address: this.eternalFarming,
+        abi: eternalFarmingAbi,
+        functionName: "incentives",
+        args: [iid]
+      });
+      results.push({
         pool,
-        nonce: BigInt(nonce)
-      };
-      try {
-        const incentive = await client.readContract({
-          address: this.eternalFarming,
-          abi: eternalFarmingAbi,
-          functionName: "incentives",
-          args: [incentiveId(key)]
-        });
-        const totalReward = incentive[0];
-        const bonusReward = incentive[1];
-        const deactivated = incentive[4];
-        results.push({
-          pool,
-          key,
-          totalReward,
-          bonusReward,
-          active: !deactivated && totalReward > 0n
-        });
-      } catch {
-      }
+        key,
+        totalReward: incentive[0],
+        bonusReward: incentive[1],
+        active: !incentive[4] && incentive[0] > 0n
+      });
     }
     return results;
   }
 };
 
 // src/lending/aave_v3.ts
-import { createPublicClient as createPublicClient8, http as http8, parseAbi as parseAbi12, encodeFunctionData as encodeFunctionData12, decodeFunctionResult as decodeFunctionResult3, zeroAddress as zeroAddress5 } from "viem";
+import { createPublicClient as createPublicClient9, http as http9, parseAbi as parseAbi13, encodeFunctionData as encodeFunctionData13, decodeFunctionResult as decodeFunctionResult3, zeroAddress as zeroAddress6 } from "viem";
 import {
-  DefiError as DefiError12,
+  DefiError as DefiError13,
   multicallRead as multicallRead3,
   decodeU256,
   InterestRateMode
 } from "@hypurrquant/defi-core";
-var POOL_ABI = parseAbi12([
+var POOL_ABI = parseAbi13([
   "function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
   "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
   "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
@@ -2359,27 +2584,27 @@ var POOL_ABI = parseAbi12([
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)"
 ]);
-var ERC20_ABI = parseAbi12([
+var ERC20_ABI = parseAbi13([
   "function totalSupply() external view returns (uint256)"
 ]);
-var INCENTIVES_ABI = parseAbi12([
+var INCENTIVES_ABI = parseAbi13([
   "function getIncentivesController() external view returns (address)"
 ]);
-var REWARDS_CONTROLLER_ABI = parseAbi12([
+var REWARDS_CONTROLLER_ABI = parseAbi13([
   "function getRewardsByAsset(address asset) external view returns (address[])",
   "function getRewardsData(address asset, address reward) external view returns (uint256 index, uint256 emissionsPerSecond, uint256 lastUpdateTimestamp, uint256 distributionEnd)"
 ]);
-var POOL_PROVIDER_ABI = parseAbi12([
+var POOL_PROVIDER_ABI = parseAbi13([
   "function ADDRESSES_PROVIDER() external view returns (address)"
 ]);
-var ADDRESSES_PROVIDER_ABI = parseAbi12([
+var ADDRESSES_PROVIDER_ABI = parseAbi13([
   "function getPriceOracle() external view returns (address)"
 ]);
-var ORACLE_ABI = parseAbi12([
+var ORACLE_ABI = parseAbi13([
   "function getAssetPrice(address asset) external view returns (uint256)",
   "function BASE_CURRENCY_UNIT() external view returns (uint256)"
 ]);
-var ERC20_DECIMALS_ABI = parseAbi12([
+var ERC20_DECIMALS_ABI = parseAbi13([
   "function decimals() external view returns (uint8)"
 ]);
 function u256ToF64(v) {
@@ -2435,14 +2660,14 @@ var AaveV3Adapter = class {
     this.protocolName = entry.name;
     this.rpcUrl = rpcUrl;
     const pool = entry.contracts?.["pool"];
-    if (!pool) throw DefiError12.contractError(`[${entry.name}] Missing 'pool' contract address`);
+    if (!pool) throw DefiError13.contractError(`[${entry.name}] Missing 'pool' contract address`);
     this.pool = pool;
   }
   name() {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: POOL_ABI,
       functionName: "supply",
       args: [params.asset, params.amount, params.on_behalf_of, 0]
@@ -2458,7 +2683,7 @@ var AaveV3Adapter = class {
   }
   async buildBorrow(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode.Stable ? 1n : 2n;
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: POOL_ABI,
       functionName: "borrow",
       args: [params.asset, params.amount, rateMode, 0, params.on_behalf_of]
@@ -2473,7 +2698,7 @@ var AaveV3Adapter = class {
   }
   async buildRepay(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode.Stable ? 1n : 2n;
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: POOL_ABI,
       functionName: "repay",
       args: [params.asset, params.amount, rateMode, params.on_behalf_of]
@@ -2488,7 +2713,7 @@ var AaveV3Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData12({
+    const data = encodeFunctionData13({
       abi: POOL_ABI,
       functionName: "withdraw",
       args: [params.asset, params.amount, params.to]
@@ -2502,8 +2727,8 @@ var AaveV3Adapter = class {
     };
   }
   async getRates(asset) {
-    if (!this.rpcUrl) throw DefiError12.rpcError("No RPC URL configured");
-    const reserveCallData = encodeFunctionData12({
+    if (!this.rpcUrl) throw DefiError13.rpcError("No RPC URL configured");
+    const reserveCallData = encodeFunctionData13({
       abi: POOL_ABI,
       functionName: "getReserveData",
       args: [asset]
@@ -2511,11 +2736,11 @@ var AaveV3Adapter = class {
     const [reserveRaw] = await multicallRead3(this.rpcUrl, [
       [this.pool, reserveCallData]
     ]).catch((e) => {
-      throw DefiError12.rpcError(`[${this.protocolName}] getReserveData failed: ${e}`);
+      throw DefiError13.rpcError(`[${this.protocolName}] getReserveData failed: ${e}`);
     });
     const reserveDecoded = decodeReserveData(reserveRaw ?? null);
     if (!reserveDecoded) {
-      throw DefiError12.rpcError(`[${this.protocolName}] getReserveData returned no data`);
+      throw DefiError13.rpcError(`[${this.protocolName}] getReserveData returned no data`);
     }
     const result = reserveDecoded;
     const RAY = 1e27;
@@ -2530,8 +2755,8 @@ var AaveV3Adapter = class {
     const aTokenAddress = result[8];
     const variableDebtTokenAddress = result[10];
     const [supplyRaw, borrowRaw] = await multicallRead3(this.rpcUrl, [
-      [aTokenAddress, encodeFunctionData12({ abi: ERC20_ABI, functionName: "totalSupply" })],
-      [variableDebtTokenAddress, encodeFunctionData12({ abi: ERC20_ABI, functionName: "totalSupply" })]
+      [aTokenAddress, encodeFunctionData13({ abi: ERC20_ABI, functionName: "totalSupply" })],
+      [variableDebtTokenAddress, encodeFunctionData13({ abi: ERC20_ABI, functionName: "totalSupply" })]
     ]);
     const totalSupply = decodeU256(supplyRaw ?? null);
     const totalBorrow = decodeU256(borrowRaw ?? null);
@@ -2542,24 +2767,24 @@ var AaveV3Adapter = class {
     const borrowEmissions = [];
     try {
       const [controllerRaw] = await multicallRead3(this.rpcUrl, [
-        [aTokenAddress, encodeFunctionData12({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
+        [aTokenAddress, encodeFunctionData13({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
       ]);
       const controllerAddr = decodeAddress(controllerRaw ?? null);
-      if (controllerAddr && controllerAddr !== zeroAddress5) {
+      if (controllerAddr && controllerAddr !== zeroAddress6) {
         const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead3(this.rpcUrl, [
-          [controllerAddr, encodeFunctionData12({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
-          [controllerAddr, encodeFunctionData12({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
+          [controllerAddr, encodeFunctionData13({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
+          [controllerAddr, encodeFunctionData13({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
         ]);
         const supplyRewards = decodeAddressArray(supplyRewardsRaw ?? null);
         const borrowRewards = decodeAddressArray(borrowRewardsRaw ?? null);
         const rewardsDataCalls = [
           ...supplyRewards.map((reward) => [
             controllerAddr,
-            encodeFunctionData12({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [aTokenAddress, reward] })
+            encodeFunctionData13({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [aTokenAddress, reward] })
           ]),
           ...borrowRewards.map((reward) => [
             controllerAddr,
-            encodeFunctionData12({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [variableDebtTokenAddress, reward] })
+            encodeFunctionData13({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsData", args: [variableDebtTokenAddress, reward] })
           ])
         ];
         if (rewardsDataCalls.length > 0) {
@@ -2591,19 +2816,19 @@ var AaveV3Adapter = class {
     if ((hasSupplyRewards || hasBorrowRewards) && totalSupply > 0n) {
       try {
         const [providerRaw] = await multicallRead3(this.rpcUrl, [
-          [this.pool, encodeFunctionData12({ abi: POOL_PROVIDER_ABI, functionName: "ADDRESSES_PROVIDER" })]
+          [this.pool, encodeFunctionData13({ abi: POOL_PROVIDER_ABI, functionName: "ADDRESSES_PROVIDER" })]
         ]);
         const providerAddr = decodeAddress(providerRaw ?? null);
         if (!providerAddr) throw new Error("No provider address");
         const [oracleRaw] = await multicallRead3(this.rpcUrl, [
-          [providerAddr, encodeFunctionData12({ abi: ADDRESSES_PROVIDER_ABI, functionName: "getPriceOracle" })]
+          [providerAddr, encodeFunctionData13({ abi: ADDRESSES_PROVIDER_ABI, functionName: "getPriceOracle" })]
         ]);
         const oracleAddr = decodeAddress(oracleRaw ?? null);
         if (!oracleAddr) throw new Error("No oracle address");
         const [assetPriceRaw, baseCurrencyUnitRaw, assetDecimalsRaw] = await multicallRead3(this.rpcUrl, [
-          [oracleAddr, encodeFunctionData12({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] })],
-          [oracleAddr, encodeFunctionData12({ abi: ORACLE_ABI, functionName: "BASE_CURRENCY_UNIT" })],
-          [asset, encodeFunctionData12({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
+          [oracleAddr, encodeFunctionData13({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [asset] })],
+          [oracleAddr, encodeFunctionData13({ abi: ORACLE_ABI, functionName: "BASE_CURRENCY_UNIT" })],
+          [asset, encodeFunctionData13({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
         ]);
         const assetPrice = decodeU256(assetPriceRaw ?? null);
         const baseCurrencyUnit = decodeU256(baseCurrencyUnitRaw ?? null);
@@ -2613,8 +2838,8 @@ var AaveV3Adapter = class {
         const assetDecimalsDivisor = 10 ** assetDecimals;
         const allRewardTokens = Array.from(/* @__PURE__ */ new Set([...supplyRewardTokens, ...borrowRewardTokens]));
         const rewardPriceCalls = allRewardTokens.flatMap((token) => [
-          [oracleAddr, encodeFunctionData12({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [token] })],
-          [token, encodeFunctionData12({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
+          [oracleAddr, encodeFunctionData13({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [token] })],
+          [token, encodeFunctionData13({ abi: ERC20_DECIMALS_ABI, functionName: "decimals" })]
         ]);
         const rewardPriceResults = rewardPriceCalls.length > 0 ? await multicallRead3(this.rpcUrl, rewardPriceCalls) : [];
         const rewardPriceMap = /* @__PURE__ */ new Map();
@@ -2686,15 +2911,15 @@ var AaveV3Adapter = class {
     };
   }
   async getUserPosition(user) {
-    if (!this.rpcUrl) throw DefiError12.rpcError("No RPC URL configured");
-    const client = createPublicClient8({ transport: http8(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError13.rpcError("No RPC URL configured");
+    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
     const result = await client.readContract({
       address: this.pool,
       abi: POOL_ABI,
       functionName: "getUserAccountData",
       args: [user]
     }).catch((e) => {
-      throw DefiError12.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
+      throw DefiError13.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
     });
     const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = result;
     const MAX_UINT256 = 2n ** 256n - 1n;
@@ -2702,8 +2927,8 @@ var AaveV3Adapter = class {
     const collateralUsd = u256ToF64(totalCollateralBase) / 1e8;
     const debtUsd = u256ToF64(totalDebtBase) / 1e8;
     const ltvBps = u256ToF64(ltv);
-    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress5, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-    const borrows = debtUsd > 0 ? [{ asset: zeroAddress5, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress6, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
+    const borrows = debtUsd > 0 ? [{ asset: zeroAddress6, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
     return {
       protocol: this.protocolName,
       user,
@@ -2716,12 +2941,12 @@ var AaveV3Adapter = class {
 };
 
 // src/lending/aave_v2.ts
-import { createPublicClient as createPublicClient9, http as http9, parseAbi as parseAbi13, encodeFunctionData as encodeFunctionData13, zeroAddress as zeroAddress6 } from "viem";
+import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, zeroAddress as zeroAddress7 } from "viem";
 import {
-  DefiError as DefiError13,
+  DefiError as DefiError14,
   InterestRateMode as InterestRateMode2
 } from "@hypurrquant/defi-core";
-var POOL_ABI2 = parseAbi13([
+var POOL_ABI2 = parseAbi14([
   "function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
   "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
   "function repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) external returns (uint256)",
@@ -2734,7 +2959,7 @@ var POOL_ABI2 = parseAbi13([
   //            [9]=variableDebtTokenAddress, [10]=interestRateStrategyAddress, [11]=id
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 variableBorrowIndex, uint128 currentLiquidityRate, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint8 id)"
 ]);
-var ERC20_ABI2 = parseAbi13([
+var ERC20_ABI2 = parseAbi14([
   "function totalSupply() external view returns (uint256)"
 ]);
 function u256ToF642(v) {
@@ -2750,14 +2975,14 @@ var AaveV2Adapter = class {
     this.protocolName = entry.name;
     this.rpcUrl = rpcUrl;
     const pool = entry.contracts?.["pool"];
-    if (!pool) throw DefiError13.contractError(`[${entry.name}] Missing 'pool' contract address`);
+    if (!pool) throw DefiError14.contractError(`[${entry.name}] Missing 'pool' contract address`);
     this.pool = pool;
   }
   name() {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: POOL_ABI2,
       functionName: "deposit",
       args: [params.asset, params.amount, params.on_behalf_of, 0]
@@ -2773,7 +2998,7 @@ var AaveV2Adapter = class {
   }
   async buildBorrow(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode2.Stable ? 1n : 2n;
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: POOL_ABI2,
       functionName: "borrow",
       args: [params.asset, params.amount, rateMode, 0, params.on_behalf_of]
@@ -2788,7 +3013,7 @@ var AaveV2Adapter = class {
   }
   async buildRepay(params) {
     const rateMode = params.interest_rate_mode === InterestRateMode2.Stable ? 1n : 2n;
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: POOL_ABI2,
       functionName: "repay",
       args: [params.asset, params.amount, rateMode, params.on_behalf_of]
@@ -2803,7 +3028,7 @@ var AaveV2Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData13({
+    const data = encodeFunctionData14({
       abi: POOL_ABI2,
       functionName: "withdraw",
       args: [params.asset, params.amount, params.to]
@@ -2817,15 +3042,15 @@ var AaveV2Adapter = class {
     };
   }
   async getRates(asset) {
-    if (!this.rpcUrl) throw DefiError13.rpcError("No RPC URL configured");
-    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError14.rpcError("No RPC URL configured");
+    const client = createPublicClient10({ transport: http10(this.rpcUrl) });
     const result = await client.readContract({
       address: this.pool,
       abi: POOL_ABI2,
       functionName: "getReserveData",
       args: [asset]
     }).catch((e) => {
-      throw DefiError13.rpcError(`[${this.protocolName}] getReserveData failed: ${e}`);
+      throw DefiError14.rpcError(`[${this.protocolName}] getReserveData failed: ${e}`);
     });
     const RAY = 1e27;
     const SECONDS_PER_YEAR4 = 31536e3;
@@ -2863,15 +3088,15 @@ var AaveV2Adapter = class {
     };
   }
   async getUserPosition(user) {
-    if (!this.rpcUrl) throw DefiError13.rpcError("No RPC URL configured");
-    const client = createPublicClient9({ transport: http9(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError14.rpcError("No RPC URL configured");
+    const client = createPublicClient10({ transport: http10(this.rpcUrl) });
     const result = await client.readContract({
       address: this.pool,
       abi: POOL_ABI2,
       functionName: "getUserAccountData",
       args: [user]
     }).catch((e) => {
-      throw DefiError13.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
+      throw DefiError14.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
     });
     const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = result;
     const MAX_UINT256 = 2n ** 256n - 1n;
@@ -2879,8 +3104,8 @@ var AaveV2Adapter = class {
     const collateralUsd = u256ToF642(totalCollateralBase) / 1e18;
     const debtUsd = u256ToF642(totalDebtBase) / 1e18;
     const ltvBps = u256ToF642(ltv);
-    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress6, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-    const borrows = debtUsd > 0 ? [{ asset: zeroAddress6, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress7, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
+    const borrows = debtUsd > 0 ? [{ asset: zeroAddress7, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
     return {
       protocol: this.protocolName,
       user,
@@ -2893,9 +3118,9 @@ var AaveV2Adapter = class {
 };
 
 // src/lending/aave_oracle.ts
-import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14 } from "viem";
-import { DefiError as DefiError14 } from "@hypurrquant/defi-core";
-var ORACLE_ABI2 = parseAbi14([
+import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15 } from "viem";
+import { DefiError as DefiError15 } from "@hypurrquant/defi-core";
+var ORACLE_ABI2 = parseAbi15([
   "function getAssetPrice(address asset) external view returns (uint256)",
   "function getAssetsPrices(address[] calldata assets) external view returns (uint256[] memory)",
   "function BASE_CURRENCY_UNIT() external view returns (uint256)"
@@ -2906,23 +3131,23 @@ var AaveOracleAdapter = class {
   rpcUrl;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
-    if (!rpcUrl) throw DefiError14.rpcError(`[${entry.name}] RPC URL required for oracle`);
+    if (!rpcUrl) throw DefiError15.rpcError(`[${entry.name}] RPC URL required for oracle`);
     this.rpcUrl = rpcUrl;
     const oracle = entry.contracts?.["oracle"];
-    if (!oracle) throw DefiError14.contractError(`[${entry.name}] Missing 'oracle' contract address`);
+    if (!oracle) throw DefiError15.contractError(`[${entry.name}] Missing 'oracle' contract address`);
     this.oracle = oracle;
   }
   name() {
     return this.protocolName;
   }
   async getPrice(asset) {
-    const client = createPublicClient10({ transport: http10(this.rpcUrl) });
+    const client = createPublicClient11({ transport: http11(this.rpcUrl) });
     const baseUnit = await client.readContract({
       address: this.oracle,
       abi: ORACLE_ABI2,
       functionName: "BASE_CURRENCY_UNIT"
     }).catch((e) => {
-      throw DefiError14.rpcError(`[${this.protocolName}] BASE_CURRENCY_UNIT failed: ${e}`);
+      throw DefiError15.rpcError(`[${this.protocolName}] BASE_CURRENCY_UNIT failed: ${e}`);
     });
     const priceVal = await client.readContract({
       address: this.oracle,
@@ -2930,7 +3155,7 @@ var AaveOracleAdapter = class {
       functionName: "getAssetPrice",
       args: [asset]
     }).catch((e) => {
-      throw DefiError14.rpcError(`[${this.protocolName}] getAssetPrice failed: ${e}`);
+      throw DefiError15.rpcError(`[${this.protocolName}] getAssetPrice failed: ${e}`);
     });
     const priceF64 = baseUnit > 0n ? Number(priceVal) / Number(baseUnit) : 0;
     const priceUsd = baseUnit > 0n ? priceVal * 10n ** 18n / baseUnit : 0n;
@@ -2943,13 +3168,13 @@ var AaveOracleAdapter = class {
     };
   }
   async getPrices(assets) {
-    const client = createPublicClient10({ transport: http10(this.rpcUrl) });
+    const client = createPublicClient11({ transport: http11(this.rpcUrl) });
     const baseUnit = await client.readContract({
       address: this.oracle,
       abi: ORACLE_ABI2,
       functionName: "BASE_CURRENCY_UNIT"
     }).catch((e) => {
-      throw DefiError14.rpcError(`[${this.protocolName}] BASE_CURRENCY_UNIT failed: ${e}`);
+      throw DefiError15.rpcError(`[${this.protocolName}] BASE_CURRENCY_UNIT failed: ${e}`);
     });
     const rawPrices = await client.readContract({
       address: this.oracle,
@@ -2957,7 +3182,7 @@ var AaveOracleAdapter = class {
       functionName: "getAssetsPrices",
       args: [assets]
     }).catch((e) => {
-      throw DefiError14.rpcError(`[${this.protocolName}] getAssetsPrices failed: ${e}`);
+      throw DefiError15.rpcError(`[${this.protocolName}] getAssetsPrices failed: ${e}`);
     });
     return rawPrices.map((priceVal, i) => {
       const priceF64 = baseUnit > 0n ? Number(priceVal) / Number(baseUnit) : 0;
@@ -2974,11 +3199,11 @@ var AaveOracleAdapter = class {
 };
 
 // src/lending/compound_v2.ts
-import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData14 } from "viem";
+import { createPublicClient as createPublicClient12, http as http12, parseAbi as parseAbi16, encodeFunctionData as encodeFunctionData15 } from "viem";
 import {
-  DefiError as DefiError15
+  DefiError as DefiError16
 } from "@hypurrquant/defi-core";
-var CTOKEN_ABI = parseAbi15([
+var CTOKEN_ABI = parseAbi16([
   "function supplyRatePerBlock() external view returns (uint256)",
   "function borrowRatePerBlock() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
@@ -2998,14 +3223,14 @@ var CompoundV2Adapter = class {
     this.rpcUrl = rpcUrl;
     const contracts = entry.contracts ?? {};
     const vtoken = contracts["vusdt"] ?? contracts["vusdc"] ?? contracts["vbnb"] ?? contracts["comptroller"];
-    if (!vtoken) throw DefiError15.contractError("Missing vToken or comptroller address");
+    if (!vtoken) throw DefiError16.contractError("Missing vToken or comptroller address");
     this.defaultVtoken = vtoken;
   }
   name() {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: CTOKEN_ABI,
       functionName: "mint",
       args: [params.amount]
@@ -3019,7 +3244,7 @@ var CompoundV2Adapter = class {
     };
   }
   async buildBorrow(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: CTOKEN_ABI,
       functionName: "borrow",
       args: [params.amount]
@@ -3033,7 +3258,7 @@ var CompoundV2Adapter = class {
     };
   }
   async buildRepay(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: CTOKEN_ABI,
       functionName: "repayBorrow",
       args: [params.amount]
@@ -3047,7 +3272,7 @@ var CompoundV2Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData14({
+    const data = encodeFunctionData15({
       abi: CTOKEN_ABI,
       functionName: "redeem",
       args: [params.amount]
@@ -3061,14 +3286,14 @@ var CompoundV2Adapter = class {
     };
   }
   async getRates(asset) {
-    if (!this.rpcUrl) throw DefiError15.rpcError("No RPC URL configured");
-    const client = createPublicClient11({ transport: http11(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError16.rpcError("No RPC URL configured");
+    const client = createPublicClient12({ transport: http12(this.rpcUrl) });
     const [supplyRate, borrowRate, totalSupply, totalBorrows] = await Promise.all([
       client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e) => {
-        throw DefiError15.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`);
+        throw DefiError16.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`);
       }),
       client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "borrowRatePerBlock" }).catch((e) => {
-        throw DefiError15.rpcError(`[${this.protocolName}] borrowRatePerBlock failed: ${e}`);
+        throw DefiError16.rpcError(`[${this.protocolName}] borrowRatePerBlock failed: ${e}`);
       }),
       client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
       client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n)
@@ -3091,18 +3316,18 @@ var CompoundV2Adapter = class {
     };
   }
   async getUserPosition(_user) {
-    throw DefiError15.unsupported(
+    throw DefiError16.unsupported(
       `[${this.protocolName}] User position requires querying individual vToken balances`
     );
   }
 };
 
 // src/lending/compound_v3.ts
-import { createPublicClient as createPublicClient12, http as http12, parseAbi as parseAbi16, encodeFunctionData as encodeFunctionData15 } from "viem";
+import { createPublicClient as createPublicClient13, http as http13, parseAbi as parseAbi17, encodeFunctionData as encodeFunctionData16 } from "viem";
 import {
-  DefiError as DefiError16
+  DefiError as DefiError17
 } from "@hypurrquant/defi-core";
-var COMET_ABI = parseAbi16([
+var COMET_ABI = parseAbi17([
   "function getUtilization() external view returns (uint256)",
   "function getSupplyRate(uint256 utilization) external view returns (uint64)",
   "function getBorrowRate(uint256 utilization) external view returns (uint64)",
@@ -3121,14 +3346,14 @@ var CompoundV3Adapter = class {
     this.rpcUrl = rpcUrl;
     const contracts = entry.contracts ?? {};
     const comet = contracts["comet_usdc"] ?? contracts["comet"] ?? contracts["comet_weth"];
-    if (!comet) throw DefiError16.contractError("Missing 'comet_usdc' or 'comet' address");
+    if (!comet) throw DefiError17.contractError("Missing 'comet_usdc' or 'comet' address");
     this.comet = comet;
   }
   name() {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: COMET_ABI,
       functionName: "supply",
       args: [params.asset, params.amount]
@@ -3142,7 +3367,7 @@ var CompoundV3Adapter = class {
     };
   }
   async buildBorrow(params) {
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: COMET_ABI,
       functionName: "withdraw",
       args: [params.asset, params.amount]
@@ -3156,7 +3381,7 @@ var CompoundV3Adapter = class {
     };
   }
   async buildRepay(params) {
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: COMET_ABI,
       functionName: "supply",
       args: [params.asset, params.amount]
@@ -3170,7 +3395,7 @@ var CompoundV3Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData15({
+    const data = encodeFunctionData16({
       abi: COMET_ABI,
       functionName: "withdraw",
       args: [params.asset, params.amount]
@@ -3184,21 +3409,21 @@ var CompoundV3Adapter = class {
     };
   }
   async getRates(asset) {
-    if (!this.rpcUrl) throw DefiError16.rpcError("No RPC URL configured");
-    const client = createPublicClient12({ transport: http12(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError17.rpcError("No RPC URL configured");
+    const client = createPublicClient13({ transport: http13(this.rpcUrl) });
     const utilization = await client.readContract({
       address: this.comet,
       abi: COMET_ABI,
       functionName: "getUtilization"
     }).catch((e) => {
-      throw DefiError16.rpcError(`[${this.protocolName}] getUtilization failed: ${e}`);
+      throw DefiError17.rpcError(`[${this.protocolName}] getUtilization failed: ${e}`);
     });
     const [supplyRate, borrowRate, totalSupply, totalBorrow] = await Promise.all([
       client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "getSupplyRate", args: [utilization] }).catch((e) => {
-        throw DefiError16.rpcError(`[${this.protocolName}] getSupplyRate failed: ${e}`);
+        throw DefiError17.rpcError(`[${this.protocolName}] getSupplyRate failed: ${e}`);
       }),
       client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "getBorrowRate", args: [utilization] }).catch((e) => {
-        throw DefiError16.rpcError(`[${this.protocolName}] getBorrowRate failed: ${e}`);
+        throw DefiError17.rpcError(`[${this.protocolName}] getBorrowRate failed: ${e}`);
       }),
       client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "totalSupply" }).catch(() => 0n),
       client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "totalBorrow" }).catch(() => 0n)
@@ -3219,18 +3444,18 @@ var CompoundV3Adapter = class {
     };
   }
   async getUserPosition(_user) {
-    throw DefiError16.unsupported(
+    throw DefiError17.unsupported(
       `[${this.protocolName}] User position requires querying Comet balanceOf + borrowBalanceOf`
     );
   }
 };
 
 // src/lending/euler_v2.ts
-import { createPublicClient as createPublicClient13, http as http13, parseAbi as parseAbi17, encodeFunctionData as encodeFunctionData16 } from "viem";
+import { createPublicClient as createPublicClient14, http as http14, parseAbi as parseAbi18, encodeFunctionData as encodeFunctionData17 } from "viem";
 import {
-  DefiError as DefiError17
+  DefiError as DefiError18
 } from "@hypurrquant/defi-core";
-var EULER_VAULT_ABI = parseAbi17([
+var EULER_VAULT_ABI = parseAbi18([
   "function deposit(uint256 amount, address receiver) external returns (uint256)",
   "function withdraw(uint256 amount, address receiver, address owner) external returns (uint256)",
   "function borrow(uint256 amount, address receiver) external returns (uint256)",
@@ -3249,14 +3474,14 @@ var EulerV2Adapter = class {
     this.rpcUrl = rpcUrl;
     const contracts = entry.contracts ?? {};
     const euler = contracts["evk_vault"] ?? contracts["euler"] ?? contracts["markets"];
-    if (!euler) throw DefiError17.contractError("Missing 'evk_vault' or 'euler' contract address");
+    if (!euler) throw DefiError18.contractError("Missing 'evk_vault' or 'euler' contract address");
     this.euler = euler;
   }
   name() {
     return this.protocolName;
   }
   async buildSupply(params) {
-    const data = encodeFunctionData16({
+    const data = encodeFunctionData17({
       abi: EULER_VAULT_ABI,
       functionName: "deposit",
       args: [params.amount, params.on_behalf_of]
@@ -3270,7 +3495,7 @@ var EulerV2Adapter = class {
     };
   }
   async buildBorrow(params) {
-    const data = encodeFunctionData16({
+    const data = encodeFunctionData17({
       abi: EULER_VAULT_ABI,
       functionName: "borrow",
       args: [params.amount, params.on_behalf_of]
@@ -3284,7 +3509,7 @@ var EulerV2Adapter = class {
     };
   }
   async buildRepay(params) {
-    const data = encodeFunctionData16({
+    const data = encodeFunctionData17({
       abi: EULER_VAULT_ABI,
       functionName: "repay",
       args: [params.amount, params.on_behalf_of]
@@ -3298,7 +3523,7 @@ var EulerV2Adapter = class {
     };
   }
   async buildWithdraw(params) {
-    const data = encodeFunctionData16({
+    const data = encodeFunctionData17({
       abi: EULER_VAULT_ABI,
       functionName: "withdraw",
       args: [params.amount, params.to, params.to]
@@ -3312,17 +3537,17 @@ var EulerV2Adapter = class {
     };
   }
   async getRates(asset) {
-    if (!this.rpcUrl) throw DefiError17.rpcError("No RPC URL configured");
-    const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError18.rpcError("No RPC URL configured");
+    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
     const [totalSupply, totalBorrows, interestRate] = await Promise.all([
       client.readContract({ address: this.euler, abi: EULER_VAULT_ABI, functionName: "totalSupply" }).catch((e) => {
-        throw DefiError17.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
+        throw DefiError18.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
       }),
       client.readContract({ address: this.euler, abi: EULER_VAULT_ABI, functionName: "totalBorrows" }).catch((e) => {
-        throw DefiError17.rpcError(`[${this.protocolName}] totalBorrows failed: ${e}`);
+        throw DefiError18.rpcError(`[${this.protocolName}] totalBorrows failed: ${e}`);
       }),
       client.readContract({ address: this.euler, abi: EULER_VAULT_ABI, functionName: "interestRate" }).catch((e) => {
-        throw DefiError17.rpcError(`[${this.protocolName}] interestRate failed: ${e}`);
+        throw DefiError18.rpcError(`[${this.protocolName}] interestRate failed: ${e}`);
       })
     ]);
     const rateF64 = Number(interestRate) / 1e27;
@@ -3342,20 +3567,20 @@ var EulerV2Adapter = class {
     };
   }
   async getUserPosition(_user) {
-    throw DefiError17.unsupported(
+    throw DefiError18.unsupported(
       `[${this.protocolName}] Euler V2 user positions require querying individual vault balances. Use the vault address directly to check balanceOf(user) for supply positions.`
     );
   }
 };
 
 // src/lending/morpho.ts
-import { parseAbi as parseAbi18, encodeFunctionData as encodeFunctionData17, decodeFunctionResult as decodeFunctionResult4, zeroAddress as zeroAddress7 } from "viem";
+import { parseAbi as parseAbi19, encodeFunctionData as encodeFunctionData18, decodeFunctionResult as decodeFunctionResult4, zeroAddress as zeroAddress8 } from "viem";
 import {
-  DefiError as DefiError18,
+  DefiError as DefiError19,
   multicallRead as multicallRead4,
   decodeU256 as decodeU2562
 } from "@hypurrquant/defi-core";
-var MORPHO_ABI = parseAbi18([
+var MORPHO_ABI = parseAbi19([
   "function market(bytes32 id) external view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee)",
   "function idToMarketParams(bytes32 id) external view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)",
   "function supply((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsSupplied, uint256 sharesSupplied)",
@@ -3363,22 +3588,22 @@ var MORPHO_ABI = parseAbi18([
   "function repay((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsRepaid, uint256 sharesRepaid)",
   "function withdraw((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)"
 ]);
-var META_MORPHO_ABI = parseAbi18([
+var META_MORPHO_ABI = parseAbi19([
   "function supplyQueueLength() external view returns (uint256)",
   "function supplyQueue(uint256 index) external view returns (bytes32)",
   "function totalAssets() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)"
 ]);
-var IRM_ABI = parseAbi18([
+var IRM_ABI = parseAbi19([
   "function borrowRateView((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee) market) external view returns (uint256)"
 ]);
 var SECONDS_PER_YEAR3 = 365.25 * 24 * 3600;
-function defaultMarketParams(loanToken = zeroAddress7) {
+function defaultMarketParams(loanToken = zeroAddress8) {
   return {
     loanToken,
-    collateralToken: zeroAddress7,
-    oracle: zeroAddress7,
-    irm: zeroAddress7,
+    collateralToken: zeroAddress8,
+    oracle: zeroAddress8,
+    irm: zeroAddress8,
     lltv: 0n
   };
 }
@@ -3416,7 +3641,7 @@ var MorphoBlueAdapter = class {
     this.rpcUrl = rpcUrl;
     const contracts = entry.contracts ?? {};
     const morpho = contracts["morpho_blue"];
-    if (!morpho) throw DefiError18.contractError("Missing 'morpho_blue' contract address");
+    if (!morpho) throw DefiError19.contractError("Missing 'morpho_blue' contract address");
     this.morpho = morpho;
     this.defaultVault = contracts["fehype"] ?? contracts["vault"] ?? contracts["feusdc"];
   }
@@ -3425,7 +3650,7 @@ var MorphoBlueAdapter = class {
   }
   async buildSupply(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData17({
+    const data = encodeFunctionData18({
       abi: MORPHO_ABI,
       functionName: "supply",
       args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
@@ -3440,7 +3665,7 @@ var MorphoBlueAdapter = class {
   }
   async buildBorrow(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData17({
+    const data = encodeFunctionData18({
       abi: MORPHO_ABI,
       functionName: "borrow",
       args: [market, params.amount, 0n, params.on_behalf_of, params.on_behalf_of]
@@ -3455,7 +3680,7 @@ var MorphoBlueAdapter = class {
   }
   async buildRepay(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData17({
+    const data = encodeFunctionData18({
       abi: MORPHO_ABI,
       functionName: "repay",
       args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
@@ -3470,7 +3695,7 @@ var MorphoBlueAdapter = class {
   }
   async buildWithdraw(params) {
     const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData17({
+    const data = encodeFunctionData18({
       abi: MORPHO_ABI,
       functionName: "withdraw",
       args: [market, params.amount, 0n, params.to, params.to]
@@ -3484,14 +3709,14 @@ var MorphoBlueAdapter = class {
     };
   }
   async getRates(asset) {
-    if (!this.rpcUrl) throw DefiError18.rpcError("No RPC URL configured");
+    if (!this.rpcUrl) throw DefiError19.rpcError("No RPC URL configured");
     if (!this.defaultVault) {
-      throw DefiError18.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
+      throw DefiError19.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
     }
     const [queueLenRaw] = await multicallRead4(this.rpcUrl, [
-      [this.defaultVault, encodeFunctionData17({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })]
+      [this.defaultVault, encodeFunctionData18({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })]
     ]).catch((e) => {
-      throw DefiError18.rpcError(`[${this.protocolName}] supplyQueueLength failed: ${e}`);
+      throw DefiError19.rpcError(`[${this.protocolName}] supplyQueueLength failed: ${e}`);
     });
     const queueLen = decodeU2562(queueLenRaw ?? null);
     if (queueLen === 0n) {
@@ -3506,25 +3731,25 @@ var MorphoBlueAdapter = class {
       };
     }
     const [marketIdRaw] = await multicallRead4(this.rpcUrl, [
-      [this.defaultVault, encodeFunctionData17({ abi: META_MORPHO_ABI, functionName: "supplyQueue", args: [0n] })]
+      [this.defaultVault, encodeFunctionData18({ abi: META_MORPHO_ABI, functionName: "supplyQueue", args: [0n] })]
     ]).catch((e) => {
-      throw DefiError18.rpcError(`[${this.protocolName}] supplyQueue(0) failed: ${e}`);
+      throw DefiError19.rpcError(`[${this.protocolName}] supplyQueue(0) failed: ${e}`);
     });
     if (!marketIdRaw || marketIdRaw.length < 66) {
-      throw DefiError18.rpcError(`[${this.protocolName}] supplyQueue(0) returned no data`);
+      throw DefiError19.rpcError(`[${this.protocolName}] supplyQueue(0) returned no data`);
     }
     const marketId = marketIdRaw.slice(0, 66);
     const [marketRaw, paramsRaw] = await multicallRead4(this.rpcUrl, [
-      [this.morpho, encodeFunctionData17({ abi: MORPHO_ABI, functionName: "market", args: [marketId] })],
-      [this.morpho, encodeFunctionData17({ abi: MORPHO_ABI, functionName: "idToMarketParams", args: [marketId] })]
+      [this.morpho, encodeFunctionData18({ abi: MORPHO_ABI, functionName: "market", args: [marketId] })],
+      [this.morpho, encodeFunctionData18({ abi: MORPHO_ABI, functionName: "idToMarketParams", args: [marketId] })]
     ]).catch((e) => {
-      throw DefiError18.rpcError(`[${this.protocolName}] market/idToMarketParams failed: ${e}`);
+      throw DefiError19.rpcError(`[${this.protocolName}] market/idToMarketParams failed: ${e}`);
     });
     const mktDecoded = decodeMarket(marketRaw ?? null);
-    if (!mktDecoded) throw DefiError18.rpcError(`[${this.protocolName}] market() returned no data`);
+    if (!mktDecoded) throw DefiError19.rpcError(`[${this.protocolName}] market() returned no data`);
     const [totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee] = mktDecoded;
     const paramsDecoded = decodeMarketParams(paramsRaw ?? null);
-    if (!paramsDecoded) throw DefiError18.rpcError(`[${this.protocolName}] idToMarketParams returned no data`);
+    if (!paramsDecoded) throw DefiError19.rpcError(`[${this.protocolName}] idToMarketParams returned no data`);
     const [loanToken, collateralToken, oracle, irm, lltv] = paramsDecoded;
     const supplyF = Number(totalSupplyAssets);
     const borrowF = Number(totalBorrowAssets);
@@ -3533,9 +3758,9 @@ var MorphoBlueAdapter = class {
     const irmMarket = { totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee };
     const borrowRatePerSec = await (async () => {
       const [borrowRateRaw] = await multicallRead4(this.rpcUrl, [
-        [irm, encodeFunctionData17({ abi: IRM_ABI, functionName: "borrowRateView", args: [irmMarketParams, irmMarket] })]
+        [irm, encodeFunctionData18({ abi: IRM_ABI, functionName: "borrowRateView", args: [irmMarketParams, irmMarket] })]
       ]).catch((e) => {
-        throw DefiError18.rpcError(`[${this.protocolName}] borrowRateView failed: ${e}`);
+        throw DefiError19.rpcError(`[${this.protocolName}] borrowRateView failed: ${e}`);
       });
       return decodeU2562(borrowRateRaw ?? null);
     })();
@@ -3554,29 +3779,29 @@ var MorphoBlueAdapter = class {
     };
   }
   async getUserPosition(_user) {
-    throw DefiError18.unsupported(
+    throw DefiError19.unsupported(
       `[${this.protocolName}] Morpho Blue user positions are per-market \u2014 use vault deposit/withdraw instead`
     );
   }
 };
 
 // src/cdp/felix.ts
-import { createPublicClient as createPublicClient14, http as http14, parseAbi as parseAbi19, encodeFunctionData as encodeFunctionData18, zeroAddress as zeroAddress8 } from "viem";
+import { createPublicClient as createPublicClient15, http as http15, parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, zeroAddress as zeroAddress9 } from "viem";
 import {
-  DefiError as DefiError19
+  DefiError as DefiError20
 } from "@hypurrquant/defi-core";
-var BORROWER_OPS_ABI = parseAbi19([
+var BORROWER_OPS_ABI = parseAbi20([
   "function openTrove(address _owner, uint256 _ownerIndex, uint256 _collAmount, uint256 _boldAmount, uint256 _upperHint, uint256 _lowerHint, uint256 _annualInterestRate, uint256 _maxUpfrontFee, address _addManager, address _removeManager, address _receiver) external returns (uint256)",
   "function adjustTrove(uint256 _troveId, uint256 _collChange, bool _isCollIncrease, uint256 _debtChange, bool _isDebtIncrease, uint256 _upperHint, uint256 _lowerHint, uint256 _maxUpfrontFee) external",
   "function closeTrove(uint256 _troveId) external"
 ]);
-var TROVE_MANAGER_ABI = parseAbi19([
+var TROVE_MANAGER_ABI = parseAbi20([
   "function getLatestTroveData(uint256 _troveId) external view returns (uint256 entireDebt, uint256 entireColl, uint256 redistDebtGain, uint256 redistCollGain, uint256 accruedInterest, uint256 recordedDebt, uint256 annualInterestRate, uint256 accruedBatchManagementFee, uint256 weightedRecordedDebt, uint256 lastInterestRateAdjTime)"
 ]);
-var HINT_HELPERS_ABI = parseAbi19([
+var HINT_HELPERS_ABI = parseAbi20([
   "function getApproxHint(uint256 _collIndex, uint256 _interestRate, uint256 _numTrials, uint256 _inputRandomSeed) external view returns (uint256 hintId, uint256 diff, uint256 latestRandomSeed)"
 ]);
-var SORTED_TROVES_ABI = parseAbi19([
+var SORTED_TROVES_ABI = parseAbi20([
   "function findInsertPosition(uint256 _annualInterestRate, uint256 _prevId, uint256 _nextId) external view returns (uint256 prevId, uint256 nextId)"
 ]);
 var FelixCdpAdapter = class {
@@ -3591,7 +3816,7 @@ var FelixCdpAdapter = class {
     this.rpcUrl = rpcUrl;
     const contracts = entry.contracts ?? {};
     const bo = contracts["borrower_operations"];
-    if (!bo) throw DefiError19.contractError("Missing 'borrower_operations' contract");
+    if (!bo) throw DefiError20.contractError("Missing 'borrower_operations' contract");
     this.borrowerOperations = bo;
     this.troveManager = contracts["trove_manager"];
     this.hintHelpers = contracts["hint_helpers"];
@@ -3604,7 +3829,7 @@ var FelixCdpAdapter = class {
     if (!this.hintHelpers || !this.sortedTroves || !this.rpcUrl) {
       return [0n, 0n];
     }
-    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
     const approxResult = await client.readContract({
       address: this.hintHelpers,
       abi: HINT_HELPERS_ABI,
@@ -3627,7 +3852,7 @@ var FelixCdpAdapter = class {
     const interestRate = 50000000000000000n;
     const [upperHint, lowerHint] = await this.getHints(interestRate);
     const hasHints = upperHint !== 0n || lowerHint !== 0n;
-    const data = encodeFunctionData18({
+    const data = encodeFunctionData19({
       abi: BORROWER_OPS_ABI,
       functionName: "openTrove",
       args: [
@@ -3656,7 +3881,7 @@ var FelixCdpAdapter = class {
   async buildAdjust(params) {
     const collChange = params.collateral_delta ?? 0n;
     const debtChange = params.debt_delta ?? 0n;
-    const data = encodeFunctionData18({
+    const data = encodeFunctionData19({
       abi: BORROWER_OPS_ABI,
       functionName: "adjustTrove",
       args: [
@@ -3679,7 +3904,7 @@ var FelixCdpAdapter = class {
     };
   }
   async buildClose(params) {
-    const data = encodeFunctionData18({
+    const data = encodeFunctionData19({
       abi: BORROWER_OPS_ABI,
       functionName: "closeTrove",
       args: [params.cdp_id]
@@ -3693,33 +3918,33 @@ var FelixCdpAdapter = class {
     };
   }
   async getCdpInfo(cdpId) {
-    if (!this.rpcUrl) throw DefiError19.rpcError(`[${this.protocolName}] getCdpInfo requires RPC \u2014 set HYPEREVM_RPC_URL`);
-    if (!this.troveManager) throw DefiError19.contractError(`[${this.protocolName}] trove_manager contract not configured`);
-    const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError20.rpcError(`[${this.protocolName}] getCdpInfo requires RPC \u2014 set HYPEREVM_RPC_URL`);
+    if (!this.troveManager) throw DefiError20.contractError(`[${this.protocolName}] trove_manager contract not configured`);
+    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
     const data = await client.readContract({
       address: this.troveManager,
       abi: TROVE_MANAGER_ABI,
       functionName: "getLatestTroveData",
       args: [cdpId]
     }).catch((e) => {
-      throw DefiError19.invalidParam(`[${this.protocolName}] Trove ${cdpId} not found: ${e}`);
+      throw DefiError20.invalidParam(`[${this.protocolName}] Trove ${cdpId} not found: ${e}`);
     });
     const [entireDebt, entireColl] = data;
     if (entireDebt === 0n && entireColl === 0n) {
-      throw DefiError19.invalidParam(`[${this.protocolName}] Trove ${cdpId} does not exist`);
+      throw DefiError20.invalidParam(`[${this.protocolName}] Trove ${cdpId} does not exist`);
     }
     const collRatio = entireDebt > 0n ? Number(entireColl) / Number(entireDebt) : 0;
     return {
       protocol: this.protocolName,
       cdp_id: cdpId,
       collateral: {
-        token: zeroAddress8,
+        token: zeroAddress9,
         symbol: "WHYPE",
         amount: entireColl,
         decimals: 18
       },
       debt: {
-        token: zeroAddress8,
+        token: zeroAddress9,
         symbol: "feUSD",
         amount: entireDebt,
         decimals: 18
@@ -3730,9 +3955,9 @@ var FelixCdpAdapter = class {
 };
 
 // src/cdp/felix_oracle.ts
-import { createPublicClient as createPublicClient15, http as http15, parseAbi as parseAbi20 } from "viem";
-import { DefiError as DefiError20 } from "@hypurrquant/defi-core";
-var PRICE_FEED_ABI = parseAbi20([
+import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi21 } from "viem";
+import { DefiError as DefiError21 } from "@hypurrquant/defi-core";
+var PRICE_FEED_ABI = parseAbi21([
   "function fetchPrice() external view returns (uint256 price, bool isNewOracleFailureDetected)",
   "function lastGoodPrice() external view returns (uint256)"
 ]);
@@ -3743,11 +3968,11 @@ var FelixOracleAdapter = class {
   rpcUrl;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
-    if (!rpcUrl) throw DefiError20.rpcError(`[${entry.name}] RPC URL required for oracle`);
+    if (!rpcUrl) throw DefiError21.rpcError(`[${entry.name}] RPC URL required for oracle`);
     this.rpcUrl = rpcUrl;
     const contracts = entry.contracts ?? {};
     const feed = contracts["price_feed"];
-    if (!feed) throw DefiError20.contractError(`[${entry.name}] Missing 'price_feed' contract address`);
+    if (!feed) throw DefiError21.contractError(`[${entry.name}] Missing 'price_feed' contract address`);
     this.priceFeed = feed;
     this.asset = contracts["asset"] ?? "0x0000000000000000000000000000000000000000";
   }
@@ -3756,9 +3981,9 @@ var FelixOracleAdapter = class {
   }
   async getPrice(asset) {
     if (asset !== this.asset && this.asset !== "0x0000000000000000000000000000000000000000") {
-      throw DefiError20.unsupported(`[${this.protocolName}] Felix PriceFeed only supports asset ${this.asset}`);
+      throw DefiError21.unsupported(`[${this.protocolName}] Felix PriceFeed only supports asset ${this.asset}`);
     }
-    const client = createPublicClient15({ transport: http15(this.rpcUrl) });
+    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
     let priceVal;
     try {
       const result = await client.readContract({
@@ -3774,7 +3999,7 @@ var FelixOracleAdapter = class {
         abi: PRICE_FEED_ABI,
         functionName: "lastGoodPrice"
       }).catch((e) => {
-        throw DefiError20.rpcError(`[${this.protocolName}] lastGoodPrice failed: ${e}`);
+        throw DefiError21.rpcError(`[${this.protocolName}] lastGoodPrice failed: ${e}`);
       });
     }
     const priceF64 = Number(priceVal) / 1e18;
@@ -3799,11 +4024,11 @@ var FelixOracleAdapter = class {
 };
 
 // src/vault/erc4626.ts
-import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData19 } from "viem";
+import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi22, encodeFunctionData as encodeFunctionData20 } from "viem";
 import {
-  DefiError as DefiError21
+  DefiError as DefiError22
 } from "@hypurrquant/defi-core";
-var ERC4626_ABI = parseAbi21([
+var ERC4626_ABI = parseAbi22([
   "function asset() external view returns (address)",
   "function totalAssets() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
@@ -3820,14 +4045,14 @@ var ERC4626VaultAdapter = class {
     this.protocolName = entry.name;
     this.rpcUrl = rpcUrl;
     const vault = entry.contracts?.["vault"];
-    if (!vault) throw DefiError21.contractError("Missing 'vault' contract address");
+    if (!vault) throw DefiError22.contractError("Missing 'vault' contract address");
     this.vaultAddress = vault;
   }
   name() {
     return this.protocolName;
   }
   async buildDeposit(assets, receiver) {
-    const data = encodeFunctionData19({
+    const data = encodeFunctionData20({
       abi: ERC4626_ABI,
       functionName: "deposit",
       args: [assets, receiver]
@@ -3841,7 +4066,7 @@ var ERC4626VaultAdapter = class {
     };
   }
   async buildWithdraw(assets, receiver, owner) {
-    const data = encodeFunctionData19({
+    const data = encodeFunctionData20({
       abi: ERC4626_ABI,
       functionName: "withdraw",
       args: [assets, receiver, owner]
@@ -3855,52 +4080,52 @@ var ERC4626VaultAdapter = class {
     };
   }
   async totalAssets() {
-    if (!this.rpcUrl) throw DefiError21.rpcError("No RPC URL configured");
-    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError22.rpcError("No RPC URL configured");
+    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI,
       functionName: "totalAssets"
     }).catch((e) => {
-      throw DefiError21.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
+      throw DefiError22.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
     });
   }
   async convertToShares(assets) {
-    if (!this.rpcUrl) throw DefiError21.rpcError("No RPC URL configured");
-    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError22.rpcError("No RPC URL configured");
+    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI,
       functionName: "convertToShares",
       args: [assets]
     }).catch((e) => {
-      throw DefiError21.rpcError(`[${this.protocolName}] convertToShares failed: ${e}`);
+      throw DefiError22.rpcError(`[${this.protocolName}] convertToShares failed: ${e}`);
     });
   }
   async convertToAssets(shares) {
-    if (!this.rpcUrl) throw DefiError21.rpcError("No RPC URL configured");
-    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError22.rpcError("No RPC URL configured");
+    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI,
       functionName: "convertToAssets",
       args: [shares]
     }).catch((e) => {
-      throw DefiError21.rpcError(`[${this.protocolName}] convertToAssets failed: ${e}`);
+      throw DefiError22.rpcError(`[${this.protocolName}] convertToAssets failed: ${e}`);
     });
   }
   async getVaultInfo() {
-    if (!this.rpcUrl) throw DefiError21.rpcError("No RPC URL configured");
-    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError22.rpcError("No RPC URL configured");
+    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
     const [totalAssets, totalSupply, asset] = await Promise.all([
       client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI, functionName: "totalAssets" }).catch((e) => {
-        throw DefiError21.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
+        throw DefiError22.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
       }),
       client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI, functionName: "totalSupply" }).catch((e) => {
-        throw DefiError21.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
+        throw DefiError22.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
       }),
       client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI, functionName: "asset" }).catch((e) => {
-        throw DefiError21.rpcError(`[${this.protocolName}] asset failed: ${e}`);
+        throw DefiError22.rpcError(`[${this.protocolName}] asset failed: ${e}`);
       })
     ]);
     return {
@@ -3914,11 +4139,11 @@ var ERC4626VaultAdapter = class {
 };
 
 // src/liquid_staking/generic_lst.ts
-import { parseAbi as parseAbi22, encodeFunctionData as encodeFunctionData20 } from "viem";
+import { parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } from "viem";
 import {
-  DefiError as DefiError22
+  DefiError as DefiError23
 } from "@hypurrquant/defi-core";
-var GENERIC_LST_ABI = parseAbi22([
+var GENERIC_LST_ABI = parseAbi23([
   "function stake() external payable returns (uint256)",
   "function unstake(uint256 amount) external returns (uint256)"
 ]);
@@ -3928,14 +4153,14 @@ var GenericLstAdapter = class {
   constructor(entry, _rpcUrl) {
     this.protocolName = entry.name;
     const staking = entry.contracts?.["staking"];
-    if (!staking) throw DefiError22.contractError("Missing 'staking' contract");
+    if (!staking) throw DefiError23.contractError("Missing 'staking' contract");
     this.staking = staking;
   }
   name() {
     return this.protocolName;
   }
   async buildStake(params) {
-    const data = encodeFunctionData20({ abi: GENERIC_LST_ABI, functionName: "stake" });
+    const data = encodeFunctionData21({ abi: GENERIC_LST_ABI, functionName: "stake" });
     return {
       description: `[${this.protocolName}] Stake ${params.amount} HYPE`,
       to: this.staking,
@@ -3945,7 +4170,7 @@ var GenericLstAdapter = class {
     };
   }
   async buildUnstake(params) {
-    const data = encodeFunctionData20({
+    const data = encodeFunctionData21({
       abi: GENERIC_LST_ABI,
       functionName: "unstake",
       args: [params.amount]
@@ -3959,20 +4184,20 @@ var GenericLstAdapter = class {
     };
   }
   async getInfo() {
-    throw DefiError22.unsupported(`[${this.protocolName}] getInfo requires RPC`);
+    throw DefiError23.unsupported(`[${this.protocolName}] getInfo requires RPC`);
   }
 };
 
 // src/liquid_staking/sthype.ts
-import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21, zeroAddress as zeroAddress9 } from "viem";
+import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi24, encodeFunctionData as encodeFunctionData22, zeroAddress as zeroAddress10 } from "viem";
 import {
-  DefiError as DefiError23
+  DefiError as DefiError24
 } from "@hypurrquant/defi-core";
-var STHYPE_ABI = parseAbi23([
+var STHYPE_ABI = parseAbi24([
   "function submit(address referral) external payable returns (uint256)",
   "function requestWithdrawals(uint256[] amounts, address owner) external returns (uint256[] requestIds)"
 ]);
-var ERC20_ABI3 = parseAbi23([
+var ERC20_ABI3 = parseAbi24([
   "function totalSupply() external view returns (uint256)"
 ]);
 var StHypeAdapter = class {
@@ -3984,7 +4209,7 @@ var StHypeAdapter = class {
     this.protocolName = entry.name;
     this.rpcUrl = rpcUrl;
     const staking = entry.contracts?.["staking"];
-    if (!staking) throw DefiError23.contractError("Missing 'staking' contract");
+    if (!staking) throw DefiError24.contractError("Missing 'staking' contract");
     this.staking = staking;
     this.sthypeToken = entry.contracts?.["sthype_token"];
   }
@@ -3992,10 +4217,10 @@ var StHypeAdapter = class {
     return this.protocolName;
   }
   async buildStake(params) {
-    const data = encodeFunctionData21({
+    const data = encodeFunctionData22({
       abi: STHYPE_ABI,
       functionName: "submit",
-      args: [zeroAddress9]
+      args: [zeroAddress10]
     });
     return {
       description: `[${this.protocolName}] Stake ${params.amount} HYPE for stHYPE`,
@@ -4006,7 +4231,7 @@ var StHypeAdapter = class {
     };
   }
   async buildUnstake(params) {
-    const data = encodeFunctionData21({
+    const data = encodeFunctionData22({
       abi: STHYPE_ABI,
       functionName: "requestWithdrawals",
       args: [[params.amount], params.recipient]
@@ -4020,19 +4245,19 @@ var StHypeAdapter = class {
     };
   }
   async getInfo() {
-    if (!this.rpcUrl) throw DefiError23.rpcError("No RPC URL configured");
-    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError24.rpcError("No RPC URL configured");
+    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
     const tokenAddr = this.sthypeToken ?? this.staking;
     const totalSupply = await client.readContract({
       address: tokenAddr,
       abi: ERC20_ABI3,
       functionName: "totalSupply"
     }).catch((e) => {
-      throw DefiError23.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
+      throw DefiError24.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
     });
     return {
       protocol: this.protocolName,
-      staked_token: zeroAddress9,
+      staked_token: zeroAddress10,
       liquid_token: tokenAddr,
       exchange_rate: 1,
       total_staked: totalSupply
@@ -4041,16 +4266,16 @@ var StHypeAdapter = class {
 };
 
 // src/liquid_staking/kinetiq.ts
-import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi24, encodeFunctionData as encodeFunctionData22, zeroAddress as zeroAddress10 } from "viem";
+import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23, zeroAddress as zeroAddress11 } from "viem";
 import {
-  DefiError as DefiError24
+  DefiError as DefiError25
 } from "@hypurrquant/defi-core";
-var KINETIQ_ABI = parseAbi24([
+var KINETIQ_ABI = parseAbi25([
   "function stake() external payable returns (uint256)",
   "function requestUnstake(uint256 amount) external returns (uint256)",
   "function totalStaked() external view returns (uint256)"
 ]);
-var ORACLE_ABI3 = parseAbi24([
+var ORACLE_ABI3 = parseAbi25([
   "function getAssetPrice(address asset) external view returns (uint256)"
 ]);
 var WHYPE = "0x5555555555555555555555555555555555555555";
@@ -4064,7 +4289,7 @@ var KinetiqAdapter = class {
     this.protocolName = entry.name;
     this.rpcUrl = rpcUrl;
     const staking = entry.contracts?.["staking"];
-    if (!staking) throw DefiError24.contractError("Missing 'staking' contract address");
+    if (!staking) throw DefiError25.contractError("Missing 'staking' contract address");
     this.staking = staking;
     this.liquidToken = entry.contracts?.["khype_token"] ?? staking;
   }
@@ -4072,7 +4297,7 @@ var KinetiqAdapter = class {
     return this.protocolName;
   }
   async buildStake(params) {
-    const data = encodeFunctionData22({ abi: KINETIQ_ABI, functionName: "stake" });
+    const data = encodeFunctionData23({ abi: KINETIQ_ABI, functionName: "stake" });
     return {
       description: `[${this.protocolName}] Stake ${params.amount} HYPE for kHYPE`,
       to: this.staking,
@@ -4082,7 +4307,7 @@ var KinetiqAdapter = class {
     };
   }
   async buildUnstake(params) {
-    const data = encodeFunctionData22({
+    const data = encodeFunctionData23({
       abi: KINETIQ_ABI,
       functionName: "requestUnstake",
       args: [params.amount]
@@ -4096,14 +4321,14 @@ var KinetiqAdapter = class {
     };
   }
   async getInfo() {
-    if (!this.rpcUrl) throw DefiError24.rpcError("No RPC URL configured");
-    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError25.rpcError("No RPC URL configured");
+    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
     const totalStaked = await client.readContract({
       address: this.staking,
       abi: KINETIQ_ABI,
       functionName: "totalStaked"
     }).catch((e) => {
-      throw DefiError24.rpcError(`[${this.protocolName}] totalStaked failed: ${e}`);
+      throw DefiError25.rpcError(`[${this.protocolName}] totalStaked failed: ${e}`);
     });
     const [khypePrice, hypePrice] = await Promise.all([
       client.readContract({ address: HYPERLEND_ORACLE, abi: ORACLE_ABI3, functionName: "getAssetPrice", args: [this.liquidToken] }).catch(() => 0n),
@@ -4112,7 +4337,7 @@ var KinetiqAdapter = class {
     const rateF64 = hypePrice > 0n && khypePrice > 0n ? Number(khypePrice * 10n ** 18n / hypePrice) / 1e18 : 1;
     return {
       protocol: this.protocolName,
-      staked_token: zeroAddress10,
+      staked_token: zeroAddress11,
       liquid_token: this.liquidToken,
       exchange_rate: rateF64,
       total_staked: totalStaked
@@ -4122,29 +4347,29 @@ var KinetiqAdapter = class {
 
 // src/yield_source/pendle.ts
 import {
-  DefiError as DefiError25
+  DefiError as DefiError26
 } from "@hypurrquant/defi-core";
 var PendleAdapter = class {
   protocolName;
   constructor(entry, _rpcUrl) {
     this.protocolName = entry.name;
     if (!entry.contracts?.["router"]) {
-      throw DefiError25.contractError("Missing 'router' contract");
+      throw DefiError26.contractError("Missing 'router' contract");
     }
   }
   name() {
     return this.protocolName;
   }
   async getYields() {
-    throw DefiError25.unsupported(`[${this.protocolName}] getYields requires RPC`);
+    throw DefiError26.unsupported(`[${this.protocolName}] getYields requires RPC`);
   }
   async buildDeposit(_pool, _amount, _recipient) {
-    throw DefiError25.unsupported(
+    throw DefiError26.unsupported(
       `[${this.protocolName}] Pendle deposit requires market address and token routing params. Use Pendle-specific CLI.`
     );
   }
   async buildWithdraw(_pool, _amount, _recipient) {
-    throw DefiError25.unsupported(
+    throw DefiError26.unsupported(
       `[${this.protocolName}] Pendle withdraw requires market-specific params`
     );
   }
@@ -4152,7 +4377,7 @@ var PendleAdapter = class {
 
 // src/yield_source/generic_yield.ts
 import {
-  DefiError as DefiError26
+  DefiError as DefiError27
 } from "@hypurrquant/defi-core";
 var GenericYieldAdapter = class {
   protocolName;
@@ -4165,26 +4390,26 @@ var GenericYieldAdapter = class {
     return this.protocolName;
   }
   async getYields() {
-    throw DefiError26.unsupported(`[${this.protocolName}] getYields requires RPC`);
+    throw DefiError27.unsupported(`[${this.protocolName}] getYields requires RPC`);
   }
   async buildDeposit(_pool, _amount, _recipient) {
-    throw DefiError26.unsupported(
+    throw DefiError27.unsupported(
       `[${this.protocolName}] Yield interface '${this.interfaceName}' requires a protocol-specific adapter. Supported: 'pendle_v2' (Pendle). Protocols like Steer (managed liquidity), Liminal (yield optimization), and Altura (gaming yield) need custom deposit logic.`
     );
   }
   async buildWithdraw(_pool, _amount, _recipient) {
-    throw DefiError26.unsupported(
+    throw DefiError27.unsupported(
       `[${this.protocolName}] Yield interface '${this.interfaceName}' requires a protocol-specific adapter. Supported: 'pendle_v2' (Pendle). Protocols like Steer (managed liquidity), Liminal (yield optimization), and Altura (gaming yield) need custom withdraw logic.`
     );
   }
 };
 
 // src/derivatives/hlp.ts
-import { parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23 } from "viem";
+import { parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24 } from "viem";
 import {
-  DefiError as DefiError27
+  DefiError as DefiError28
 } from "@hypurrquant/defi-core";
-var HLP_ABI = parseAbi25([
+var HLP_ABI = parseAbi26([
   "function deposit(uint256 amount) external returns (uint256)",
   "function withdraw(uint256 shares) external returns (uint256)"
 ]);
@@ -4194,14 +4419,14 @@ var HlpVaultAdapter = class {
   constructor(entry, _rpcUrl) {
     this.protocolName = entry.name;
     const vault = entry.contracts?.["vault"];
-    if (!vault) throw DefiError27.contractError("Missing 'vault' contract");
+    if (!vault) throw DefiError28.contractError("Missing 'vault' contract");
     this.vault = vault;
   }
   name() {
     return this.protocolName;
   }
   async buildOpenPosition(params) {
-    const data = encodeFunctionData23({
+    const data = encodeFunctionData24({
       abi: HLP_ABI,
       functionName: "deposit",
       args: [params.collateral]
@@ -4215,7 +4440,7 @@ var HlpVaultAdapter = class {
     };
   }
   async buildClosePosition(params) {
-    const data = encodeFunctionData23({
+    const data = encodeFunctionData24({
       abi: HLP_ABI,
       functionName: "withdraw",
       args: [params.size]
@@ -4232,7 +4457,7 @@ var HlpVaultAdapter = class {
 
 // src/derivatives/generic_derivatives.ts
 import {
-  DefiError as DefiError28
+  DefiError as DefiError29
 } from "@hypurrquant/defi-core";
 var GenericDerivativesAdapter = class {
   protocolName;
@@ -4245,23 +4470,23 @@ var GenericDerivativesAdapter = class {
     return this.protocolName;
   }
   async buildOpenPosition(_params) {
-    throw DefiError28.unsupported(
+    throw DefiError29.unsupported(
       `[${this.protocolName}] Derivatives interface '${this.interfaceName}' requires a protocol-specific adapter. Supported: 'hlp_vault' (HLP Vault). Protocols like Rumpel need custom position management logic.`
     );
   }
   async buildClosePosition(_params) {
-    throw DefiError28.unsupported(
+    throw DefiError29.unsupported(
       `[${this.protocolName}] Derivatives interface '${this.interfaceName}' requires a protocol-specific adapter. Supported: 'hlp_vault' (HLP Vault). Protocols like Rumpel need custom position management logic.`
     );
   }
 };
 
 // src/options/rysk.ts
-import { parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24 } from "viem";
+import { parseAbi as parseAbi27, encodeFunctionData as encodeFunctionData25 } from "viem";
 import {
-  DefiError as DefiError29
+  DefiError as DefiError30
 } from "@hypurrquant/defi-core";
-var RYSK_ABI = parseAbi26([
+var RYSK_ABI = parseAbi27([
   "function openOption(address underlying, uint256 strikePrice, uint256 expiry, bool isCall, uint256 amount) external returns (uint256 premium)",
   "function closeOption(address underlying, uint256 strikePrice, uint256 expiry, bool isCall, uint256 amount) external returns (uint256 payout)"
 ]);
@@ -4271,14 +4496,14 @@ var RyskAdapter = class {
   constructor(entry, _rpcUrl) {
     this.protocolName = entry.name;
     const controller = entry.contracts?.["controller"];
-    if (!controller) throw DefiError29.contractError("Missing 'controller' contract");
+    if (!controller) throw DefiError30.contractError("Missing 'controller' contract");
     this.controller = controller;
   }
   name() {
     return this.protocolName;
   }
   async buildBuy(params) {
-    const data = encodeFunctionData24({
+    const data = encodeFunctionData25({
       abi: RYSK_ABI,
       functionName: "openOption",
       args: [
@@ -4298,7 +4523,7 @@ var RyskAdapter = class {
     };
   }
   async buildSell(params) {
-    const data = encodeFunctionData24({
+    const data = encodeFunctionData25({
       abi: RYSK_ABI,
       functionName: "closeOption",
       args: [
@@ -4321,7 +4546,7 @@ var RyskAdapter = class {
 
 // src/options/generic_options.ts
 import {
-  DefiError as DefiError30
+  DefiError as DefiError31
 } from "@hypurrquant/defi-core";
 var GenericOptionsAdapter = class {
   protocolName;
@@ -4334,21 +4559,21 @@ var GenericOptionsAdapter = class {
     return this.protocolName;
   }
   async buildBuy(_params) {
-    throw DefiError30.unsupported(
+    throw DefiError31.unsupported(
       `[${this.protocolName}] Options interface '${this.interfaceName}' requires a protocol-specific adapter. Supported: 'rysk' (Rysk Finance). Other options protocols need custom strike/expiry handling.`
     );
   }
   async buildSell(_params) {
-    throw DefiError30.unsupported(
+    throw DefiError31.unsupported(
       `[${this.protocolName}] Options interface '${this.interfaceName}' requires a protocol-specific adapter. Supported: 'rysk' (Rysk Finance). Other options protocols need custom strike/expiry handling.`
     );
   }
 };
 
 // src/nft/erc721.ts
-import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi27 } from "viem";
-import { DefiError as DefiError31 } from "@hypurrquant/defi-core";
-var ERC721_ABI = parseAbi27([
+import { createPublicClient as createPublicClient20, http as http20, parseAbi as parseAbi28 } from "viem";
+import { DefiError as DefiError32 } from "@hypurrquant/defi-core";
+var ERC721_ABI = parseAbi28([
   "function name() returns (string)",
   "function symbol() returns (string)",
   "function totalSupply() returns (uint256)",
@@ -4367,14 +4592,14 @@ var ERC721Adapter = class {
     return this.protocolName;
   }
   async getCollectionInfo(collection) {
-    if (!this.rpcUrl) throw DefiError31.rpcError("No RPC URL configured");
-    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError32.rpcError("No RPC URL configured");
+    const client = createPublicClient20({ transport: http20(this.rpcUrl) });
     const [collectionName, symbol, totalSupply] = await Promise.all([
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "name" }).catch((e) => {
-        throw DefiError31.rpcError(`[${this.protocolName}] name failed: ${e}`);
+        throw DefiError32.rpcError(`[${this.protocolName}] name failed: ${e}`);
       }),
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "symbol" }).catch((e) => {
-        throw DefiError31.rpcError(`[${this.protocolName}] symbol failed: ${e}`);
+        throw DefiError32.rpcError(`[${this.protocolName}] symbol failed: ${e}`);
       }),
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "totalSupply" }).catch(() => void 0)
     ]);
@@ -4386,11 +4611,11 @@ var ERC721Adapter = class {
     };
   }
   async getTokenInfo(collection, tokenId) {
-    if (!this.rpcUrl) throw DefiError31.rpcError("No RPC URL configured");
-    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError32.rpcError("No RPC URL configured");
+    const client = createPublicClient20({ transport: http20(this.rpcUrl) });
     const [owner, tokenUri] = await Promise.all([
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "ownerOf", args: [tokenId] }).catch((e) => {
-        throw DefiError31.rpcError(`[${this.protocolName}] ownerOf failed: ${e}`);
+        throw DefiError32.rpcError(`[${this.protocolName}] ownerOf failed: ${e}`);
       }),
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "tokenURI", args: [tokenId] }).catch(() => void 0)
     ]);
@@ -4402,10 +4627,10 @@ var ERC721Adapter = class {
     };
   }
   async getBalance(owner, collection) {
-    if (!this.rpcUrl) throw DefiError31.rpcError("No RPC URL configured");
-    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
+    if (!this.rpcUrl) throw DefiError32.rpcError("No RPC URL configured");
+    const client = createPublicClient20({ transport: http20(this.rpcUrl) });
     return client.readContract({ address: collection, abi: ERC721_ABI, functionName: "balanceOf", args: [owner] }).catch((e) => {
-      throw DefiError31.rpcError(`[${this.protocolName}] balanceOf failed: ${e}`);
+      throw DefiError32.rpcError(`[${this.protocolName}] balanceOf failed: ${e}`);
     });
   }
 };
@@ -4416,7 +4641,7 @@ function createDex(entry, rpcUrl) {
     case "uniswap_v3":
       return new UniswapV3Adapter(entry, rpcUrl);
     case "uniswap_v4":
-      throw DefiError32.unsupported(
+      throw DefiError33.unsupported(
         `[${entry.name}] Uniswap V4 (singleton PoolManager) is not yet supported \u2014 use HyperSwap V3 or another V3-compatible DEX for quotes`
       );
     case "algebra_v3":
@@ -4426,6 +4651,8 @@ function createDex(entry, rpcUrl) {
     case "solidly_v2":
     case "solidly_cl":
       return new SolidlyAdapter(entry, rpcUrl);
+    case "hybra":
+      return new ThenaCLAdapter(entry, rpcUrl);
     case "curve_stableswap":
       return new CurveStableSwapAdapter(entry);
     case "balancer_v3":
@@ -4433,7 +4660,7 @@ function createDex(entry, rpcUrl) {
     case "woofi":
       return new WooFiAdapter(entry, rpcUrl);
     default:
-      throw DefiError32.unsupported(`DEX interface '${entry.interface}' not yet implemented`);
+      throw DefiError33.unsupported(`DEX interface '${entry.interface}' not yet implemented`);
   }
 }
 function createLending(entry, rpcUrl) {
@@ -4452,7 +4679,7 @@ function createLending(entry, rpcUrl) {
     case "compound_v3":
       return new CompoundV3Adapter(entry, rpcUrl);
     default:
-      throw DefiError32.unsupported(`Lending interface '${entry.interface}' not yet implemented`);
+      throw DefiError33.unsupported(`Lending interface '${entry.interface}' not yet implemented`);
   }
 }
 function createCdp(entry, rpcUrl) {
@@ -4460,7 +4687,7 @@ function createCdp(entry, rpcUrl) {
     case "liquity_v2":
       return new FelixCdpAdapter(entry, rpcUrl);
     default:
-      throw DefiError32.unsupported(`CDP interface '${entry.interface}' not yet implemented`);
+      throw DefiError33.unsupported(`CDP interface '${entry.interface}' not yet implemented`);
   }
 }
 function createVault(entry, rpcUrl) {
@@ -4469,7 +4696,7 @@ function createVault(entry, rpcUrl) {
     case "beefy_vault":
       return new ERC4626VaultAdapter(entry, rpcUrl);
     default:
-      throw DefiError32.unsupported(`Vault interface '${entry.interface}' not yet implemented`);
+      throw DefiError33.unsupported(`Vault interface '${entry.interface}' not yet implemented`);
   }
 }
 function createLiquidStaking(entry, rpcUrl) {
@@ -4491,9 +4718,9 @@ function createGauge(entry, rpcUrl) {
     case "solidly_cl":
     case "algebra_v3":
     case "hybra":
-      return new SolidlyGaugeAdapter(entry, rpcUrl);
+      return new HybraGaugeAdapter(entry, rpcUrl);
     default:
-      throw DefiError32.unsupported(`Gauge interface '${entry.interface}' not supported`);
+      throw DefiError33.unsupported(`Gauge interface '${entry.interface}' not supported`);
   }
 }
 function createMasterChef(entry, rpcUrl) {
@@ -4528,9 +4755,9 @@ function createNft(entry, rpcUrl) {
     case "erc721":
       return new ERC721Adapter(entry, rpcUrl);
     case "marketplace":
-      throw DefiError32.unsupported(`NFT marketplace '${entry.name}' is not queryable as ERC-721. Use a specific collection address.`);
+      throw DefiError33.unsupported(`NFT marketplace '${entry.name}' is not queryable as ERC-721. Use a specific collection address.`);
     default:
-      throw DefiError32.unsupported(`NFT interface '${entry.interface}' not supported`);
+      throw DefiError33.unsupported(`NFT interface '${entry.interface}' not supported`);
   }
 }
 function createOracleFromLending(entry, rpcUrl) {
@@ -4539,7 +4766,7 @@ function createOracleFromLending(entry, rpcUrl) {
     case "aave_v3_isolated":
       return new AaveOracleAdapter(entry, rpcUrl);
     default:
-      throw DefiError32.unsupported(`Oracle not available for lending interface '${entry.interface}'`);
+      throw DefiError33.unsupported(`Oracle not available for lending interface '${entry.interface}'`);
   }
 }
 function createOracleFromCdp(entry, _asset, rpcUrl) {
@@ -4547,7 +4774,7 @@ function createOracleFromCdp(entry, _asset, rpcUrl) {
     case "liquity_v2":
       return new FelixOracleAdapter(entry, rpcUrl);
     default:
-      throw DefiError32.unsupported(`Oracle not available for CDP interface '${entry.interface}'`);
+      throw DefiError33.unsupported(`Oracle not available for CDP interface '${entry.interface}'`);
   }
 }
 function createMerchantMoeLB(entry, rpcUrl) {
@@ -4556,14 +4783,410 @@ function createMerchantMoeLB(entry, rpcUrl) {
 function createKittenSwapFarming(entry, rpcUrl) {
   const farmingCenter = entry.contracts?.["farming_center"];
   if (!farmingCenter) {
-    throw new DefiError32("CONTRACT_ERROR", `[${entry.name}] Missing 'farming_center' contract address`);
+    throw new DefiError33("CONTRACT_ERROR", `[${entry.name}] Missing 'farming_center' contract address`);
   }
   const eternalFarming = entry.contracts?.["eternal_farming"];
   if (!eternalFarming) {
-    throw new DefiError32("CONTRACT_ERROR", `[${entry.name}] Missing 'eternal_farming' contract address`);
+    throw new DefiError33("CONTRACT_ERROR", `[${entry.name}] Missing 'eternal_farming' contract address`);
   }
-  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, rpcUrl);
+  const positionManager = entry.contracts?.["position_manager"];
+  if (!positionManager) {
+    throw new DefiError33("CONTRACT_ERROR", `[${entry.name}] Missing 'position_manager' contract address`);
+  }
+  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl);
 }
+
+// src/dex/solidly_gauge.ts
+import { createPublicClient as createPublicClient21, encodeFunctionData as encodeFunctionData26, http as http21, parseAbi as parseAbi29, zeroAddress as zeroAddress12 } from "viem";
+import { DefiError as DefiError34 } from "@hypurrquant/defi-core";
+var gaugeAbi = parseAbi29([
+  "function deposit(uint256 amount) external",
+  "function depositFor(uint256 amount, uint256 tokenId) external",
+  "function withdraw(uint256 amount) external",
+  "function getReward() external",
+  "function getReward(address account) external",
+  "function getReward(address account, address[] tokens) external",
+  "function getReward(uint256 tokenId) external",
+  "function earned(address account) external view returns (uint256)",
+  "function earned(address token, address account) external view returns (uint256)",
+  "function earned(uint256 tokenId) external view returns (uint256)",
+  "function rewardRate() external view returns (uint256)",
+  "function rewardToken() external view returns (address)",
+  "function totalSupply() external view returns (uint256)",
+  "function rewardsListLength() external view returns (uint256)",
+  "function rewardData(address token) external view returns (uint256 periodFinish, uint256 rewardRate, uint256 lastUpdateTime, uint256 rewardPerTokenStored)",
+  "function nonfungiblePositionManager() external view returns (address)"
+]);
+var veAbi2 = parseAbi29([
+  "function create_lock(uint256 value, uint256 lock_duration) external returns (uint256)",
+  "function increase_amount(uint256 tokenId, uint256 value) external",
+  "function increase_unlock_time(uint256 tokenId, uint256 lock_duration) external",
+  "function withdraw(uint256 tokenId) external",
+  "function balanceOfNFT(uint256 tokenId) external view returns (uint256)",
+  "function locked(uint256 tokenId) external view returns (uint256 amount, uint256 end)"
+]);
+var voterAbi2 = parseAbi29([
+  "function vote(uint256 tokenId, address[] calldata pools, uint256[] calldata weights) external",
+  "function claimBribes(address[] calldata bribes, address[][] calldata tokens, uint256 tokenId) external",
+  "function claimFees(address[] calldata fees, address[][] calldata tokens, uint256 tokenId) external",
+  "function gauges(address pool) external view returns (address)",
+  "function gaugeForPool(address pool) external view returns (address)",
+  "function poolToGauge(address pool) external view returns (address)"
+]);
+var SolidlyGaugeAdapter = class {
+  protocolName;
+  voter;
+  veToken;
+  rpcUrl;
+  constructor(entry, rpcUrl) {
+    this.protocolName = entry.name;
+    const voter = entry.contracts?.["voter"];
+    if (!voter) {
+      throw new DefiError34("CONTRACT_ERROR", "Missing 'voter' contract");
+    }
+    const veToken = entry.contracts?.["ve_token"];
+    if (!veToken) {
+      throw new DefiError34("CONTRACT_ERROR", "Missing 've_token' contract");
+    }
+    this.voter = voter;
+    this.veToken = veToken;
+    this.rpcUrl = rpcUrl;
+  }
+  name() {
+    return this.protocolName;
+  }
+  // IGauge
+  async buildDeposit(gauge, amount, tokenId, lpToken) {
+    if (tokenId !== void 0) {
+      const data2 = encodeFunctionData26({
+        abi: gaugeAbi,
+        functionName: "depositFor",
+        args: [amount, tokenId]
+      });
+      return {
+        description: `[${this.protocolName}] Deposit ${amount} LP to gauge (boost veNFT #${tokenId})`,
+        to: gauge,
+        data: data2,
+        value: 0n,
+        gas_estimate: 2e5,
+        approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
+      };
+    }
+    const data = encodeFunctionData26({
+      abi: gaugeAbi,
+      functionName: "deposit",
+      args: [amount]
+    });
+    return {
+      description: `[${this.protocolName}] Deposit ${amount} LP to gauge`,
+      to: gauge,
+      data,
+      value: 0n,
+      gas_estimate: 2e5,
+      approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
+    };
+  }
+  async buildWithdraw(gauge, amount) {
+    const data = encodeFunctionData26({
+      abi: gaugeAbi,
+      functionName: "withdraw",
+      args: [amount]
+    });
+    return {
+      description: `[${this.protocolName}] Withdraw ${amount} LP from gauge`,
+      to: gauge,
+      data,
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  /**
+   * Resolve gauge address from a pool address via voter contract.
+   * Tries gaugeForPool (Ramses), poolToGauge (NEST), gauges (classic Solidly).
+   */
+  async resolveGauge(pool) {
+    if (!this.rpcUrl) throw DefiError34.rpcError("RPC URL required for gauge lookup");
+    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+    for (const fn of ["gaugeForPool", "poolToGauge", "gauges"]) {
+      try {
+        const gauge = await client.readContract({
+          address: this.voter,
+          abi: voterAbi2,
+          functionName: fn,
+          args: [pool]
+        });
+        if (gauge !== zeroAddress12) return gauge;
+      } catch {
+      }
+    }
+    throw new DefiError34("CONTRACT_ERROR", `[${this.protocolName}] No gauge found for pool ${pool}`);
+  }
+  /**
+   * Discover reward tokens for a gauge.
+   * Returns { tokens, multiToken } where multiToken indicates getReward(account, tokens[]) support.
+   */
+  async discoverRewardTokens(gauge) {
+    if (!this.rpcUrl) return { tokens: [], multiToken: false };
+    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+    try {
+      const len = await client.readContract({
+        address: gauge,
+        abi: gaugeAbi,
+        functionName: "rewardsListLength"
+      });
+      if (Number(len) > 0) {
+        const candidates = [
+          "0x5555555555555555555555555555555555555555",
+          // WHYPE
+          "0x555570a286F15EbDFE42B66eDE2f724Aa1AB5555",
+          // xRAM
+          "0x067b0C72aa4C6Bd3BFEFfF443c536DCd6a25a9C8",
+          // HYBR
+          "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035"
+          // NEST token
+        ];
+        const found = [];
+        for (const token of candidates) {
+          try {
+            const rd = await client.readContract({
+              address: gauge,
+              abi: gaugeAbi,
+              functionName: "rewardData",
+              args: [token]
+            });
+            if (rd[0] > 0n || rd[1] > 0n) found.push(token);
+          } catch {
+          }
+        }
+        if (found.length > 0) return { tokens: found, multiToken: true };
+        return { tokens: [], multiToken: true };
+      }
+    } catch {
+    }
+    try {
+      const rt = await client.readContract({
+        address: gauge,
+        abi: gaugeAbi,
+        functionName: "rewardToken"
+      });
+      if (rt !== zeroAddress12) return { tokens: [rt], multiToken: false };
+    } catch {
+    }
+    return { tokens: [], multiToken: false };
+  }
+  async buildClaimRewards(gauge, account) {
+    if (!this.rpcUrl || !account) {
+      const data2 = encodeFunctionData26({
+        abi: gaugeAbi,
+        functionName: "getReward",
+        args: [account ?? zeroAddress12]
+      });
+      return { description: `[${this.protocolName}] Claim gauge rewards`, to: gauge, data: data2, value: 0n, gas_estimate: 2e5 };
+    }
+    const { tokens, multiToken } = await this.discoverRewardTokens(gauge);
+    if (multiToken && tokens.length > 0) {
+      const data2 = encodeFunctionData26({
+        abi: gaugeAbi,
+        functionName: "getReward",
+        args: [account, tokens]
+      });
+      return {
+        description: `[${this.protocolName}] Claim gauge rewards (${tokens.length} tokens)`,
+        to: gauge,
+        data: data2,
+        value: 0n,
+        gas_estimate: 3e5
+      };
+    }
+    const data = encodeFunctionData26({
+      abi: gaugeAbi,
+      functionName: "getReward",
+      args: []
+    });
+    return {
+      description: `[${this.protocolName}] Claim gauge rewards`,
+      to: gauge,
+      data,
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  /**
+   * Claim rewards for a CL gauge by NFT tokenId (Hybra V4 style).
+   */
+  async buildClaimRewardsByTokenId(gauge, tokenId) {
+    const data = encodeFunctionData26({
+      abi: gaugeAbi,
+      functionName: "getReward",
+      args: [tokenId]
+    });
+    return {
+      description: `[${this.protocolName}] Claim gauge rewards for NFT #${tokenId}`,
+      to: gauge,
+      data,
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+  async getPendingRewards(gauge, user) {
+    if (!this.rpcUrl) throw DefiError34.rpcError("RPC URL required");
+    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+    const results = [];
+    const { tokens, multiToken } = await this.discoverRewardTokens(gauge);
+    if (multiToken && tokens.length > 0) {
+      for (const token of tokens) {
+        try {
+          const earned = await client.readContract({
+            address: gauge,
+            abi: gaugeAbi,
+            functionName: "earned",
+            args: [token, user]
+          });
+          results.push({ token, symbol: token.slice(0, 10), amount: earned });
+        } catch {
+        }
+      }
+    } else if (tokens.length > 0) {
+      try {
+        const earned = await client.readContract({
+          address: gauge,
+          abi: gaugeAbi,
+          functionName: "earned",
+          args: [user]
+        });
+        results.push({ token: tokens[0], symbol: tokens[0].slice(0, 10), amount: earned });
+      } catch {
+      }
+    } else {
+      try {
+        const earned = await client.readContract({
+          address: gauge,
+          abi: gaugeAbi,
+          functionName: "earned",
+          args: [user]
+        });
+        results.push({ token: zeroAddress12, symbol: "unknown", amount: earned });
+      } catch {
+      }
+    }
+    return results;
+  }
+  /**
+   * Get pending rewards for a CL gauge NFT position (Hybra V4 style).
+   */
+  async getPendingRewardsByTokenId(gauge, tokenId) {
+    if (!this.rpcUrl) throw DefiError34.rpcError("RPC URL required");
+    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+    return await client.readContract({
+      address: gauge,
+      abi: gaugeAbi,
+      functionName: "earned",
+      args: [tokenId]
+    });
+  }
+  // IVoteEscrow
+  async buildCreateLock(amount, lockDuration) {
+    const data = encodeFunctionData26({
+      abi: veAbi2,
+      functionName: "create_lock",
+      args: [amount, BigInt(lockDuration)]
+    });
+    return {
+      description: `[${this.protocolName}] Create veNFT lock: ${amount} tokens for ${lockDuration}s`,
+      to: this.veToken,
+      data,
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+  async buildIncreaseAmount(tokenId, amount) {
+    const data = encodeFunctionData26({
+      abi: veAbi2,
+      functionName: "increase_amount",
+      args: [tokenId, amount]
+    });
+    return {
+      description: `[${this.protocolName}] Increase veNFT #${tokenId} by ${amount}`,
+      to: this.veToken,
+      data,
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  async buildIncreaseUnlockTime(tokenId, lockDuration) {
+    const data = encodeFunctionData26({
+      abi: veAbi2,
+      functionName: "increase_unlock_time",
+      args: [tokenId, BigInt(lockDuration)]
+    });
+    return {
+      description: `[${this.protocolName}] Extend veNFT #${tokenId} lock by ${lockDuration}s`,
+      to: this.veToken,
+      data,
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  async buildWithdrawExpired(tokenId) {
+    const data = encodeFunctionData26({
+      abi: veAbi2,
+      functionName: "withdraw",
+      args: [tokenId]
+    });
+    return {
+      description: `[${this.protocolName}] Withdraw expired veNFT #${tokenId}`,
+      to: this.veToken,
+      data,
+      value: 0n,
+      gas_estimate: 2e5
+    };
+  }
+  // IVoter
+  async buildVote(tokenId, pools, weights) {
+    const data = encodeFunctionData26({
+      abi: voterAbi2,
+      functionName: "vote",
+      args: [tokenId, pools, weights]
+    });
+    return {
+      description: `[${this.protocolName}] Vote with veNFT #${tokenId}`,
+      to: this.voter,
+      data,
+      value: 0n,
+      gas_estimate: 5e5
+    };
+  }
+  async buildClaimBribes(bribes, tokenId) {
+    const tokensPerBribe = bribes.map(() => []);
+    const data = encodeFunctionData26({
+      abi: voterAbi2,
+      functionName: "claimBribes",
+      args: [bribes, tokensPerBribe, tokenId]
+    });
+    return {
+      description: `[${this.protocolName}] Claim bribes for veNFT #${tokenId}`,
+      to: this.voter,
+      data,
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+  async buildClaimFees(fees, tokenId) {
+    const tokensPerFee = fees.map(() => []);
+    const data = encodeFunctionData26({
+      abi: voterAbi2,
+      functionName: "claimFees",
+      args: [fees, tokensPerFee, tokenId]
+    });
+    return {
+      description: `[${this.protocolName}] Claim trading fees for veNFT #${tokenId}`,
+      to: this.voter,
+      data,
+      value: 0n,
+      gas_estimate: 3e5
+    };
+  }
+};
 
 // src/dex/dex_price.ts
 var DexSpotPrice = class {
@@ -4622,6 +5245,7 @@ export {
   GenericOptionsAdapter,
   GenericYieldAdapter,
   HlpVaultAdapter,
+  HybraGaugeAdapter,
   KinetiqAdapter,
   KittenSwapFarmingAdapter,
   MasterChefAdapter,
@@ -4632,6 +5256,7 @@ export {
   SolidlyAdapter,
   SolidlyGaugeAdapter,
   StHypeAdapter,
+  ThenaCLAdapter,
   UniswapV2Adapter,
   UniswapV3Adapter,
   WooFiAdapter,

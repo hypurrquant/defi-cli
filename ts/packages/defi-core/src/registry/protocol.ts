@@ -47,6 +47,16 @@ export function protocolCategoryLabel(category: ProtocolCategory): string {
   }
 }
 
+export interface PoolInfo {
+  name: string;
+  address: Address;
+  token0: string;
+  token1: string;
+  tick_spacing?: number;
+  gauge?: Address;
+  stable?: boolean;
+}
+
 export interface ProtocolEntry {
   name: string;
   slug: string;
@@ -55,5 +65,6 @@ export interface ProtocolEntry {
   chain: string;
   native?: boolean;
   contracts?: Record<string, Address>;
+  pools?: PoolInfo[];
   description?: string;
 }

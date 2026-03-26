@@ -15,6 +15,8 @@ export interface DeFiTx {
     spender: Address;
     amount: bigint;
   }>;
+  /** Pre-transactions to execute before the main tx (e.g. farming approval) */
+  pre_txs?: DeFiTx[];
 }
 
 /** Result of executing or simulating a transaction */
@@ -117,6 +119,14 @@ export interface AddLiquidityParams {
   amount_a: bigint;
   amount_b: bigint;
   recipient: Address;
+  /** Optional lower tick for concentrated LP (defaults to full range) */
+  tick_lower?: number;
+  /** Optional upper tick for concentrated LP (defaults to full range) */
+  tick_upper?: number;
+  /** ±N% concentrated range around current price (e.g. 2 for ±2%) */
+  range_pct?: number;
+  /** Optional pool address for tick detection / single-side LP */
+  pool?: Address;
 }
 
 export interface RemoveLiquidityParams {

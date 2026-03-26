@@ -13,6 +13,8 @@ interface DeFiTx {
         spender: Address;
         amount: bigint;
     }>;
+    /** Pre-transactions to execute before the main tx (e.g. farming approval) */
+    pre_txs?: DeFiTx[];
 }
 /** Result of executing or simulating a transaction */
 interface ActionResult {
@@ -85,6 +87,14 @@ interface AddLiquidityParams {
     amount_a: bigint;
     amount_b: bigint;
     recipient: Address;
+    /** Optional lower tick for concentrated LP (defaults to full range) */
+    tick_lower?: number;
+    /** Optional upper tick for concentrated LP (defaults to full range) */
+    tick_upper?: number;
+    /** ±N% concentrated range around current price (e.g. 2 for ±2%) */
+    range_pct?: number;
+    /** Optional pool address for tick detection / single-side LP */
+    pool?: Address;
 }
 interface RemoveLiquidityParams {
     protocol: string;
@@ -468,14 +478,20 @@ interface ILending {
 /** ve(3,3) Gauge operations — stake LP tokens to earn emissions */
 interface IGauge {
     name(): string;
+    /** Resolve gauge address from pool address via voter */
+    resolveGauge?(pool: Address): Promise<Address>;
     /** Deposit LP tokens into gauge */
     buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
-    /** Withdraw LP tokens from gauge */
-    buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
+    /** Withdraw LP tokens or NFT from gauge */
+    buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
     /** Claim earned rewards from gauge */
     buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
+    /** Claim rewards for a CL gauge NFT position (Hybra V4 style) */
+    buildClaimRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<DeFiTx>;
     /** Get pending rewards for a user */
     getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
+    /** Get pending rewards for a CL gauge NFT position */
+    getPendingRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<bigint>;
 }
 /** ve(3,3) Vote-escrow operations — lock tokens for veNFT */
 interface IVoteEscrow {
@@ -621,6 +637,15 @@ declare enum ProtocolCategory {
     Other = "other"
 }
 declare function protocolCategoryLabel(category: ProtocolCategory): string;
+interface PoolInfo {
+    name: string;
+    address: Address;
+    token0: string;
+    token1: string;
+    tick_spacing?: number;
+    gauge?: Address;
+    stable?: boolean;
+}
 interface ProtocolEntry {
     name: string;
     slug: string;
@@ -629,6 +654,7 @@ interface ProtocolEntry {
     chain: string;
     native?: boolean;
     contracts?: Record<string, Address>;
+    pools?: PoolInfo[];
     description?: string;
 }
 
@@ -646,6 +672,11 @@ declare class Registry {
     getProtocolsByCategory(category: ProtocolCategory): ProtocolEntry[];
     getProtocolsForChain(chain: string): ProtocolEntry[];
     resolveToken(chain: string, symbol: string): TokenEntry;
+    /**
+     * Resolve a pool by name (e.g. "WHYPE/USDC") from a protocol's pool list.
+     * Returns the pool info or throws if not found.
+     */
+    resolvePool(protocolSlug: string, poolName: string): PoolInfo;
 }
 
-export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type Slippage, type StakeParams, type StakingInfo, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };
+export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type Slippage, type StakeParams, type StakingInfo, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };

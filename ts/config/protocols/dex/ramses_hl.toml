@@ -20,3 +20,40 @@ gauge_factory = "0x1AD1DC4430bD55FbD19f151F6f3CDB4Bb473Fa16"
 fee_distributor_factory = "0xE7E05591362a74D3746F828941ec833e102a6E90"
 fee_recipient_factory = "0xa0BDd8142568d478D69C0D601D46bfdDa04A7c4a"
 access_hub = "0x6631a487d59893831b331653225E0bfeBf6Ea1EC"
+
+# V2 gauged pools
+[[protocol.pools]]
+name = "WHYPE/RAM"
+address = "0xa33601b7811dC089CAfEB7C7B97fC4c8271899b2"
+token0 = "WHYPE"
+token1 = "RAM"
+gauge = "0x92fBD7B15dA58e03F6E3D1d7026c6c69cbD2E637"
+
+[[protocol.pools]]
+name = "hyperRAM/USDC"
+address = "0x5F5E466665397BD71F9bA595cE83E06593E51584"
+token0 = "hyperRAM"
+token1 = "USDC"
+gauge = "0x005e24c9029392f9496701749530c0F374Ca67FC"
+
+[[protocol.pools]]
+name = "sUSDe/hyperRAM"
+address = "0x0F71c99ba20AECEE5b5D3bcCb3A6871cE90eCD0a"
+token0 = "sUSDe"
+token1 = "hyperRAM"
+gauge = "0xd4c7120C644cf23A8EBcFEc0FA320b88BF8c8B03"
+
+[[protocol.pools]]
+name = "USDC/WS"
+address = "0xDD41eD5111D33d1811de145B9695AD6c7400c169"
+token0 = "USDC"
+token1 = "WS"
+gauge = "0x70361196A69d93E00ecd6C7074a1b9fb9cA63CAe"
+
+[[protocol.pools]]
+name = "USDH/USDC"
+address = "0xcbB578aB514Da59d5a9FF2eFFa779506Ed741b39"
+token0 = "USDH"
+token1 = "USDC"
+stable = true
+gauge = "0xc34Fc53810fD536CC1240ac67976AC6344958A11"

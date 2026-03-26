@@ -125,19 +125,28 @@ declare class KittenSwapFarmingAdapter {
     private readonly protocolName;
     private readonly farmingCenter;
     private readonly eternalFarming;
+    private readonly positionManager;
     private readonly rpcUrl;
-    constructor(protocolName: string, farmingCenter: Address, eternalFarming: Address, rpcUrl: string);
+    constructor(protocolName: string, farmingCenter: Address, eternalFarming: Address, positionManager: Address, rpcUrl: string);
     name(): string;
     /**
-     * Discover the active IncentiveKey for a given pool by scanning nonces 0–MAX_NONCE_SCAN.
-     * Checks KNOWN_NONCES first for instant resolution.
+     * Discover the active IncentiveKey for a given pool.
+     * 1. Check runtime cache
+     * 2. Read numOfIncentives() for max nonce
+     * 3. Batch-query via Multicall3 in reverse order (newest first)
+     * 4. Return first active (non-deactivated, totalReward > 0) incentive
      */
     discoverIncentiveKey(pool: Address): Promise<IncentiveKey | null>;
     /**
-     * Build a multicall tx that enters farming for a position NFT.
-     * Pattern: multicall([enterFarming(key, tokenId), claimReward(KITTEN, owner, max), claimReward(WHYPE, owner, max)])
+     * Build approveForFarming tx on the PositionManager.
+     * Required before enterFarming if not already approved.
      */
-    buildEnterFarming(tokenId: bigint, pool: Address, owner: Address): Promise<DeFiTx>;
+    buildApproveForFarming(tokenId: bigint): Promise<DeFiTx | null>;
+    /**
+     * Build enterFarming tx for a position NFT.
+     * Checks farming approval first and returns pre_txs if needed.
+     */
+    buildEnterFarming(tokenId: bigint, pool: Address, _owner: Address): Promise<DeFiTx>;
     /**
      * Build a tx that exits farming for a position NFT (unstakes).
      */
@@ -160,7 +169,8 @@ declare class KittenSwapFarmingAdapter {
     }>;
     /**
      * Discover all pools with active farming incentives.
-     * Iterates KNOWN_NONCES pools and verifies each against the on-chain incentives mapping.
+     * Dynamically scans all nonces (0..numOfIncentives) via Multicall3 and
+     * groups results by pool. Only returns the latest active incentive per pool.
      */
     discoverFarmingPools(): Promise<FarmingPool[]>;
 }
@@ -303,8 +313,26 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
     name(): string;
     buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx>;
     buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx>;
+    /**
+     * Resolve gauge address from a pool address via voter contract.
+     * Tries gaugeForPool (Ramses), poolToGauge (NEST), gauges (classic Solidly).
+     */
+    resolveGauge(pool: Address): Promise<Address>;
+    /**
+     * Discover reward tokens for a gauge.
+     * Returns { tokens, multiToken } where multiToken indicates getReward(account, tokens[]) support.
+     */
+    private discoverRewardTokens;
     buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
-    getPendingRewards(_gauge: Address, _user: Address): Promise<RewardInfo[]>;
+    /**
+     * Claim rewards for a CL gauge by NFT tokenId (Hybra V4 style).
+     */
+    buildClaimRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<DeFiTx>;
+    getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
+    /**
+     * Get pending rewards for a CL gauge NFT position (Hybra V4 style).
+     */
+    getPendingRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<bigint>;
     buildCreateLock(amount: bigint, lockDuration: number): Promise<DeFiTx>;
     buildIncreaseAmount(tokenId: bigint, amount: bigint): Promise<DeFiTx>;
     buildIncreaseUnlockTime(tokenId: bigint, lockDuration: number): Promise<DeFiTx>;
@@ -355,6 +383,50 @@ declare class DexSpotPrice {
      * `quoteDecimals` — decimals of the quote token (to convert the output to number)
      */
     static getPrice(dex: IDex, token: Address, tokenDecimals: number, quoteToken: Address, quoteDecimals: number): Promise<PriceData>;
+}
+
+declare class ThenaCLAdapter implements IDex {
+    private readonly protocolName;
+    private readonly router;
+    private readonly positionManager;
+    private readonly factory;
+    private readonly rpcUrl;
+    private readonly defaultTickSpacing;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
+    name(): string;
+    buildSwap(params: SwapParams): Promise<DeFiTx>;
+    quote(_params: QuoteParams): Promise<QuoteResult>;
+    buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx>;
+    buildRemoveLiquidity(_params: RemoveLiquidityParams): Promise<DeFiTx>;
+}
+
+/**
+ * Hybra ve(3,3) Gauge adapter using GaugeManager pattern.
+ * CL gauges require NFT deposit and claim goes through GaugeManager (not directly to gauge).
+ */
+declare class HybraGaugeAdapter implements IGaugeSystem {
+    private readonly protocolName;
+    private readonly gaugeManager;
+    private readonly veToken;
+    private readonly voter;
+    private readonly positionManager;
+    private readonly rpcUrl;
+    constructor(entry: ProtocolEntry, rpcUrl?: string);
+    name(): string;
+    resolveGauge(pool: Address): Promise<Address>;
+    buildDeposit(gauge: Address, _amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
+    buildWithdraw(gauge: Address, _amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
+    buildClaimRewards(gauge: Address, _account?: Address): Promise<DeFiTx>;
+    buildClaimRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<DeFiTx>;
+    getPendingRewards(gauge: Address, _user: Address): Promise<RewardInfo[]>;
+    getPendingRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<bigint>;
+    buildCreateLock(amount: bigint, lockDuration: number): Promise<DeFiTx>;
+    buildIncreaseAmount(tokenId: bigint, amount: bigint): Promise<DeFiTx>;
+    buildIncreaseUnlockTime(tokenId: bigint, lockDuration: number): Promise<DeFiTx>;
+    buildWithdrawExpired(tokenId: bigint): Promise<DeFiTx>;
+    buildVote(tokenId: bigint, pools: Address[], weights: bigint[]): Promise<DeFiTx>;
+    buildClaimBribes(bribes: Address[], tokenId: bigint): Promise<DeFiTx>;
+    buildClaimFees(fees: Address[], tokenId: bigint): Promise<DeFiTx>;
 }
 
 declare class AaveV3Adapter implements ILending {
@@ -592,4 +664,4 @@ declare class ERC721Adapter implements INft {
     getBalance(owner: Address, collection: Address): Promise<bigint>;
 }
 
-export { AaveOracleAdapter, AaveV2Adapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, type FarmingPool, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, type IncentiveKey, KinetiqAdapter, KittenSwapFarmingAdapter, type LBAddLiquidityParams, type LBPosition, type LBRemoveLiquidityParams, MasterChefAdapter, MerchantMoeLBAdapter, MorphoBlueAdapter, PendleAdapter, type RewardedPool, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createKittenSwapFarming, createLending, createLiquidStaking, createMasterChef, createMerchantMoeLB, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };
+export { AaveOracleAdapter, AaveV2Adapter, AaveV3Adapter, AlgebraV3Adapter, BalancerV3Adapter, CompoundV2Adapter, CompoundV3Adapter, CurveStableSwapAdapter, DexSpotPrice, ERC4626VaultAdapter, ERC721Adapter, EulerV2Adapter, type FarmingPool, FelixCdpAdapter, FelixOracleAdapter, GenericDerivativesAdapter, GenericLstAdapter, GenericOptionsAdapter, GenericYieldAdapter, HlpVaultAdapter, HybraGaugeAdapter, type IncentiveKey, KinetiqAdapter, KittenSwapFarmingAdapter, type LBAddLiquidityParams, type LBPosition, type LBRemoveLiquidityParams, MasterChefAdapter, MerchantMoeLBAdapter, MorphoBlueAdapter, PendleAdapter, type RewardedPool, RyskAdapter, SolidlyAdapter, SolidlyGaugeAdapter, StHypeAdapter, ThenaCLAdapter, UniswapV2Adapter, UniswapV3Adapter, WooFiAdapter, createCdp, createDerivatives, createDex, createGauge, createKittenSwapFarming, createLending, createLiquidStaking, createMasterChef, createMerchantMoeLB, createNft, createOptions, createOracleFromCdp, createOracleFromLending, createVault, createYieldSource };

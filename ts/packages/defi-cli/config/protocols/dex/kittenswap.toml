@@ -17,3 +17,24 @@ ve_token = "0x29d3a21ff35a519e00cf6d272f2ad897b109bd84"
 minter = "0xac36d3671f21A5056Cd1751E201574d702748C7A"
 farming_center = "0x211BD8917d433B7cC1F4497AbA906554Ab6ee479"
 eternal_farming = "0xf3b57fE4d5D0927C3A5e549CB6aF1866687e2D62"
+
+[[protocol.pools]]
+name = "WHYPE/USDC"
+address = "0x12df9913e9e08453440e3c4b1ae73819160b513e"
+token0 = "WHYPE"
+token1 = "USDC"
+tick_spacing = 10
+
+[[protocol.pools]]
+name = "WHYPE/USDT0"
+address = "0x3c1403335d0ca7d0a73c9e775b25514537c2b809"
+token0 = "WHYPE"
+token1 = "USDT0"
+tick_spacing = 10
+
+[[protocol.pools]]
+name = "WHYPE/KITTEN"
+address = "0x71d1fde797e1810711e4c9abcfca6ef04c266196"
+token0 = "WHYPE"
+token1 = "KITTEN"
+tick_spacing = 500

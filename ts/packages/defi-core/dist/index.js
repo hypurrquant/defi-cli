@@ -422,6 +422,24 @@ var Registry = class _Registry {
     if (!token) throw new Error(`Token not found: ${symbol}`);
     return token;
   }
+  /**
+   * Resolve a pool by name (e.g. "WHYPE/USDC") from a protocol's pool list.
+   * Returns the pool info or throws if not found.
+   */
+  resolvePool(protocolSlug, poolName) {
+    const protocol = this.getProtocol(protocolSlug);
+    if (!protocol.pools || protocol.pools.length === 0) {
+      throw new Error(`Protocol ${protocol.name} has no pools configured`);
+    }
+    const pool = protocol.pools.find(
+      (p) => p.name.toLowerCase() === poolName.toLowerCase()
+    );
+    if (!pool) {
+      const available = protocol.pools.map((p) => p.name).join(", ");
+      throw new Error(`Pool '${poolName}' not found in ${protocol.name}. Available: ${available}`);
+    }
+    return pool;
+  }
 };
 export {
   ChainConfig,

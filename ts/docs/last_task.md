@@ -1,144 +1,141 @@
-# Last Task Summary — 2026-03-25
+# Last Task Summary — 2026-03-26
 
 ## Session Overview
 
-Full defi-cli build, verification, and npm publish session. From protocol verification to production-ready CLI with MCP server.
+LP minting + gauge staking + emission claiming 전체 flow 구현 및 메인넷 검증. KittenSwap, Hybra, Ramses, NEST 4개 DEX 프로토콜에 대해 concentrated LP, gauge deposit, claim까지 CLI 추상화 완료.
 
 ## Key Deliverables
 
-### 1. Auto-approve
-- Executor checks on-chain allowance before broadcasting
-- Sends `approve(spender, exactAmount)` if insufficient
-- All adapters populate `approvals` field: aave_v3, aave_v2, uniswap_v2, uniswap_v3, algebra_v3, solidly, solidly_gauge
-- Skip in dry-run/simulation mode
+### 1. Algebra Integral MintParams ABI Fix
+- KittenSwap PM: `deployer` 필드 추가 (Algebra Integral 스타일)
+- NEST PM: `deployer` 없는 Algebra V2 스타일 유지
+- `useSingleQuoter` 플래그로 자동 분기
 
-### 2. needs_approval Simulation Status
-- Simulation mode checks allowance before `eth_call`
-- Returns `needs_approval` status with `pending_approvals` details
-- Hints user to use `--broadcast` for auto-approve
-- Prevents confusing "STF" revert messages
+### 2. Hybra Thena CL Adapter (`thena_cl.ts`)
+- 12-param mint ABI: `(token0, token1, tickSpacing, tickLower, tickUpper, amount0, amount1, min0, min1, recipient, deadline, sqrtPriceX96)`
+- `pool_factory`에서 `getPool(tokenA, tokenB, tickSpacing)` 조회
+- Single-side LP 자동 out-of-range 틱 감지
 
-### 3. Multicall Optimization
-- **aave_v3 getRates**: 20-40 calls → 7 multicall batches (~80% reduction)
-- **morpho_blue getRates**: 5 sequential → 3 batched (~40% reduction)
-- **solidly quote**: 4 parallel calls → 1 multicall (~75% reduction)
-- **LB discover**: ~300+ calls → 12 multicall batches (25x reduction)
+### 3. Hybra GaugeManager Adapter (`hybra_gauge.ts`)
+- `GaugeManager.gauges(pool)` → gauge 주소 조회
+- NFT deposit: `PM.approve(gauge, tokenId)` → `gauge.deposit(tokenId)` (pre_txs 자동)
+- Claim: `GaugeManager.claimRewards(gauge, tokenIds[], redeemType=1)` (직접 gauge 호출 불가)
+- `gauge.earned(tokenId)` (msg.sender=depositor 필수)
+- `gauge.withdraw(tokenId, redeemType)` (redeemType=1)
 
-### 4. Explorer Link Output
-- Broadcast transactions show explorer URL in stderr + JSON output
-- Auto-resolved from chain config `explorer_url`
-- HyperEVM: `https://explorer.hyperliquid.xyz/tx/...`
-- Mantle: `https://mantlescan.xyz/tx/...`
+### 4. KittenSwap Farming Fixes
+- `approveForFarming(tokenId, true, farmingCenter)` gas_estimate 60000
+- Executor `estimateGasWithBuffer` fallback에 20% buffer 적용
+- Multicall3 기반 동적 IncentiveKey 탐색 (`numOfIncentives()` → 역순 배치 스캔)
+- `KNOWN_NONCES` 하드코딩 제거 → 런타임 캐시
 
-### 5. Dashboard (Landing Page)
-- `defi` with no subcommand shows wallet balances via Multicall3
-- Two-column display: HyperEVM + Mantle
-- Native + ERC20 balances (7 HyperEVM tokens, 6 Mantle tokens)
-- Version from package.json (dynamic)
-- Setup instructions when `DEFI_WALLET_ADDRESS` not set
+### 5. `--range N` ±N% Concentrated LP
+- `tick_math.ts`: `pctToTickDelta`, `alignTickUp/Down`, `rangeToTicks` 공유 유틸
+- `defi dex lp-add --range 2` → 현재 틱 기준 ±2% 범위 자동 계산
+- algebra_v3, thena_cl 모두 지원
 
-### 6. MCP Server
-- 14 tools for AI agent integration (`defi-mcp` bin)
-- Tools: status, lending_rates, lending_supply, lending_withdraw, dex_quote, dex_swap, dex_lp_add, dex_lp_remove, bridge, vault_info, staking_info, price, scan, portfolio
-- `mcp-config.example.json` for Claude Desktop / Cursor
+### 6. NFT tokenId 자동 추출
+- Executor가 TX receipt에서 `Transfer(from=0x0)` 이벤트 파싱
+- `minted_token_id` 필드로 ActionResult에 반환
+- stderr에 `Minted NFT tokenId: XXXXX` 출력
 
-### 7. Setup Wizard
-- `defi setup` interactive CLI (readline)
-- Configures DEFI_PRIVATE_KEY, DEFI_WALLET_ADDRESS, RPC URLs
-- Saves to `~/.defi/.env`, auto-loaded at startup via dotenv
-- Validates address/key format, derives wallet from private key
+### 7. Pool Config Registry
+- 각 프로토콜 TOML에 `[[protocol.pools]]` 섹션 추가
+- `registry.resolvePool('hybra', 'WHYPE/USDC')` → pool address + gauge + tickSpacing
+- CLI: `--pool WHYPE/USDC` 이름으로 풀 지정 가능
+- 4개 프로토콜 총 35개 메이저 풀 등록 (gauge 주소 포함)
 
-### 8. LB Reward APR Calculation
-- Merchant Moe Liquidity Book adapter with full reward discovery
-- Formula: `actual_moe_per_sec = total × (1-treasury) × (1-static) × weight/totalWeight`
-- VeMoe weight power model (alpha=2/3)
-- Range TVL from bin reserves × token prices
-- APR = `(moePerDay × moePrice × 365) / rangeTvl × 100`
-- Verified: WMNT/USDT0 557% ≈ frontend 591%
+### 8. Solidly Gauge Adapter 개선
+- `resolveGauge(pool)`: `gaugeForPool` / `poolToGauge` / `gauges` 자동 시도
+- Reward token discovery: `rewardData()` (multi-token) vs `rewardToken()` (single-token) 자동 분기
+- NEST: `getReward()` (no args), Ramses: `getReward(account, tokens[])`
+- `getPendingRewards`: multi-token `earned(token, account)` vs single-token `earned(account)`
 
-### 9. KittenSwap Farming
-- Algebra eternal farming adapter: enter, exit, collect, claim, discover
-- IncentiveKey discovery via nonce scan (0-60)
-- FarmingCenter multicall: enterFarming + claimReward(KITTEN) + claimReward(WHYPE)
-- 3 active pools: WHYPE/KITTEN (nonce=33), WHYPE/USDT0 (nonce=1), WHYPE/USDC (nonce=43)
+## Protocol-Specific Notes
 
-## Chain & Protocol Status
+### KittenSwap
+- Interface: `algebra_v3` (Algebra Integral, deployer field in mint)
+- Farming: `FarmingCenter.enterFarming(key, tokenId)` — NOT multicall
+- Pre-tx: `PM.approveForFarming(tokenId, true, farmingCenter)` 필수
+- 3 pools: WHYPE/USDC, WHYPE/USDT0, WHYPE/KITTEN
 
-### Mantle (4 protocols)
-| Protocol | Category | Interface | Mainnet Verified |
-|----------|----------|-----------|-----------------|
-| Aave V3 Mantle | lending | aave_v3 | ✅ supply + withdraw |
-| Lendle | lending | aave_v2 | ✅ supply + withdraw |
-| Uniswap V3 Mantle | dex | uniswap_v3 | ✅ LP add (NFT) |
-| Merchant Moe | dex | uniswap_v2 + LB | ✅ swap, LP, LB discover, rewards |
+### Hybra
+- Interface: `hybra` (Thena CL V4, tickSpacing-based)
+- Gauge: GaugeManager 경유 필수 (직접 gauge 호출 시 "Caller is not RewardsDistribution")
+- `redeemType=0` 에러, `redeemType=1` (rHYBR vesting NFT) 동작
+- Out-of-range LP는 에미션 미적립
+- 8 gauged pools (WHYPE/USDC, WHYPE/USDT0, WHYPE/USDH, WHYPE/UETH, WHYPE/UBTC, WHYPE/PURR, UETH/USDC, UBTC/USDC)
 
-### HyperEVM (19 protocols)
-| Protocol | Category | Interface | Status |
-|----------|----------|-----------|--------|
-| HyperLend | lending | aave_v3 | ✅ mainnet supply + withdraw |
-| HypurrFi | lending | aave_v3 | ✅ mainnet supply + withdraw |
-| Purrlend | lending | aave_v3 | ✅ mainnet supply + withdraw |
-| HyperYield | lending | aave_v3 | ✅ rates |
-| PrimeFi | lending | aave_v2 | ✅ rates |
-| Felix Morpho | lending | morpho_blue | ✅ rates (use vault for deposit) |
-| Euler V2 | lending | euler_v2 | ✅ rates |
-| Felix | cdp | liquity_v2 | ✅ config |
-| Felix Vaults | vault | erc4626 | ✅ mainnet deposit + withdraw |
-| Hyperbeat | vault | erc4626 | ✅ info |
-| Looping Collective | vault | erc4626 | ✅ info |
-| Upshift | vault | erc4626 | ✅ info |
-| Lazy Summer | yield_agg | erc4626 | ✅ info |
-| KittenSwap | dex | algebra_v3 | ✅ quote, LP dry-run, farming discover |
-| NEST V1 | dex | algebra_v3 | ✅ quote |
-| Project X | dex | uniswap_v4 | ⚠️ V4 not yet supported |
-| Ramses HL | dex | solidly_v2 | ✅ LP dry-run, gauge simulated |
-| Hypersurface | options | options | config only |
-| Seaport | nft | marketplace | config only |
+### Ramses
+- CL: `uniswap_v3` (tickSpacing-based PM, 11-param mint)
+- V2: `solidly_v2` (classic AMM)
+- Gauge 없는 풀도 에미션 적립 (fee-based)
+- Claim: PM `collect` (fee 수거) 또는 Ramses FE에서
+- 5 V2 gauges, 5 CL gauges
 
-## Mainnet Transactions
+### NEST
+- Interface: `algebra_v3` (Algebra V2, no deployer in mint)
+- Fenix Finance 포크
+- `voter.poolToGauge(pool)` → gauge 주소
+- Claim: `gauge.getReward()` (no args, selector 0x3d18b912)
+- `voter.aggregateClaim()` 복합 claim도 지원
+- 32 pools, 전부 gauge 있음
 
-### Mantle (9 tx)
-1. Approve USDC → Lendle ✅
-2. Approve USDC → Merchant Moe Router ✅
-3. Swap 0.3 USDC → WMNT (Merchant Moe) ✅
-4. Approve USDC → Aave V3 ✅
-5. Supply 0.5 USDC → Aave V3 ✅
-6. Withdraw all from Aave V3 ✅
-7. Approve USDC → Lendle (max) ✅
-8. Supply 0.5 USDC → Lendle ✅
-9. Withdraw all from Lendle ✅
+## Mainnet Transactions (This Session)
 
-### HyperEVM (8 tx)
-1. Auto-approve WHYPE → HyperLend ✅
-2. Supply 0.01 WHYPE → HyperLend ✅
-3. Withdraw all from HyperLend ✅
-4. Supply 0.01 WHYPE → HypurrFi ✅
-5. Withdraw all from HypurrFi ✅
-6. Auto-approve + Supply 0.01 WHYPE → Purrlend ✅
-7. Withdraw all from Purrlend ✅
-8. Felix Vault deposit + withdraw ✅
+### KittenSwap
+| Action | TX | Status |
+|--------|-----|--------|
+| LP add WHYPE/USDC ±2% | `0x216e...` | ✅ NFT #61847 |
+| Farming enter #61847 | `0x6e50...` | ✅ (pre_tx approve 자동) |
 
-## npm Package
+### Hybra
+| Action | TX | Status |
+|--------|-----|--------|
+| Swap WHYPE→USDT0 | `0x9f53...` | ✅ |
+| LP WHYPE/USDT0 full-range | `0xedc3...` | ✅ NFT #50538 |
+| Gauge deposit #50538 | `0xe549...` | ✅ |
+| Gauge claim via GaugeManager | `0xcf26...` | ✅ rHYBR received |
+| LP WHYPE/USDT0 single-side | `0xd015...` | ✅ NFT #50540 |
+| Gauge deposit #50540 | `0xfa3a...` | ✅ (pre_tx approve 자동) |
 
-- **Name**: `@hypurrquant/defi-cli`
-- **Latest**: v0.3.0
-- **Install**: `npm install -g @hypurrquant/defi-cli`
-- **Bin**: `defi` (CLI), `defi-mcp` (MCP server)
-- **CI**: Node 20/22/24 matrix, package smoke test, GitHub Release on tag
+### Ramses
+| Action | TX | Status |
+|--------|-----|--------|
+| LP WHYPE/USDT0 ±2% | `0xb01b...` | ✅ NFT #152756 |
 
-## SSOT Address Fixes (from defi-docs verification)
-- HyperLend pool_data_provider: `0x3Bb9...` → `0x5481...`
-- HypurrFi pool_data_provider: `0x7b88...` → `0x895C...`
-- Felix BorrowerOperations: `0xadfb...` → `0x5b27...`
-- Felix TroveManager: `0x5844...` → `0x3100...`
-- Felix SortedTroves: `0xa82c...` → `0xd1ca...`
-- Merchant Moe MasterChef: `0xd4BD...` → `0xA756...` (V2)
-- USDT0 checksum fix on HyperEVM
+### NEST
+| Action | TX | Status |
+|--------|-----|--------|
+| LP WHYPE/USDC full-range | `0x50c9...` | ✅ NFT #21396 |
+| LP WHYPE/USDC ±2% | `0xea60...` | ✅ NFT #21409 |
+| Claim `getReward()` simulation | ✅ | |
+
+## Files Changed
+
+### New Files
+- `ts/packages/defi-protocols/src/dex/thena_cl.ts` — Hybra Thena CL DEX adapter
+- `ts/packages/defi-protocols/src/dex/hybra_gauge.ts` — Hybra GaugeManager adapter
+- `ts/packages/defi-protocols/src/dex/tick_math.ts` — Shared tick calculation utils
+- `ts/packages/defi-cli/config/protocols/dex/hybra.toml` — Hybra protocol config
+- `ts/packages/defi-cli/config/protocols/dex/ramses_cl.toml` — Ramses CL config
+
+### Modified Files
+- `algebra_v3.ts` — Deployer field ABI fix, Algebra V2/Integral 분기, --range 지원
+- `kittenswap_farming.ts` — Multicall3 동적 nonce 탐색, KNOWN_NONCES 제거
+- `solidly_gauge.ts` — resolveGauge, reward token discovery, multi/single-token 분기
+- `factory.ts` — hybra DEX/gauge adapter 등록
+- `executor.ts` — pre_txs gas buffer fix, NFT tokenId 추출
+- `types.ts` — AddLiquidityParams (range_pct, pool), DeFiTx (pre_txs), PoolInfo
+- `protocol.ts` — PoolInfo interface, ProtocolEntry.pools
+- `registry.ts` — resolvePool() 메서드
+- `gauge.ts` (CLI) — gauge find/earned/deposit/withdraw --token-id 지원
+- `dex.ts` (CLI) — --range, --pool name 지원
+- Config TOMLs — 35개 메이저 풀 정보 추가
 
 ## Known Limitations
-- Uniswap V3 Mantle swap: router ABI incompatible (DEX agg planned)
-- Project X: V4 singleton PoolManager not yet supported
-- Felix Morpho: use Felix Vaults (ERC-4626) for deposit/withdraw
-- ERC-4626 withdraw: must use `maxWithdraw()`, not max uint
-- Mantle gas: high gas units (up to 5B), capped at 5B in executor
-- KittenSwap farming nonces: hardcoded for 3 pools, fallback scan 0-60
+- Hybra `redeemType=0` (HYBR 직접 수령) 미지원 — rHYBR vesting NFT로만 수령
+- Hybra NFT #50492: gauge에 stuck (approve로 잘못 전송, _stakes 미등록)
+- Ramses gauge 없는 풀의 에미션 claim 메커니즘 미구현
+- NEST `aggregateClaim` 복합 claim 미구현 (개별 `getReward()` 사용)
+- Pool config는 정적 — 새 풀 추가 시 수동 업데이트 필요

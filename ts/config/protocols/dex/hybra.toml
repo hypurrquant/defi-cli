@@ -1,0 +1,91 @@
+[protocol]
+name = "Hybra"
+slug = "hybra"
+category = "dex"
+interface = "hybra"
+chain = "hyperevm"
+native = true
+description = "Hybra V4 CL DEX with ve(3,3) gauge emissions on HyperEVM"
+
+[protocol.contracts]
+# V4 CL
+position_manager = "0xcc9E3991360229Fd13694022b9456D371f1a2568"
+pool_factory = "0x32b9dA73215255d50D84FeB51540B75acC1324c2"
+quoter = "0x8CD6acfF822eE9E3240501b3CeDa64364791e4E2"
+router = "0xbEc2Bf10B7172C8E5621569bD285E9adB1806426"
+# V2 AMM
+v2_router = "0x0d76Fcf33C6EDeD05696549757d136788C98CC9D"
+v2_factory = "0x9c7397c9C5ecC400992843408D3A283fE9108009"
+# ve(3,3) governance
+voter = "0x5623F012d15EB828C12fe32e46d40AdC2A9e4FA3"
+ve_token = "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
+minter = "0xA8265e40e4Cdf6DB345861F4FCb75F9CC63E149b"
+rewards_distributor = "0x04FCae9aF38e79B7bb82C6491BDACC2431F0e"
+gauge_factory_cl = "0xeB60888176d0c6AF4C539D64b2E83E470a63e4F9"
+gauge_manager = "0x742CAA5bA7C92ca6CFeBfD0e73c21739b3b65d5e"
+bribe_factory = "0x2555F79AC6e8096c755096e3A8d175a4Bf5fC82F"
+
+# Gauged pools (active emissions)
+[[protocol.pools]]
+name = "WHYPE/USDC"
+address = "0x4C3078122fE4F946A6Dd3bFF487C19661DeA9314"
+token0 = "WHYPE"
+token1 = "USDC"
+tick_spacing = 50
+gauge = "0xa26921d56981fA43BA598428ea0C4Dd6De89CB8C"
+
+[[protocol.pools]]
+name = "WHYPE/USDT0"
+address = "0xC22FaD66665343D385608cC45D2e1484f9bA8D6b"
+token0 = "WHYPE"
+token1 = "USDT0"
+tick_spacing = 50
+gauge = "0x382E5dB8eC64E8506879B94568b41d159d64577F"
+
+[[protocol.pools]]
+name = "WHYPE/USDH"
+address = "0xF18ec0caAEB02F590158EcFB06C6108C818e0935"
+token0 = "WHYPE"
+token1 = "USDH"
+tick_spacing = 50
+gauge = "0x2E15d1f00F25F8466C57dc006f7aE6410a0b6410"
+
+[[protocol.pools]]
+name = "WHYPE/UETH"
+address = "0xF7179a2d763b1d4754e614df9898048Ab9C8608b"
+token0 = "WHYPE"
+token1 = "UETH"
+tick_spacing = 50
+gauge = "0x9605c3851224BD97EE0Bb0CB99C2fF7A3EAdB2a9"
+
+[[protocol.pools]]
+name = "WHYPE/UBTC"
+address = "0x28973CBC1a222fAefA314454985F1788B26234eC"
+token0 = "WHYPE"
+token1 = "UBTC"
+tick_spacing = 50
+gauge = "0x5d25F74e0334E87063E1F6f8A137689726508584"
+
+[[protocol.pools]]
+name = "WHYPE/PURR"
+address = "0x888b0f80B2BE0528a43cE7B1d2f1cdDF917C95bA"
+token0 = "WHYPE"
+token1 = "PURR"
+tick_spacing = 50
+gauge = "0x43Aa5E6d1F6a5BDa12D04CA4B2ebB0B0D43a86a3"
+
+[[protocol.pools]]
+name = "UETH/USDC"
+address = "0x0e7e71e7481a67eeEAF395dC53CfD62816842946"
+token0 = "UETH"
+token1 = "USDC"
+tick_spacing = 50
+gauge = "0x2ec76eCd8E5709c2a48c7bC96FF85C8Dc01f573C"
+
+[[protocol.pools]]
+name = "UBTC/USDC"
+address = "0x13B146978B03cda11A429D8B1b8bb179D3bD2AF3"
+token0 = "UBTC"
+token1 = "USDC"
+tick_spacing = 50
+gauge = "0xc891Af66C0bf56AA5cd0F6a8F84F58c5Bc3214c0"
