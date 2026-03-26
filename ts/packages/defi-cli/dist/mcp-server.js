@@ -3254,11 +3254,20 @@ var init_dist3 = __esm({
         const pairs = pairAddressResults.map((r) => decodeAddress(r)).filter((a) => a !== null && a !== zeroAddress6);
         if (pairs.length === 0) return;
         const gaugeForPoolAbi = parseAbi10(["function gaugeForPool(address) external view returns (address)"]);
+        const poolToGaugeAbi = parseAbi10(["function poolToGauge(address) external view returns (address)"]);
         const gaugeCalls = pairs.map((pair) => [
           this.voter,
           encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pair] })
         ]);
-        const gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+        let gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+        const allNullV2 = gaugeResults.every((r) => !r || decodeAddress(r) === zeroAddress6 || decodeAddress(r) === null);
+        if (allNullV2) {
+          const fallbackCalls = pairs.map((pair) => [
+            this.voter,
+            encodeFunctionData10({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [pair] })
+          ]);
+          gaugeResults = await multicallRead(this.rpcUrl, fallbackCalls);
+        }
         const gaugedPairs = [];
         for (let i = 0; i < pairs.length; i++) {
           const gauge = decodeAddress(gaugeResults[i] ?? null);
@@ -3312,12 +3321,16 @@ var init_dist3 = __esm({
         const clFactoryAbi = parseAbi10([
           "function getPool(address tokenA, address tokenB, int24 tickSpacing) external view returns (address pool)"
         ]);
+        const algebraFactoryAbi = parseAbi10([
+          "function poolByPair(address tokenA, address tokenB) external view returns (address pool)"
+        ]);
         const poolAbi2 = parseAbi10([
           "function token0() external view returns (address)",
           "function token1() external view returns (address)"
         ]);
         const erc20SymbolAbi = parseAbi10(["function symbol() external view returns (string)"]);
         const gaugeForPoolAbi = parseAbi10(["function gaugeForPool(address) external view returns (address)"]);
+        const poolToGaugeAbi = parseAbi10(["function poolToGauge(address) external view returns (address)"]);
         const tokenEntries = Object.entries(HYPEREVM_TOKENS);
         const tokenAddresses = tokenEntries.map(([, addr]) => addr);
         const pairs = [];
@@ -3326,13 +3339,38 @@ var init_dist3 = __esm({
             pairs.push([tokenAddresses[i], tokenAddresses[j]]);
           }
         }
+        const isAlgebra = await (async () => {
+          try {
+            const [result] = await multicallRead(this.rpcUrl, [[
+              this.clFactory,
+              encodeFunctionData10({ abi: algebraFactoryAbi, functionName: "poolByPair", args: [tokenAddresses[0], tokenAddresses[1]] })
+            ]]);
+            return result !== null && result.length >= 66;
+          } catch {
+            return false;
+          }
+        })();
         const getPoolCalls = [];
-        for (const [tokenA, tokenB] of pairs) {
-          for (const ts of CL_TICK_SPACINGS) {
+        const callMeta = [];
+        if (isAlgebra) {
+          for (let p = 0; p < pairs.length; p++) {
+            const [tokenA, tokenB] = pairs[p];
             getPoolCalls.push([
               this.clFactory,
-              encodeFunctionData10({ abi: clFactoryAbi, functionName: "getPool", args: [tokenA, tokenB, ts] })
+              encodeFunctionData10({ abi: algebraFactoryAbi, functionName: "poolByPair", args: [tokenA, tokenB] })
             ]);
+            callMeta.push({ pairIdx: p, tickSpacing: 0 });
+          }
+        } else {
+          for (let p = 0; p < pairs.length; p++) {
+            const [tokenA, tokenB] = pairs[p];
+            for (const ts of CL_TICK_SPACINGS) {
+              getPoolCalls.push([
+                this.clFactory,
+                encodeFunctionData10({ abi: clFactoryAbi, functionName: "getPool", args: [tokenA, tokenB, ts] })
+              ]);
+              callMeta.push({ pairIdx: p, tickSpacing: ts });
+            }
           }
         }
         const getPoolResults = await multicallRead(this.rpcUrl, getPoolCalls);
@@ -3340,10 +3378,9 @@ var init_dist3 = __esm({
         for (let i = 0; i < getPoolCalls.length; i++) {
           const pool = decodeAddress(getPoolResults[i] ?? null);
           if (pool && pool !== zeroAddress6) {
-            const pairIdx = Math.floor(i / CL_TICK_SPACINGS.length);
-            const tsIdx = i % CL_TICK_SPACINGS.length;
+            const { pairIdx, tickSpacing } = callMeta[i];
             const [tokenA, tokenB] = pairs[pairIdx];
-            candidatePools.push({ pool, tokenA, tokenB, tickSpacing: CL_TICK_SPACINGS[tsIdx] });
+            candidatePools.push({ pool, tokenA, tokenB, tickSpacing });
           }
         }
         if (candidatePools.length === 0) return;
@@ -3351,7 +3388,15 @@ var init_dist3 = __esm({
           this.voter,
           encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pool] })
         ]);
-        const gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+        let gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+        const allNull = gaugeResults.every((r) => !r || decodeAddress(r) === zeroAddress6 || decodeAddress(r) === null);
+        if (allNull) {
+          const fallbackCalls = candidatePools.map(({ pool }) => [
+            this.voter,
+            encodeFunctionData10({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [pool] })
+          ]);
+          gaugeResults = await multicallRead(this.rpcUrl, fallbackCalls);
+        }
         const gaugedCL = [];
         for (let i = 0; i < candidatePools.length; i++) {
           const gauge = decodeAddress(gaugeResults[i] ?? null);

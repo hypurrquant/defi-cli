@@ -181,13 +181,24 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
 
     if (pairs.length === 0) return;
 
-    // Step 3: for each pair, call gaugeForPool on voter
+    // Step 3: for each pair, call gaugeForPool on voter (fallback to poolToGauge)
     const gaugeForPoolAbi = parseAbi(["function gaugeForPool(address) external view returns (address)"]);
+    const poolToGaugeAbi = parseAbi(["function poolToGauge(address) external view returns (address)"]);
     const gaugeCalls: Array<[Address, Hex]> = pairs.map((pair) => [
       this.voter,
       encodeFunctionData({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pair] }),
     ]);
-    const gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+    let gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+
+    // If all results are null (gaugeForPool not supported), try poolToGauge
+    const allNullV2 = gaugeResults.every(r => !r || decodeAddress(r) === zeroAddress || decodeAddress(r) === null);
+    if (allNullV2) {
+      const fallbackCalls: Array<[Address, Hex]> = pairs.map((pair) => [
+        this.voter,
+        encodeFunctionData({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [pair] }),
+      ]);
+      gaugeResults = await multicallRead(this.rpcUrl, fallbackCalls);
+    }
 
     // Filter only pairs that have a gauge
     const gaugedPairs: Array<{ pair: Address; gauge: Address }> = [];
@@ -253,12 +264,16 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     const clFactoryAbi = parseAbi([
       "function getPool(address tokenA, address tokenB, int24 tickSpacing) external view returns (address pool)",
     ]);
+    const algebraFactoryAbi = parseAbi([
+      "function poolByPair(address tokenA, address tokenB) external view returns (address pool)",
+    ]);
     const poolAbi = parseAbi([
       "function token0() external view returns (address)",
       "function token1() external view returns (address)",
     ]);
     const erc20SymbolAbi = parseAbi(["function symbol() external view returns (string)"]);
     const gaugeForPoolAbi = parseAbi(["function gaugeForPool(address) external view returns (address)"]);
+    const poolToGaugeAbi = parseAbi(["function poolToGauge(address) external view returns (address)"]);
 
     const tokenEntries = Object.entries(HYPEREVM_TOKENS);
     const tokenAddresses = tokenEntries.map(([, addr]) => addr);
@@ -271,39 +286,79 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
       }
     }
 
-    // Build getPool calls for all (tokenA, tokenB, tickSpacing) combos
+    // Detect factory type: try poolByPair (Algebra) — if it returns non-null, it's Algebra
+    const isAlgebra = await (async () => {
+      try {
+        const [result] = await multicallRead(this.rpcUrl!, [[
+          this.clFactory!,
+          encodeFunctionData({ abi: algebraFactoryAbi, functionName: "poolByPair", args: [tokenAddresses[0]!, tokenAddresses[1]!] }),
+        ]]);
+        // If poolByPair returns any data (even zero address), it's Algebra
+        return result !== null && result.length >= 66;
+      } catch {
+        return false;
+      }
+    })();
+
+    // Build pool lookup calls
     const getPoolCalls: Array<[Address, Hex]> = [];
-    for (const [tokenA, tokenB] of pairs) {
-      for (const ts of CL_TICK_SPACINGS) {
+    const callMeta: Array<{ pairIdx: number; tickSpacing: number }> = [];
+
+    if (isAlgebra) {
+      // Algebra: one pool per pair (no tickSpacing)
+      for (let p = 0; p < pairs.length; p++) {
+        const [tokenA, tokenB] = pairs[p]!;
         getPoolCalls.push([
-          this.clFactory,
-          encodeFunctionData({ abi: clFactoryAbi, functionName: "getPool", args: [tokenA, tokenB, ts] }),
+          this.clFactory!,
+          encodeFunctionData({ abi: algebraFactoryAbi, functionName: "poolByPair", args: [tokenA!, tokenB!] }),
         ]);
+        callMeta.push({ pairIdx: p, tickSpacing: 0 });
+      }
+    } else {
+      // Uniswap-style: multiple tick spacings per pair
+      for (let p = 0; p < pairs.length; p++) {
+        const [tokenA, tokenB] = pairs[p]!;
+        for (const ts of CL_TICK_SPACINGS) {
+          getPoolCalls.push([
+            this.clFactory!,
+            encodeFunctionData({ abi: clFactoryAbi, functionName: "getPool", args: [tokenA!, tokenB!, ts] }),
+          ]);
+          callMeta.push({ pairIdx: p, tickSpacing: ts });
+        }
       }
     }
 
     const getPoolResults = await multicallRead(this.rpcUrl, getPoolCalls);
 
-    // Collect non-zero pool addresses with their tickSpacing index
+    // Collect non-zero pool addresses
     const candidatePools: Array<{ pool: Address; tokenA: Address; tokenB: Address; tickSpacing: number }> = [];
     for (let i = 0; i < getPoolCalls.length; i++) {
       const pool = decodeAddress(getPoolResults[i] ?? null);
       if (pool && pool !== zeroAddress) {
-        const pairIdx = Math.floor(i / CL_TICK_SPACINGS.length);
-        const tsIdx = i % CL_TICK_SPACINGS.length;
+        const { pairIdx, tickSpacing } = callMeta[i]!;
         const [tokenA, tokenB] = pairs[pairIdx]!;
-        candidatePools.push({ pool, tokenA: tokenA!, tokenB: tokenB!, tickSpacing: CL_TICK_SPACINGS[tsIdx]! });
+        candidatePools.push({ pool, tokenA: tokenA!, tokenB: tokenB!, tickSpacing });
       }
     }
 
     if (candidatePools.length === 0) return;
 
-    // Batch gaugeForPool for all candidate pools
+    // Batch gauge lookup — try gaugeForPool first, fallback to poolToGauge
     const gaugeCalls: Array<[Address, Hex]> = candidatePools.map(({ pool }) => [
       this.voter,
       encodeFunctionData({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pool] }),
     ]);
-    const gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+    let gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
+
+    // If all results are null (gaugeForPool not supported), try poolToGauge
+    const allNull = gaugeResults.every(r => !r || decodeAddress(r) === zeroAddress || decodeAddress(r) === null);
+    if (allNull) {
+      const fallbackCalls: Array<[Address, Hex]> = candidatePools.map(({ pool }) => [
+        this.voter,
+        encodeFunctionData({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [pool] }),
+      ]);
+      gaugeResults = await multicallRead(this.rpcUrl, fallbackCalls);
+    }
 
     // Filter to pools that have a gauge
     const gaugedCL: Array<{ pool: Address; gauge: Address; tokenA: Address; tokenB: Address; tickSpacing: number }> = [];
