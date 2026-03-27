@@ -108,11 +108,12 @@ async function liquidSwapRoute(
   const json = await res.json() as Record<string, unknown>;
   const execution = json.execution as Record<string, unknown> | undefined;
   if (!execution) throw new Error("LiquidSwap: no execution data in response");
+  const details = json.details as Record<string, unknown> | undefined;
   return {
     to: String(execution.to ?? LIQD_ROUTER),
     data: String(execution.calldata),
     value: String(execution.value ?? "0x0"),
-    outAmount: String((json.quote as Record<string, unknown> | undefined)?.amountOut ?? "0"),
+    outAmount: String(details?.amountOut ?? json.amountOut ?? "0"),
   };
 }
 
@@ -202,7 +203,12 @@ export function registerSwap(
           return;
         }
         const ooChain = chainNames.openocean;
-        // OpenOcean amount is in token units — pass raw wei as-is (user must supply wei)
+        // OpenOcean amount is human-readable — convert wei to decimal
+        const fromToken = (opts.from as string).startsWith("0x")
+          ? registry.tokens.get(chainName)?.find(t => t.address.toLowerCase() === (opts.from as string).toLowerCase())
+          : registry.tokens.get(chainName)?.find(t => t.symbol.toLowerCase() === (opts.from as string).toLowerCase());
+        const fromDecimals = fromToken?.decimals ?? 18;
+        const humanAmount = (Number(opts.amount) / 10 ** fromDecimals).toString();
         const slippagePct = (slippageBps / 100).toFixed(2);
 
         try {
@@ -210,7 +216,7 @@ export function registerSwap(
             ooChain,
             fromAddr,
             toAddr,
-            opts.amount as string,
+            humanAmount,
             slippagePct,
             wallet,
           );

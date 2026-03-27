@@ -10034,11 +10034,12 @@ async function liquidSwapRoute(tokenIn, tokenOut, amountIn, slippagePct) {
   const json = await res.json();
   const execution = json.execution;
   if (!execution) throw new Error("LiquidSwap: no execution data in response");
+  const details = json.details;
   return {
     to: String(execution.to ?? LIQD_ROUTER),
     data: String(execution.calldata),
     value: String(execution.value ?? "0x0"),
-    outAmount: String(json.quote?.amountOut ?? "0")
+    outAmount: String(details?.amountOut ?? json.amountOut ?? "0")
   };
 }
 function registerSwap(parent, getOpts, makeExecutor2) {
@@ -10099,13 +10100,16 @@ function registerSwap(parent, getOpts, makeExecutor2) {
         return;
       }
       const ooChain = chainNames.openocean;
+      const fromToken = opts.from.startsWith("0x") ? registry.tokens.get(chainName)?.find((t) => t.address.toLowerCase() === opts.from.toLowerCase()) : registry.tokens.get(chainName)?.find((t) => t.symbol.toLowerCase() === opts.from.toLowerCase());
+      const fromDecimals = fromToken?.decimals ?? 18;
+      const humanAmount = (Number(opts.amount) / 10 ** fromDecimals).toString();
       const slippagePct = (slippageBps / 100).toFixed(2);
       try {
         const swap = await openoceanSwap(
           ooChain,
           fromAddr,
           toAddr,
-          opts.amount,
+          humanAmount,
           slippagePct,
           wallet
         );
