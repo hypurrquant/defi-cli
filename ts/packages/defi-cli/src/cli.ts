@@ -25,6 +25,7 @@ import { registerWallet } from "./commands/wallet.js";
 import { registerToken } from "./commands/token.js";
 import { registerWhales } from "./commands/whales.js";
 import { registerBridge } from "./commands/bridge.js";
+import { registerSwap } from "./commands/swap.js";
 import { registerSetup } from "./commands/setup.js";
 
 const BANNER = `
@@ -89,5 +90,6 @@ registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
 registerWhales(program, getOutputMode);
 registerBridge(program, getOutputMode);
+registerSwap(program, getOutputMode, makeExecutor);
 
 registerSetup(program);

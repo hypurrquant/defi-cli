@@ -14,7 +14,7 @@ async function main() {
     const knownSubcommands = new Set([
       "status", "schema", "lp", "lending", "cdp", "vault",
       "yield", "portfolio", "monitor", "alert", "scan", "positions",
-      "price", "wallet", "token", "whales", "bridge",
+      "price", "wallet", "token", "whales", "bridge", "swap",
       "agent", "setup", "init",
     ]);
     const hasSubcommand = rawArgs.some(a => !a.startsWith("-") && knownSubcommands.has(a));

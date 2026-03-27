@@ -9968,6 +9968,205 @@ function registerBridge(parent, getOpts) {
   });
 }
 
+// src/commands/swap.ts
+var CHAIN_NAMES = {
+  hyperevm: { kyber: "hyperevm", openocean: "hyperevm" },
+  mantle: { openocean: "mantle" }
+};
+var KYBER_API = "https://aggregator-api.kyberswap.com";
+async function kyberGetQuote(chain, tokenIn, tokenOut, amountIn) {
+  const params = new URLSearchParams({ tokenIn, tokenOut, amountIn });
+  const url = `${KYBER_API}/${chain}/api/v1/routes?${params}`;
+  const res = await fetch(url, { headers: { "x-client-id": "defi-cli" } });
+  if (!res.ok) throw new Error(`KyberSwap quote failed: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  const data = json.data;
+  if (!data?.routeSummary) throw new Error(`KyberSwap: no route found`);
+  return data;
+}
+async function kyberBuildTx(chain, routeSummary, sender, recipient, slippageTolerance) {
+  const url = `${KYBER_API}/${chain}/api/v1/route/build`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-client-id": "defi-cli" },
+    body: JSON.stringify({ routeSummary, sender, recipient, slippageTolerance })
+  });
+  if (!res.ok) throw new Error(`KyberSwap build failed: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  const data = json.data;
+  if (!data) throw new Error("KyberSwap: no build data");
+  return {
+    to: String(data.routerAddress),
+    data: String(data.data),
+    value: String(data.value ?? "0x0")
+  };
+}
+var OPENOCEAN_API = "https://open-api.openocean.finance/v4";
+async function openoceanSwap(chain, inTokenAddress, outTokenAddress, amountIn, slippagePct, account) {
+  const params = new URLSearchParams({
+    inTokenAddress,
+    outTokenAddress,
+    amount: amountIn,
+    gasPrice: "0.1",
+    slippage: slippagePct,
+    account
+  });
+  const url = `${OPENOCEAN_API}/${chain}/swap?${params}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`OpenOcean swap failed: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  const data = json.data;
+  if (!data) throw new Error("OpenOcean: no swap data");
+  return {
+    to: String(data.to),
+    data: String(data.data),
+    value: String(data.value ?? "0x0"),
+    outAmount: String(data.outAmount ?? "0")
+  };
+}
+var LIQD_API = "https://api.liqd.ag/v2";
+var LIQD_ROUTER = "0x744489ee3d540777a66f2cf297479745e0852f7a";
+async function liquidSwapRoute(tokenIn, tokenOut, amountIn, slippagePct) {
+  const params = new URLSearchParams({ tokenIn, tokenOut, amountIn, slippage: slippagePct });
+  const url = `${LIQD_API}/route?${params}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`LiquidSwap route failed: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  const execution = json.execution;
+  if (!execution) throw new Error("LiquidSwap: no execution data in response");
+  return {
+    to: String(execution.to ?? LIQD_ROUTER),
+    data: String(execution.calldata),
+    value: String(execution.value ?? "0x0"),
+    outAmount: String(json.quote?.amountOut ?? "0")
+  };
+}
+function registerSwap(parent, getOpts, makeExecutor2) {
+  parent.command("swap").description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap)").requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid", "kyber").option("--slippage <bps>", "Slippage tolerance in bps", "50").action(async (opts) => {
+    const executor = makeExecutor2();
+    const chainName = parent.opts().chain ?? "hyperevm";
+    const registry = Registry.loadEmbedded();
+    const provider = opts.provider.toLowerCase();
+    const slippageBps = parseInt(opts.slippage, 10);
+    const fromAddr = opts.from.startsWith("0x") ? opts.from : registry.resolveToken(chainName, opts.from).address;
+    const toAddr = opts.to.startsWith("0x") ? opts.to : registry.resolveToken(chainName, opts.to).address;
+    const wallet = process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+    if (provider === "kyber") {
+      const chainNames = CHAIN_NAMES[chainName];
+      if (!chainNames?.kyber) {
+        printOutput({ error: `KyberSwap: unsupported chain '${chainName}'. Supported: hyperevm` }, getOpts());
+        return;
+      }
+      const kyberChain = chainNames.kyber;
+      try {
+        const quoteData = await kyberGetQuote(kyberChain, fromAddr, toAddr, opts.amount);
+        const routeSummary = quoteData.routeSummary;
+        const amountOut = String(routeSummary.amountOut ?? "0");
+        const txData = await kyberBuildTx(
+          kyberChain,
+          routeSummary,
+          wallet,
+          wallet,
+          slippageBps
+        );
+        const tx = {
+          description: `KyberSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
+          to: txData.to,
+          data: txData.data,
+          value: txData.value.startsWith("0x") ? BigInt(txData.value) : BigInt(txData.value || 0),
+          approvals: [{ token: fromAddr, spender: txData.to, amount: BigInt(opts.amount) }]
+        };
+        const result = await executor.execute(tx);
+        printOutput({
+          provider: "kyber",
+          chain: kyberChain,
+          from_token: fromAddr,
+          to_token: toAddr,
+          amount_in: opts.amount,
+          amount_out: amountOut,
+          router: txData.to,
+          ...result
+        }, getOpts());
+      } catch (e) {
+        printOutput({ error: `KyberSwap error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+      }
+      return;
+    }
+    if (provider === "openocean") {
+      const chainNames = CHAIN_NAMES[chainName];
+      if (!chainNames) {
+        printOutput({ error: `OpenOcean: unsupported chain '${chainName}'. Supported: ${Object.keys(CHAIN_NAMES).join(", ")}` }, getOpts());
+        return;
+      }
+      const ooChain = chainNames.openocean;
+      const slippagePct = (slippageBps / 100).toFixed(2);
+      try {
+        const swap = await openoceanSwap(
+          ooChain,
+          fromAddr,
+          toAddr,
+          opts.amount,
+          slippagePct,
+          wallet
+        );
+        const tx = {
+          description: `OpenOcean: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
+          to: swap.to,
+          data: swap.data,
+          value: swap.value.startsWith("0x") ? BigInt(swap.value) : BigInt(swap.value || 0),
+          approvals: [{ token: fromAddr, spender: swap.to, amount: BigInt(opts.amount) }]
+        };
+        const result = await executor.execute(tx);
+        printOutput({
+          provider: "openocean",
+          chain: ooChain,
+          from_token: fromAddr,
+          to_token: toAddr,
+          amount_in: opts.amount,
+          amount_out: swap.outAmount,
+          router: swap.to,
+          ...result
+        }, getOpts());
+      } catch (e) {
+        printOutput({ error: `OpenOcean error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+      }
+      return;
+    }
+    if (provider === "liquid") {
+      if (chainName !== "hyperevm") {
+        printOutput({ error: `LiquidSwap only supports hyperevm, got '${chainName}'` }, getOpts());
+        return;
+      }
+      const slippagePct = (slippageBps / 100).toFixed(2);
+      try {
+        const route = await liquidSwapRoute(fromAddr, toAddr, opts.amount, slippagePct);
+        const tx = {
+          description: `LiquidSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
+          to: route.to,
+          data: route.data,
+          value: route.value.startsWith("0x") ? BigInt(route.value) : BigInt(route.value || 0),
+          approvals: [{ token: fromAddr, spender: route.to, amount: BigInt(opts.amount) }]
+        };
+        const result = await executor.execute(tx);
+        printOutput({
+          provider: "liquid",
+          chain: chainName,
+          from_token: fromAddr,
+          to_token: toAddr,
+          amount_in: opts.amount,
+          amount_out: route.outAmount,
+          router: route.to,
+          ...result
+        }, getOpts());
+      } catch (e) {
+        printOutput({ error: `LiquidSwap error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+      }
+      return;
+    }
+    printOutput({ error: `Unknown provider '${opts.provider}'. Choose: kyber, openocean, liquid` }, getOpts());
+  });
+}
+
 // src/commands/setup.ts
 import pc2 from "picocolors";
 import { createInterface } from "readline";
@@ -10156,6 +10355,7 @@ registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
 registerWhales(program, getOutputMode);
 registerBridge(program, getOutputMode);
+registerSwap(program, getOutputMode, makeExecutor);
 registerSetup(program);
 export {
   program
