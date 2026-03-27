@@ -13,8 +13,8 @@ async function main() {
     // Known subcommands registered in cli.ts — everything that isn't a flag
     const knownSubcommands = new Set([
       "status", "schema", "lp", "lending", "cdp", "vault",
-      "yield", "portfolio", "monitor", "alert", "scan", "positions",
-      "price", "wallet", "token", "whales", "bridge", "swap",
+      "yield", "portfolio",
+      "price", "wallet", "token", "bridge", "swap",
       "agent", "setup", "init",
     ]);
     const hasSubcommand = rawArgs.some(a => !a.startsWith("-") && knownSubcommands.has(a));
