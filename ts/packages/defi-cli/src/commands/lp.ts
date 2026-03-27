@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import type { OutputMode } from "../output.js";
 import type { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
-import { Registry } from "@hypurrquant/defi-core";
+import { Registry, ProtocolCategory } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
@@ -10,7 +10,10 @@ import {
   createGauge,
   createKittenSwapFarming,
   createMerchantMoeLB,
+  createLending,
 } from "@hypurrquant/defi-protocols";
+import { loadWhitelist } from "../whitelist.js";
+import type { WhitelistEntry } from "../whitelist.js";
 
 /** Resolve the wallet owner address from options or env vars */
 function resolveAccount(optOwner?: string): Address {
@@ -524,5 +527,248 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       );
 
       printOutput(results, getOpts());
+    });
+
+  // ─────────────────────────────────────────
+  // lp autopilot
+  // ─────────────────────────────────────────
+  lp.command("autopilot")
+    .description("Auto-allocate budget across whitelisted pools (reads ~/.defi/pools.toml)")
+    .requiredOption("--budget <usd>", "Total budget in USD")
+    .option("--chain <chain>", "Filter whitelist to a specific chain")
+    .option("--dry-run", "Show plan only (default)", true)
+    .option("--broadcast", "Execute the plan (TODO: not yet implemented)")
+    .action(async (opts) => {
+      const budgetUsd = parseFloat(opts.budget as string);
+      if (isNaN(budgetUsd) || budgetUsd <= 0) {
+        printOutput({ error: `Invalid budget: ${opts.budget}` }, getOpts());
+        process.exit(1);
+        return;
+      }
+
+      // Step 1: Load whitelist
+      let whitelist = loadWhitelist();
+      if (whitelist.length === 0) {
+        printOutput(
+          { error: "No pools whitelisted. Create ~/.defi/pools.toml (see config/pools.example.toml)" },
+          getOpts(),
+        );
+        process.exit(1);
+        return;
+      }
+
+      // Filter by --chain if specified
+      const chainFilter = (opts.chain as string | undefined)?.toLowerCase();
+      if (chainFilter) {
+        whitelist = whitelist.filter((e) => e.chain.toLowerCase() === chainFilter);
+        if (whitelist.length === 0) {
+          printOutput(
+            { error: `No whitelisted pools found for chain '${chainFilter}'` },
+            getOpts(),
+          );
+          process.exit(1);
+          return;
+        }
+      }
+
+      // Step 2: Scan whitelisted pools — fetch current APY/APR for each entry
+      const registry = Registry.loadEmbedded();
+
+      interface ScannedEntry {
+        entry: WhitelistEntry;
+        apy?: number;
+        apr?: number;
+        active?: boolean;
+        scan_error?: string;
+      }
+
+      const scanned: ScannedEntry[] = await Promise.all(
+        whitelist.map(async (entry): Promise<ScannedEntry> => {
+          try {
+            const chainName = entry.chain.toLowerCase();
+            let chain;
+            try {
+              chain = registry.getChain(chainName);
+            } catch {
+              return { entry, scan_error: `Unknown chain '${chainName}'` };
+            }
+            const rpcUrl = chain.effectiveRpcUrl();
+
+            // Lending: fetch supply APY via getRates
+            if (entry.type === "lending" && entry.asset) {
+              const protos = registry
+                .getProtocolsForChain(chainName)
+                .filter(
+                  (p) =>
+                    p.category === ProtocolCategory.Lending &&
+                    p.slug === entry.protocol,
+                );
+              if (protos.length === 0) {
+                return { entry, scan_error: `Protocol not found: ${entry.protocol}` };
+              }
+              const proto = protos[0]!;
+              const assetAddr = registry.resolveToken(chainName, entry.asset).address as Address;
+              const adapter = createLending(proto, rpcUrl);
+              const rates = await adapter.getRates(assetAddr);
+              return { entry, apy: rates.supply_apy };
+            }
+
+            // LB: fetch APR from discoverRewardedPools
+            if (entry.type === "lb" && entry.pool) {
+              const protos = registry
+                .getProtocolsForChain(chainName)
+                .filter((p) => p.slug === entry.protocol);
+              if (protos.length === 0) {
+                return { entry, scan_error: `Protocol not found: ${entry.protocol}` };
+              }
+              const proto = protos[0]!;
+              if (proto.interface === "uniswap_v2" && proto.contracts?.["lb_factory"]) {
+                const adapter = createMerchantMoeLB(proto, rpcUrl);
+                const pools = await adapter.discoverRewardedPools();
+                // Match by pool name (pair) or address
+                const match = pools.find(
+                  (p) =>
+                    p.pool.toLowerCase() === entry.pool!.toLowerCase() ||
+                    `${p.symbolX}/${p.symbolY}`.toLowerCase() === entry.pool!.toLowerCase() ||
+                    `${p.symbolY}/${p.symbolX}`.toLowerCase() === entry.pool!.toLowerCase(),
+                );
+                if (match) {
+                  return { entry, apr: match.aprPercent, active: !match.stopped };
+                }
+              }
+              return { entry, scan_error: "Pool not found in LB discovery" };
+            }
+
+            // Farming: fetch active status from discoverFarmingPools
+            if (entry.type === "farming" && entry.pool) {
+              const protos = registry
+                .getProtocolsForChain(chainName)
+                .filter((p) => p.slug === entry.protocol);
+              if (protos.length === 0) {
+                return { entry, scan_error: `Protocol not found: ${entry.protocol}` };
+              }
+              const proto = protos[0]!;
+              if (proto.interface === "algebra_v3" && proto.contracts?.["farming_center"]) {
+                const adapter = createKittenSwapFarming(proto, rpcUrl);
+                const pools = await adapter.discoverFarmingPools();
+                const match = pools.find(
+                  (p) => p.pool.toLowerCase() === entry.pool!.toLowerCase(),
+                );
+                if (match) {
+                  return { entry, active: match.active };
+                }
+              }
+              return { entry, scan_error: "Pool not found in farming discovery" };
+            }
+
+            // Gauge: check if gauge exists
+            if (entry.type === "gauge" && entry.pool) {
+              const protos = registry
+                .getProtocolsForChain(chainName)
+                .filter((p) => p.slug === entry.protocol);
+              if (protos.length === 0) {
+                return { entry, scan_error: `Protocol not found: ${entry.protocol}` };
+              }
+              const proto = protos[0]!;
+              if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(proto.interface)) {
+                const adapter = createGauge(proto, rpcUrl);
+                if (adapter.discoverGaugedPools) {
+                  const pools = await adapter.discoverGaugedPools();
+                  const poolAddr = entry.pool.startsWith("0x")
+                    ? entry.pool.toLowerCase()
+                    : undefined;
+                  const match = pools.find(
+                    (p) =>
+                      (poolAddr && p.pool.toLowerCase() === poolAddr) ||
+                      `${p.token0}/${p.token1}`.toLowerCase() === entry.pool!.toLowerCase() ||
+                      `${p.token1}/${p.token0}`.toLowerCase() === entry.pool!.toLowerCase(),
+                  );
+                  return { entry, active: !!match };
+                }
+              }
+              return { entry, scan_error: "Gauge discovery not supported for this protocol" };
+            }
+
+            return { entry, scan_error: "Unsupported entry type or missing pool/asset field" };
+          } catch (err) {
+            return { entry, scan_error: String(err) };
+          }
+        }),
+      );
+
+      // Step 3: Generate allocation plan
+      // Reserve 20% of budget as safety margin
+      const RESERVE_PCT = 0.20;
+      const deployableBudget = budgetUsd * (1 - RESERVE_PCT);
+      const reserveUsd = budgetUsd * RESERVE_PCT;
+
+      // Sort by yield: lending/lb by APY/APR descending, farming/gauge by active first
+      const ranked = [...scanned].sort((a, b) => {
+        const scoreA = a.apy ?? a.apr ?? (a.active ? 1 : 0);
+        const scoreB = b.apy ?? b.apr ?? (b.active ? 1 : 0);
+        return scoreB - scoreA;
+      });
+
+      // Allocate respecting max_allocation_pct per entry
+      const allocations: Array<Record<string, unknown>> = [];
+      let remainingBudget = deployableBudget;
+
+      for (const s of ranked) {
+        if (remainingBudget <= 0) break;
+        const maxAlloc = budgetUsd * (s.entry.max_allocation_pct / 100);
+        const alloc = Math.min(maxAlloc, remainingBudget);
+        if (alloc <= 0) continue;
+
+        const item: Record<string, unknown> = {
+          protocol: s.entry.protocol,
+          chain: s.entry.chain,
+          type: s.entry.type,
+          amount_usd: Math.round(alloc * 100) / 100,
+        };
+        if (s.entry.pool) item["pool"] = s.entry.pool;
+        if (s.entry.asset) item["asset"] = s.entry.asset;
+        if (s.apy !== undefined) item["apy"] = s.apy;
+        if (s.apr !== undefined) item["apr"] = s.apr;
+        if (s.active !== undefined) item["active"] = s.active;
+        if (s.scan_error) item["scan_error"] = s.scan_error;
+
+        allocations.push(item);
+        remainingBudget -= alloc;
+      }
+
+      // Add reserve entry
+      const totalReserved = reserveUsd + remainingBudget;
+      allocations.push({
+        reserve: true,
+        amount_usd: Math.round(totalReserved * 100) / 100,
+        note: "20% safety margin (hardcoded) + unallocated remainder",
+      });
+
+      // Estimate daily/annual yield
+      let estimatedAnnualYieldUsd = 0;
+      for (const alloc of allocations) {
+        if (alloc["reserve"]) continue;
+        const amt = alloc["amount_usd"] as number;
+        const rate = (alloc["apy"] as number | undefined) ?? (alloc["apr"] as number | undefined);
+        if (rate !== undefined && rate > 0) {
+          // APY/APR are stored as decimal fractions (e.g. 0.0888 = 8.88%) or percentages (873 = 873%)
+          // Use as-is: yield.ts stores supply_apy as a decimal fraction from the protocol adapter
+          estimatedAnnualYieldUsd += amt * rate;
+        }
+      }
+      const estimatedDailyYieldUsd = estimatedAnnualYieldUsd / 365;
+
+      const plan = {
+        budget_usd: budgetUsd,
+        deployable_usd: Math.round(deployableBudget * 100) / 100,
+        reserve_pct: RESERVE_PCT * 100,
+        allocations,
+        estimated_daily_yield_usd: Math.round(estimatedDailyYieldUsd * 100) / 100,
+        estimated_annual_yield_usd: Math.round(estimatedAnnualYieldUsd * 100) / 100,
+        execution: "dry_run",
+        note: "--broadcast execution is not yet implemented in this version",
+      };
+
+      printOutput(plan, getOpts());
     });
 }

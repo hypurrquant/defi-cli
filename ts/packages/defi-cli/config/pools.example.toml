@@ -1,0 +1,31 @@
+# Pool whitelist — autopilot only operates within these pools
+# Copy this file to ~/.defi/pools.toml and customize for your strategy.
+# Run: defi lp autopilot --budget 300 --dry-run
+
+[[whitelist]]
+chain = "mantle"
+protocol = "merchantmoe-mantle"
+pool = "WMNT/USDT0"       # pool name or address
+type = "lb"               # lb, gauge, farming, lending
+max_allocation_pct = 40   # max % of budget for this pool
+
+[[whitelist]]
+chain = "mantle"
+protocol = "lendle-mantle"
+asset = "USDC"
+type = "lending"
+max_allocation_pct = 40
+
+[[whitelist]]
+chain = "hyperevm"
+protocol = "kittenswap"
+pool = "WHYPE/USDC"
+type = "farming"
+max_allocation_pct = 30
+
+[[whitelist]]
+chain = "hyperevm"
+protocol = "hyperlend"
+asset = "USDC"
+type = "lending"
+max_allocation_pct = 30
