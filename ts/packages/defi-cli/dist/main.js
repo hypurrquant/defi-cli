@@ -6404,7 +6404,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
     );
     printOutput(results, getOpts());
   });
-  lp.command("autopilot").description("Auto-allocate budget across whitelisted pools (reads ~/.defi/pools.toml)").requiredOption("--budget <usd>", "Total budget in USD").option("--chain <chain>", "Filter whitelist to a specific chain").option("--dry-run", "Show plan only (default)", true).option("--broadcast", "Execute the plan (TODO: not yet implemented)").action(async (opts) => {
+  lp.command("autopilot").description("Auto-allocate budget across whitelisted pools (reads ~/.defi/pools.toml)").requiredOption("--budget <usd>", "Total budget in USD").option("--chain <chain>", "Filter whitelist to a specific chain").option("--dry-run", "Show plan only (default)", true).option("--broadcast", "Execute the plan (lending supply supported; LP types show a warning)").action(async (opts) => {
     const budgetUsd = parseFloat(opts.budget);
     if (isNaN(budgetUsd) || budgetUsd <= 0) {
       printOutput({ error: `Invalid budget: ${opts.budget}` }, getOpts());
@@ -6564,6 +6564,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       }
     }
     const estimatedDailyYieldUsd = estimatedAnnualYieldUsd / 365;
+    const isBroadcast = !!opts.broadcast;
     const plan = {
       budget_usd: budgetUsd,
       deployable_usd: Math.round(deployableBudget * 100) / 100,
@@ -6571,10 +6572,71 @@ function registerLP(parent, getOpts, makeExecutor2) {
       allocations,
       estimated_daily_yield_usd: Math.round(estimatedDailyYieldUsd * 100) / 100,
       estimated_annual_yield_usd: Math.round(estimatedAnnualYieldUsd * 100) / 100,
-      execution: "dry_run",
-      note: "--broadcast execution is not yet implemented in this version"
+      execution: isBroadcast ? "broadcast" : "dry_run"
     };
     printOutput(plan, getOpts());
+    if (!isBroadcast) return;
+    process.stderr.write("\nExecuting autopilot plan...\n");
+    const executor = makeExecutor2();
+    const execResults = [];
+    let allocIndex = 0;
+    const actionAllocs = allocations.filter((a) => !a["reserve"]);
+    for (const alloc of actionAllocs) {
+      allocIndex++;
+      const chainName = alloc["chain"].toLowerCase();
+      let chain;
+      try {
+        chain = registry.getChain(chainName);
+      } catch {
+        process.stderr.write(`
+--- ${allocIndex}/${actionAllocs.length}: ${alloc["protocol"]} \u2014 unknown chain '${chainName}', skipping ---
+`);
+        execResults.push({ ...alloc, exec_status: "skipped", exec_error: `Unknown chain '${chainName}'` });
+        continue;
+      }
+      const rpc = chain.effectiveRpcUrl();
+      process.stderr.write(`
+--- ${allocIndex}/${actionAllocs.length}: ${alloc["protocol"]} (${alloc["type"]}) $${alloc["amount_usd"]} ---
+`);
+      if (alloc["type"] === "lending" && alloc["asset"]) {
+        try {
+          const protocol = registry.getProtocol(alloc["protocol"]);
+          const adapter = createLending(protocol, rpc);
+          const tokenInfo = registry.resolveToken(chainName, alloc["asset"]);
+          const assetAddr = tokenInfo.address;
+          const decimals = tokenInfo.decimals ?? 18;
+          const amountWei = BigInt(Math.floor(alloc["amount_usd"] * 10 ** decimals));
+          const wallet = resolveAccount();
+          const tx = await adapter.buildSupply({
+            protocol: alloc["protocol"],
+            asset: assetAddr,
+            amount: amountWei,
+            on_behalf_of: wallet
+          });
+          process.stderr.write(`  Supplying ${amountWei} wei of ${alloc["asset"]} to ${alloc["protocol"]}...
+`);
+          const result = await executor.execute(tx);
+          process.stderr.write(`  Status: ${result.status}
+`);
+          const explorerUrl = result.details?.["explorer_url"];
+          if (explorerUrl) process.stderr.write(`  Explorer: ${explorerUrl}
+`);
+          execResults.push({ ...alloc, exec_status: result.status, tx_hash: result.tx_hash });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`  Error: ${msg}
+`);
+          execResults.push({ ...alloc, exec_status: "error", exec_error: msg });
+        }
+        continue;
+      }
+      const lpMsg = `LP execution for type '${alloc["type"]}' pool '${alloc["pool"] ?? ""}' \u2014 requires manual token preparation (swap + addLiquidity not yet automated)`;
+      process.stderr.write(`  Warning: ${lpMsg}
+`);
+      execResults.push({ ...alloc, exec_status: "skipped", exec_note: lpMsg });
+    }
+    process.stderr.write("\nAutopilot execution complete.\n");
+    printOutput({ execution_results: execResults }, getOpts());
   });
 }
 
