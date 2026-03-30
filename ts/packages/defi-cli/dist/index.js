@@ -1008,8 +1008,25 @@ function isPlaceholder(addr) {
 function registerStatus(parent, getOpts) {
   parent.command("status").description("Show chain and protocol status").option("--verify", "Verify contract addresses on-chain").action(async (opts) => {
     const globalOpts = parent.opts();
-    const chainName = globalOpts.chain ?? "hyperevm";
     const registry = Registry.loadEmbedded();
+    const chainKeys = globalOpts.chain ? [globalOpts.chain] : Array.from(registry.chains.keys());
+    if (chainKeys.length > 1) {
+      const summary = [];
+      for (const ck of chainKeys) {
+        const cc = registry.getChain(ck);
+        const protos = registry.getProtocolsForChain(ck);
+        summary.push({
+          chain: cc.name,
+          chain_id: cc.chain_id,
+          rpc_url: cc.effectiveRpcUrl(),
+          protocols: protos.map((p) => ({ slug: p.slug, name: p.name, category: p.category, interface: p.interface })),
+          summary: { total_protocols: protos.length }
+        });
+      }
+      printOutput(summary, getOpts());
+      return;
+    }
+    const chainName = chainKeys[0];
     const chainConfig = registry.getChain(chainName);
     const chainProtocols = registry.getProtocolsForChain(chainName);
     let blockNumber;
@@ -1113,27 +1130,34 @@ function registerStatus(parent, getOpts) {
 function handleSchema(params) {
   const action = typeof params["action"] === "string" ? params["action"] : "all";
   switch (action) {
-    case "dex.swap":
+    case "status":
+      return { action: "status", params: {}, cli: "defi status" };
+    case "list_protocols":
       return {
-        action: "dex.swap",
+        action: "list_protocols",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug (e.g. hyperswap-v3)" },
-          token_in: { type: "string", required: true, description: "Input token symbol or address" },
-          token_out: { type: "string", required: true, description: "Output token symbol or address" },
-          amount: { type: "string", required: true, description: "Amount (human-readable, e.g. '1.5')" },
-          slippage_bps: { type: "number", required: false, default: 50, description: "Slippage in basis points" },
-          recipient: { type: "string", required: false, description: "Recipient address" }
-        }
+          category: { type: "string", required: false, description: "Filter by category (e.g. dex, lending)" }
+        },
+        cli: "defi status"
       };
-    case "dex.quote":
+    case "yield":
       return {
-        action: "dex.quote",
+        action: "yield",
         params: {
+          chain: { type: "string", required: false, description: "Target chain (omit for all chains)" },
+          asset: { type: "string", required: false, default: "USDC", description: "Token symbol" }
+        },
+        cli: "defi yield --asset USDC"
+      };
+    case "lending.rates":
+      return {
+        action: "lending.rates",
+        params: {
+          chain: { type: "string", required: true, description: "Target chain" },
           protocol: { type: "string", required: true, description: "Protocol slug" },
-          token_in: { type: "string", required: true, description: "Input token symbol or address" },
-          token_out: { type: "string", required: true, description: "Output token symbol or address" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" }
-        }
+          asset: { type: "string", required: true, description: "Token symbol or address" }
+        },
+        cli: "defi --chain hyperevm lending rates --protocol hypurrfi --asset USDC"
       };
     case "lending.supply":
     case "lending.borrow":
@@ -1142,47 +1166,54 @@ function handleSchema(params) {
       return {
         action,
         params: {
+          chain: { type: "string", required: true, description: "Target chain" },
           protocol: { type: "string", required: true, description: "Protocol slug" },
           asset: { type: "string", required: true, description: "Token symbol or address" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" }
-        }
+          amount: { type: "string", required: true, description: "Amount in wei" }
+        },
+        cli: `defi --chain hyperevm lending ${action.split(".")[1]} --protocol hypurrfi --asset USDC --amount 1000000`
       };
-    case "staking.stake":
-    case "staking.unstake":
+    case "lp.discover":
       return {
-        action,
+        action: "lp.discover",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" }
-        }
+          chain: { type: "string", required: true, description: "Target chain" },
+          protocol: { type: "string", required: false, description: "Filter by protocol slug" }
+        },
+        cli: "defi --chain hyperevm lp discover"
       };
-    case "vault.deposit":
-    case "vault.withdraw":
+    case "swap":
       return {
-        action,
+        action: "swap",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" }
-        }
+          chain: { type: "string", required: true, description: "Target chain" },
+          from: { type: "string", required: true, description: "Input token symbol or address" },
+          to: { type: "string", required: true, description: "Output token symbol or address" },
+          amount: { type: "string", required: true, description: "Amount in wei" },
+          provider: { type: "string", required: false, default: "kyber", description: "Aggregator: kyber, openocean, liquid" },
+          slippage: { type: "string", required: false, default: "50", description: "Slippage in bps" }
+        },
+        cli: "defi --chain hyperevm swap --from USDC --to WHYPE --amount 1000000"
       };
-    case "cdp.open":
+    case "price":
       return {
-        action: "cdp.open",
+        action: "price",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug" },
-          collateral: { type: "string", required: true, description: "Collateral token symbol or address" },
-          collateral_amount: { type: "string", required: true, description: "Collateral amount (human-readable)" },
-          debt_amount: { type: "string", required: true, description: "Debt amount (human-readable)" }
-        }
+          chain: { type: "string", required: true, description: "Target chain" },
+          asset: { type: "string", required: true, description: "Token symbol or address" }
+        },
+        cli: "defi --chain hyperevm price --asset WHYPE"
       };
-    case "status":
-      return { action: "status", params: {} };
-    case "list_protocols":
+    case "bridge":
       return {
-        action: "list_protocols",
+        action: "bridge",
         params: {
-          category: { type: "string", required: false, description: "Filter by category (e.g. dex, lending, vault)" }
-        }
+          chain: { type: "string", required: true, description: "Source chain" },
+          token: { type: "string", required: true, description: "Token symbol or address" },
+          amount: { type: "string", required: true, description: "Amount in wei" },
+          to_chain: { type: "string", required: true, description: "Destination chain" }
+        },
+        cli: "defi --chain hyperevm bridge --token USDC --amount 1000000 --to-chain mantle"
       };
     default:
       return {
@@ -1190,17 +1221,25 @@ function handleSchema(params) {
           "status",
           "list_protocols",
           "schema",
-          "dex.swap",
-          "dex.quote",
+          "yield",
+          "lending.rates",
           "lending.supply",
           "lending.borrow",
           "lending.repay",
           "lending.withdraw",
-          "staking.stake",
-          "staking.unstake",
-          "vault.deposit",
-          "vault.withdraw",
-          "cdp.open"
+          "lp.discover",
+          "lp.add",
+          "lp.farm",
+          "lp.claim",
+          "lp.remove",
+          "swap",
+          "price",
+          "token.balance",
+          "token.approve",
+          "token.transfer",
+          "wallet.balance",
+          "portfolio.show",
+          "bridge"
         ]
       };
   }
@@ -3963,6 +4002,74 @@ var MerchantMoeLBAdapter = class {
       } catch {
       }
     }
+    const stableSymbols = /* @__PURE__ */ new Set(["USDT", "USDC", "USDT0", "MUSD", "AUSD", "USDY", "FDUSD", "USDe", "sUSDe"]);
+    const mntSymbols = /* @__PURE__ */ new Set(["WMNT", "MNT"]);
+    const moeSymbols = /* @__PURE__ */ new Set(["MOE"]);
+    const sixDecimalStables = /* @__PURE__ */ new Set(["USDT", "USDC", "USDT0", "FDUSD"]);
+    const tokenPriceMap = /* @__PURE__ */ new Map();
+    const tokenDecimalsMap = /* @__PURE__ */ new Map();
+    for (const [addr, sym] of symbolMap) {
+      const key = addr.toLowerCase();
+      if (stableSymbols.has(sym)) {
+        tokenPriceMap.set(key, 1);
+        tokenDecimalsMap.set(key, sixDecimalStables.has(sym) ? 6 : 18);
+      } else if (mntSymbols.has(sym)) {
+        tokenPriceMap.set(key, wmntPriceUsd);
+        tokenDecimalsMap.set(key, 18);
+      } else if (moeSymbols.has(sym)) {
+        tokenPriceMap.set(key, moePriceUsd);
+        tokenDecimalsMap.set(key, 18);
+      }
+    }
+    const unknownTokenAddrs = [];
+    for (let i = 0; i < rewardedPairs.length; i++) {
+      for (const addr of [tokenXAddresses[i], tokenYAddresses[i]]) {
+        if (addr && !tokenPriceMap.has(addr.toLowerCase())) {
+          if (!unknownTokenAddrs.some((a) => a.toLowerCase() === addr.toLowerCase())) {
+            unknownTokenAddrs.push(addr);
+          }
+        }
+      }
+    }
+    if (unknownTokenAddrs.length > 0 && this.lbQuoter && this.wmnt && wmntPriceUsd > 0) {
+      const erc20DecimalsAbi = parseAbi12(["function decimals() external view returns (uint8)"]);
+      const decCalls = unknownTokenAddrs.map((addr) => [
+        addr,
+        encodeFunctionData12({ abi: erc20DecimalsAbi, functionName: "decimals" })
+      ]);
+      const decResults = await multicallRead(rpcUrl, decCalls).catch(() => []);
+      for (let i = 0; i < unknownTokenAddrs.length; i++) {
+        const dec = decResults[i] ? Number(decodeUint256Result(decResults[i]) ?? 18n) : 18;
+        tokenDecimalsMap.set(unknownTokenAddrs[i].toLowerCase(), dec);
+      }
+      const quotePromises = unknownTokenAddrs.map(async (tokenAddr) => {
+        try {
+          const dec = tokenDecimalsMap.get(tokenAddr.toLowerCase()) ?? 18;
+          const quoteUnit = 10n ** BigInt(Math.max(dec - 2, 0));
+          const quote = await client.readContract({
+            address: this.lbQuoter,
+            abi: lbQuoterAbi2,
+            functionName: "findBestPathFromAmountIn",
+            args: [[tokenAddr, this.wmnt], quoteUnit]
+          });
+          const amountOut = quote.amounts?.at(-1) ?? 0n;
+          const priceInWmnt = Number(amountOut) / 1e18 * (10 ** dec / Number(quoteUnit));
+          return { addr: tokenAddr, price: priceInWmnt * wmntPriceUsd };
+        } catch {
+          return { addr: tokenAddr, price: 0 };
+        }
+      });
+      const priceResults = await Promise.all(quotePromises);
+      for (const { addr, price } of priceResults) {
+        if (price > 0) tokenPriceMap.set(addr.toLowerCase(), price);
+      }
+    }
+    const getTokenPriceUsd = (_sym, addr) => {
+      return tokenPriceMap.get(addr.toLowerCase()) ?? 0;
+    };
+    const getTokenDecimals = (_sym, addr) => {
+      return tokenDecimalsMap.get(addr.toLowerCase()) ?? 18;
+    };
     const binRequests = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
       const range = poolData[i].range;
@@ -3993,19 +4100,6 @@ var MerchantMoeLBAdapter = class {
         binReservesY.get(poolIdx).set(binId, decoded[1]);
       }
     }
-    const stableSymbols = /* @__PURE__ */ new Set(["USDT", "USDC", "MUSD", "AUSD", "USDY", "FDUSD"]);
-    const mntSymbols = /* @__PURE__ */ new Set(["WMNT", "MNT"]);
-    const moeSymbols = /* @__PURE__ */ new Set(["MOE"]);
-    const sixDecimalStables = /* @__PURE__ */ new Set(["USDT", "USDC", "FDUSD"]);
-    const getTokenPriceUsd = (sym) => {
-      if (stableSymbols.has(sym)) return 1;
-      if (mntSymbols.has(sym)) return wmntPriceUsd;
-      if (moeSymbols.has(sym)) return moePriceUsd;
-      return 0;
-    };
-    const getTokenDecimals = (sym) => {
-      return sixDecimalStables.has(sym) ? 6 : 18;
-    };
     const results = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
       const { pool, rewarder } = rewardedPairs[i];
@@ -4030,10 +4124,10 @@ var MerchantMoeLBAdapter = class {
         const maxBin = Number(range[1]);
         rewardedBins = maxBin - minBin + 1;
         if (rxMap && ryMap) {
-          const priceX = getTokenPriceUsd(symX);
-          const priceY = getTokenPriceUsd(symY);
-          const decX = getTokenDecimals(symX);
-          const decY = getTokenDecimals(symY);
+          const priceX = getTokenPriceUsd(symX, tokenX);
+          const priceY = getTokenPriceUsd(symY, tokenY);
+          const decX = getTokenDecimals(symX, tokenX);
+          const decY = getTokenDecimals(symY, tokenY);
           for (let b = minBin; b <= maxBin; b++) {
             const rx = rxMap.get(b) ?? 0n;
             const ry = ryMap.get(b) ?? 0n;
@@ -6083,7 +6177,11 @@ function resolvePoolAddress(registry, protocolSlug, pool) {
 function registerLP(parent, getOpts, makeExecutor2) {
   const lp = parent.command("lp").description("Unified LP operations: discover, add, farm, claim, remove, positions");
   lp.command("discover").description("Scan all protocols for fee + emission pools (gauges, farming, LB rewards)").option("--protocol <protocol>", "Filter to a single protocol slug").option("--emission-only", "Only show emission (gauge/farming) pools, skip fee-only").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const rpcUrl = chain.effectiveRpcUrl();
@@ -6138,7 +6236,10 @@ function registerLP(parent, getOpts, makeExecutor2) {
                   moePerDay: p.moePerDay,
                   aprPercent: p.aprPercent,
                   rangeTvlUsd: p.rangeTvlUsd,
-                  isTopPool: p.isTopPool
+                  isTopPool: p.isTopPool,
+                  rewardedBins: p.rewardedBins,
+                  minBinId: p.minBinId,
+                  maxBinId: p.maxBinId
                 });
               }
             }
@@ -6155,7 +6256,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
   });
   lp.command("add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2)").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6181,7 +6286,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
   });
   lp.command("farm").description("Add liquidity and auto-stake into gauge/farming for emissions").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--gauge <address>", "Gauge address (required for solidly/hybra if not resolved automatically)").option("--recipient <address>", "Recipient / owner address").option("--tick-lower <tick>", "Lower tick for concentrated LP").option("--tick-upper <tick>", "Upper tick for concentrated LP").option("--range <percent>", "\xB1N% concentrated range around current price").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6259,7 +6368,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
   });
   lp.command("claim").description("Claim rewards from a pool (fee or emission)").requiredOption("--protocol <protocol>", "Protocol slug").option("--pool <address>", "Pool address (required for farming/LB)").option("--gauge <address>", "Gauge contract address (required for solidly/hybra)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--bins <binIds>", "Comma-separated bin IDs (for Merchant Moe LB)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const rpcUrl = chain.effectiveRpcUrl();
@@ -6306,7 +6419,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
   });
   lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--liquidity <amount>", "Liquidity amount to remove in wei").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const rpcUrl = chain.effectiveRpcUrl();
@@ -6369,7 +6486,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
     printOutput({ step: "lp_remove", ...removeResult }, getOpts());
   });
   lp.command("positions").description("Show all LP positions across protocols").option("--protocol <protocol>", "Filter to a single protocol slug").option("--pool <address>", "Filter to a specific pool address").option("--bins <binIds>", "Comma-separated bin IDs (for Merchant Moe LB, auto-detected if omitted)").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const rpcUrl = chain.effectiveRpcUrl();
@@ -6640,7 +6761,11 @@ function registerLP(parent, getOpts, makeExecutor2) {
 function registerLending(parent, getOpts, makeExecutor2) {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
   lending.command("rates").description("Show current lending rates").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6650,7 +6775,11 @@ function registerLending(parent, getOpts, makeExecutor2) {
     printOutput(rates, getOpts());
   });
   lending.command("position").description("Show current lending position").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6660,7 +6789,11 @@ function registerLending(parent, getOpts, makeExecutor2) {
   });
   lending.command("supply").description("Supply an asset to a lending protocol").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount to supply in wei").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6673,7 +6806,11 @@ function registerLending(parent, getOpts, makeExecutor2) {
   });
   lending.command("borrow").description("Borrow an asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6692,7 +6829,11 @@ function registerLending(parent, getOpts, makeExecutor2) {
   });
   lending.command("repay").description("Repay a borrowed asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6711,7 +6852,11 @@ function registerLending(parent, getOpts, makeExecutor2) {
   });
   lending.command("withdraw").description("Withdraw a supplied asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--to <address>", "Recipient address").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const protocol = registry.getProtocol(opts.protocol);
@@ -6939,8 +7084,10 @@ function registerYield(parent, getOpts, makeExecutor2) {
     try {
       const registry = Registry.loadEmbedded();
       const asset = opts.asset;
+      const specifiedChain = parent.opts().chain;
+      const chainKeys = specifiedChain ? [specifiedChain.toLowerCase()] : Array.from(registry.chains.keys());
       const allRates = [];
-      for (const [chainKey] of registry.chains) {
+      for (const chainKey of chainKeys) {
         try {
           const chain = registry.getChain(chainKey);
           const rpc = chain.effectiveRpcUrl();
@@ -6969,7 +7116,12 @@ function registerYield(parent, getOpts, makeExecutor2) {
   yieldCmd.command("compare").description("Compare lending rates across protocols for an asset").option("--asset <token>", "Token symbol or address", "USDC").action(async (opts) => {
     try {
       const registry = Registry.loadEmbedded();
-      const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+      const specChain = parent.opts().chain;
+      if (!specChain) {
+        printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+        return;
+      }
+      const chainName = specChain.toLowerCase();
       const chain = registry.getChain(chainName);
       const rpc = chain.effectiveRpcUrl();
       const assetAddr = resolveAsset(registry, chainName, opts.asset);
@@ -7205,7 +7357,12 @@ function registerYield(parent, getOpts, makeExecutor2) {
   yieldCmd.command("optimize").description("Find the optimal yield strategy for an asset").requiredOption("--asset <token>", "Token symbol or address").option("--strategy <strategy>", "Strategy: best-supply, leverage-loop, auto", "auto").option("--amount <amount>", "Amount to deploy (for allocation breakdown)").action(async (opts) => {
     try {
       const registry = Registry.loadEmbedded();
-      const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+      const specChain = parent.opts().chain;
+      if (!specChain) {
+        printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+        return;
+      }
+      const chainName = specChain.toLowerCase();
       const chain = registry.getChain(chainName);
       const rpc = chain.effectiveRpcUrl();
       const asset = opts.asset;
@@ -7551,7 +7708,12 @@ function registerPortfolio(parent, getOpts) {
   portfolio.command("show").description("Show current portfolio positions").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
     const mode = getOpts();
     const registry = Registry.loadEmbedded();
-    const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+    const _chain = parent.opts().chain;
+    if (!_chain) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
+    const chainName = _chain.toLowerCase();
     let chain;
     try {
       chain = registry.getChain(chainName);
@@ -7689,7 +7851,12 @@ function registerPortfolio(parent, getOpts) {
   });
   portfolio.command("snapshot").description("Take a new portfolio snapshot and save it locally").requiredOption("--address <address>", "Wallet address to snapshot").action(async (opts) => {
     const mode = getOpts();
-    const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+    const _chain = parent.opts().chain;
+    if (!_chain) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
+    const chainName = _chain.toLowerCase();
     const registry = Registry.loadEmbedded();
     if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
       printOutput({ error: `Invalid address: ${opts.address}` }, mode);
@@ -7716,7 +7883,12 @@ function registerPortfolio(parent, getOpts) {
   });
   portfolio.command("pnl").description("Show PnL since the last snapshot").requiredOption("--address <address>", "Wallet address").option("--since <hours>", "Compare against snapshot from N hours ago (default: last snapshot)").action(async (opts) => {
     const mode = getOpts();
-    const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+    const _chain = parent.opts().chain;
+    if (!_chain) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
+    const chainName = _chain.toLowerCase();
     const registry = Registry.loadEmbedded();
     if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
       printOutput({ error: `Invalid address: ${opts.address}` }, mode);
@@ -7761,7 +7933,12 @@ function registerPortfolio(parent, getOpts) {
   });
   portfolio.command("history").description("List saved portfolio snapshots with values").requiredOption("--address <address>", "Wallet address").option("--limit <n>", "Number of snapshots to show", "10").action(async (opts) => {
     const mode = getOpts();
-    const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+    const _chain = parent.opts().chain;
+    if (!_chain) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
+    const chainName = _chain.toLowerCase();
     if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
       printOutput({ error: `Invalid address: ${opts.address}` }, mode);
       return;
@@ -7800,7 +7977,12 @@ function registerPrice(parent, getOpts) {
   parent.command("price").description("Query asset prices from oracles and DEXes").requiredOption("--asset <token>", "Token symbol or address").option("--source <source>", "Price source: oracle, dex, or all", "all").action(async (opts) => {
     const mode = getOpts();
     const registry = Registry.loadEmbedded();
-    const chainName = (parent.opts().chain ?? "hyperevm").toLowerCase();
+    const _chain = parent.opts().chain;
+    if (!_chain) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
+    const chainName = _chain.toLowerCase();
     let chain;
     try {
       chain = registry.getChain(chainName);
@@ -7927,7 +8109,11 @@ import { createPublicClient as createPublicClient23, http as http23, formatEther
 function registerWallet(parent, getOpts) {
   const wallet = parent.command("wallet").description("Wallet management");
   wallet.command("balance").description("Show native token balance").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient23({ transport: http23(chain.effectiveRpcUrl()) });
@@ -7951,7 +8137,11 @@ import { createPublicClient as createPublicClient24, http as http24, maxUint256 
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--owner <address>", "Wallet address to query").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient24({ transport: http24(chain.effectiveRpcUrl()) });
@@ -7971,7 +8161,11 @@ function registerToken(parent, getOpts, makeExecutor2) {
   });
   token.command("approve").description("Approve a spender for a token").requiredOption("--token <token>", "Token symbol or address").requiredOption("--spender <address>", "Spender address").option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
     const amount = opts.amount === "max" ? maxUint256 : BigInt(opts.amount);
@@ -7980,7 +8174,11 @@ function registerToken(parent, getOpts, makeExecutor2) {
     printOutput(result, getOpts());
   });
   token.command("allowance").description("Check token allowance").requiredOption("--token <token>", "Token symbol or address").requiredOption("--owner <address>", "Owner address").requiredOption("--spender <address>", "Spender address").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient24({ transport: http24(chain.effectiveRpcUrl()) });
@@ -7995,7 +8193,11 @@ function registerToken(parent, getOpts, makeExecutor2) {
   });
   token.command("transfer").description("Transfer tokens to an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--to <address>", "Recipient address").requiredOption("--amount <amount>", "Amount to transfer (in wei)").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
     const tx = buildTransfer(tokenAddr, opts.to, BigInt(opts.amount));
@@ -8102,7 +8304,11 @@ async function getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc) {
 }
 function registerBridge(parent, getOpts) {
   parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, debridge, cctp", "lifi").action(async (opts) => {
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const fromChain = registry.getChain(chainName);
     const toChain = registry.getChain(opts.toChain);
@@ -8306,7 +8512,11 @@ async function liquidSwapRoute(tokenIn, tokenOut, amountIn, slippagePct) {
 function registerSwap(parent, getOpts, makeExecutor2) {
   parent.command("swap").description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap)").requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid", "kyber").option("--slippage <bps>", "Slippage tolerance in bps", "50").action(async (opts) => {
     const executor = makeExecutor2();
-    const chainName = parent.opts().chain ?? "hyperevm";
+    const chainName = parent.opts().chain;
+    if (!chainName) {
+      printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const provider = opts.provider.toLowerCase();
     const slippageBps = parseInt(opts.slippage, 10);
@@ -8592,7 +8802,7 @@ var BANNER = `
   Lending, LP farming, DEX swap, yield comparison
   \u2014 all from your terminal.
 `;
-var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version(_pkg.version).addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain", "hyperevm").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
+var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version(_pkg.version).addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
 function getOutputMode() {
   const opts = program.opts();
   return parseOutputMode(opts);
@@ -8600,7 +8810,11 @@ function getOutputMode() {
 function makeExecutor() {
   const opts = program.opts();
   const registry = Registry.loadEmbedded();
-  const chain = registry.getChain(opts.chain ?? "hyperevm");
+  if (!opts.chain) {
+    process.stderr.write("Error: --chain is required for this command (e.g. --chain hyperevm)\n");
+    process.exit(1);
+  }
+  const chain = registry.getChain(opts.chain);
   return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url);
 }
 registerStatus(program, getOutputMode);

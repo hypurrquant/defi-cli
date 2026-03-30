@@ -775,8 +775,86 @@ export class MerchantMoeLBAdapter {
       }
     }
 
+    // --- Resolve token prices for all pool tokens ---
+    const stableSymbols = new Set(["USDT", "USDC", "USDT0", "MUSD", "AUSD", "USDY", "FDUSD", "USDe", "sUSDe"]);
+    const mntSymbols = new Set(["WMNT", "MNT"]);
+    const moeSymbols = new Set(["MOE"]);
+    const sixDecimalStables = new Set(["USDT", "USDC", "USDT0", "FDUSD"]);
+
+    // Address-based price & decimals maps
+    const tokenPriceMap = new Map<string, number>();
+    const tokenDecimalsMap = new Map<string, number>();
+
+    // Seed known prices by symbol
+    for (const [addr, sym] of symbolMap) {
+      const key = addr.toLowerCase();
+      if (stableSymbols.has(sym)) { tokenPriceMap.set(key, 1); tokenDecimalsMap.set(key, sixDecimalStables.has(sym) ? 6 : 18); }
+      else if (mntSymbols.has(sym)) { tokenPriceMap.set(key, wmntPriceUsd); tokenDecimalsMap.set(key, 18); }
+      else if (moeSymbols.has(sym)) { tokenPriceMap.set(key, moePriceUsd); tokenDecimalsMap.set(key, 18); }
+    }
+
+    // Collect unknown tokens from rewarded pools
+    const unknownTokenAddrs: Address[] = [];
+    for (let i = 0; i < rewardedPairs.length; i++) {
+      for (const addr of [tokenXAddresses[i], tokenYAddresses[i]]) {
+        if (addr && !tokenPriceMap.has(addr.toLowerCase())) {
+          if (!unknownTokenAddrs.some(a => a.toLowerCase() === addr.toLowerCase())) {
+            unknownTokenAddrs.push(addr);
+          }
+        }
+      }
+    }
+
+    // Query decimals + prices for unknown tokens via LB Quoter
+    if (unknownTokenAddrs.length > 0 && this.lbQuoter && this.wmnt && wmntPriceUsd > 0) {
+      const erc20DecimalsAbi = parseAbi(["function decimals() external view returns (uint8)"]);
+
+      // Batch: query decimals for all unknown tokens
+      const decCalls: Array<[Address, Hex]> = unknownTokenAddrs.map(addr => [
+        addr,
+        encodeFunctionData({ abi: erc20DecimalsAbi, functionName: "decimals" }),
+      ]);
+      const decResults = await multicallRead(rpcUrl, decCalls).catch(() => [] as (Hex | undefined)[]);
+      for (let i = 0; i < unknownTokenAddrs.length; i++) {
+        const dec = decResults[i] ? Number(decodeUint256Result(decResults[i]!) ?? 18n) : 18;
+        tokenDecimalsMap.set(unknownTokenAddrs[i]!.toLowerCase(), dec);
+      }
+
+      // Quote each unknown token → WMNT in parallel
+      // Use small amount (0.01 token) to minimize slippage on thin pools
+      const quotePromises = unknownTokenAddrs.map(async (tokenAddr) => {
+        try {
+          const dec = tokenDecimalsMap.get(tokenAddr.toLowerCase()) ?? 18;
+          const quoteUnit = 10n ** BigInt(Math.max(dec - 2, 0)); // 0.01 token
+          const quote = await client.readContract({
+            address: this.lbQuoter!,
+            abi: lbQuoterAbi,
+            functionName: "findBestPathFromAmountIn",
+            args: [[tokenAddr, this.wmnt!], quoteUnit as unknown as bigint & { __brand: "uint128" }],
+          });
+          const amountOut = ((quote as unknown as { amounts: bigint[] }).amounts?.at(-1)) ?? 0n;
+          // Scale back: price per 1 token = amountOut / quoteUnit * 10^dec / 10^18
+          const priceInWmnt = (Number(amountOut) / 1e18) * (10 ** dec / Number(quoteUnit));
+          return { addr: tokenAddr, price: priceInWmnt * wmntPriceUsd };
+        } catch {
+          return { addr: tokenAddr, price: 0 };
+        }
+      });
+      const priceResults = await Promise.all(quotePromises);
+      for (const { addr, price } of priceResults) {
+        if (price > 0) tokenPriceMap.set(addr.toLowerCase(), price);
+      }
+    }
+
+    // Price/decimals lookup by address
+    const getTokenPriceUsd = (_sym: string, addr: Address): number => {
+      return tokenPriceMap.get(addr.toLowerCase()) ?? 0;
+    };
+    const getTokenDecimals = (_sym: string, addr: Address): number => {
+      return tokenDecimalsMap.get(addr.toLowerCase()) ?? 18;
+    };
+
     // --- Batch 7: Pool.getBin(binId) for all bins in rewarded range ---
-    // Build flat list of (poolIndex, binId) for all rewarded bins
     type BinRequest = { poolIdx: number; binId: number };
     const binRequests: BinRequest[] = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
@@ -789,8 +867,6 @@ export class MerchantMoeLBAdapter {
       }
     }
 
-    // Bin reserves keyed by pool index
-    // reserveX[poolIdx][binId] and reserveY[poolIdx][binId]
     const binReservesX = new Map<number, Map<number, bigint>>();
     const binReservesY = new Map<number, Map<number, bigint>>();
 
@@ -813,26 +889,6 @@ export class MerchantMoeLBAdapter {
         binReservesY.get(poolIdx)!.set(binId, decoded[1]);
       }
     }
-
-    // --- Assemble results ---
-    // Token price classification by symbol (USD)
-    // Stablecoins → $1; WMNT/MNT → wmntPriceUsd; MOE → moePriceUsd; unknown → 0
-    const stableSymbols = new Set(["USDT", "USDC", "MUSD", "AUSD", "USDY", "FDUSD"]);
-    const mntSymbols = new Set(["WMNT", "MNT"]);
-    const moeSymbols = new Set(["MOE"]);
-    // USDT/USDC on Mantle have 6 decimals; other stable tokens have 18
-    const sixDecimalStables = new Set(["USDT", "USDC", "FDUSD"]);
-
-    const getTokenPriceUsd = (sym: string): number => {
-      if (stableSymbols.has(sym)) return 1;
-      if (mntSymbols.has(sym)) return wmntPriceUsd;
-      if (moeSymbols.has(sym)) return moePriceUsd;
-      return 0;
-    };
-
-    const getTokenDecimals = (sym: string): number => {
-      return sixDecimalStables.has(sym) ? 6 : 18;
-    };
 
     const results: RewardedPool[] = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
@@ -866,10 +922,10 @@ export class MerchantMoeLBAdapter {
         const maxBin = Number(range[1]);
         rewardedBins = maxBin - minBin + 1;
         if (rxMap && ryMap) {
-          const priceX = getTokenPriceUsd(symX);
-          const priceY = getTokenPriceUsd(symY);
-          const decX = getTokenDecimals(symX);
-          const decY = getTokenDecimals(symY);
+          const priceX = getTokenPriceUsd(symX, tokenX);
+          const priceY = getTokenPriceUsd(symY, tokenY);
+          const decX = getTokenDecimals(symX, tokenX);
+          const decY = getTokenDecimals(symY, tokenY);
           for (let b = minBin; b <= maxBin; b++) {
             const rx = rxMap.get(b) ?? 0n;
             const ry = ryMap.get(b) ?? 0n;

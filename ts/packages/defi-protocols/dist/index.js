@@ -2877,6 +2877,74 @@ var MerchantMoeLBAdapter = class {
       } catch {
       }
     }
+    const stableSymbols = /* @__PURE__ */ new Set(["USDT", "USDC", "USDT0", "MUSD", "AUSD", "USDY", "FDUSD", "USDe", "sUSDe"]);
+    const mntSymbols = /* @__PURE__ */ new Set(["WMNT", "MNT"]);
+    const moeSymbols = /* @__PURE__ */ new Set(["MOE"]);
+    const sixDecimalStables = /* @__PURE__ */ new Set(["USDT", "USDC", "USDT0", "FDUSD"]);
+    const tokenPriceMap = /* @__PURE__ */ new Map();
+    const tokenDecimalsMap = /* @__PURE__ */ new Map();
+    for (const [addr, sym] of symbolMap) {
+      const key = addr.toLowerCase();
+      if (stableSymbols.has(sym)) {
+        tokenPriceMap.set(key, 1);
+        tokenDecimalsMap.set(key, sixDecimalStables.has(sym) ? 6 : 18);
+      } else if (mntSymbols.has(sym)) {
+        tokenPriceMap.set(key, wmntPriceUsd);
+        tokenDecimalsMap.set(key, 18);
+      } else if (moeSymbols.has(sym)) {
+        tokenPriceMap.set(key, moePriceUsd);
+        tokenDecimalsMap.set(key, 18);
+      }
+    }
+    const unknownTokenAddrs = [];
+    for (let i = 0; i < rewardedPairs.length; i++) {
+      for (const addr of [tokenXAddresses[i], tokenYAddresses[i]]) {
+        if (addr && !tokenPriceMap.has(addr.toLowerCase())) {
+          if (!unknownTokenAddrs.some((a) => a.toLowerCase() === addr.toLowerCase())) {
+            unknownTokenAddrs.push(addr);
+          }
+        }
+      }
+    }
+    if (unknownTokenAddrs.length > 0 && this.lbQuoter && this.wmnt && wmntPriceUsd > 0) {
+      const erc20DecimalsAbi = parseAbi12(["function decimals() external view returns (uint8)"]);
+      const decCalls = unknownTokenAddrs.map((addr) => [
+        addr,
+        encodeFunctionData12({ abi: erc20DecimalsAbi, functionName: "decimals" })
+      ]);
+      const decResults = await multicallRead4(rpcUrl, decCalls).catch(() => []);
+      for (let i = 0; i < unknownTokenAddrs.length; i++) {
+        const dec = decResults[i] ? Number(decodeUint256Result(decResults[i]) ?? 18n) : 18;
+        tokenDecimalsMap.set(unknownTokenAddrs[i].toLowerCase(), dec);
+      }
+      const quotePromises = unknownTokenAddrs.map(async (tokenAddr) => {
+        try {
+          const dec = tokenDecimalsMap.get(tokenAddr.toLowerCase()) ?? 18;
+          const quoteUnit = 10n ** BigInt(Math.max(dec - 2, 0));
+          const quote = await client.readContract({
+            address: this.lbQuoter,
+            abi: lbQuoterAbi2,
+            functionName: "findBestPathFromAmountIn",
+            args: [[tokenAddr, this.wmnt], quoteUnit]
+          });
+          const amountOut = quote.amounts?.at(-1) ?? 0n;
+          const priceInWmnt = Number(amountOut) / 1e18 * (10 ** dec / Number(quoteUnit));
+          return { addr: tokenAddr, price: priceInWmnt * wmntPriceUsd };
+        } catch {
+          return { addr: tokenAddr, price: 0 };
+        }
+      });
+      const priceResults = await Promise.all(quotePromises);
+      for (const { addr, price } of priceResults) {
+        if (price > 0) tokenPriceMap.set(addr.toLowerCase(), price);
+      }
+    }
+    const getTokenPriceUsd = (_sym, addr) => {
+      return tokenPriceMap.get(addr.toLowerCase()) ?? 0;
+    };
+    const getTokenDecimals = (_sym, addr) => {
+      return tokenDecimalsMap.get(addr.toLowerCase()) ?? 18;
+    };
     const binRequests = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
       const range = poolData[i].range;
@@ -2907,19 +2975,6 @@ var MerchantMoeLBAdapter = class {
         binReservesY.get(poolIdx).set(binId, decoded[1]);
       }
     }
-    const stableSymbols = /* @__PURE__ */ new Set(["USDT", "USDC", "MUSD", "AUSD", "USDY", "FDUSD"]);
-    const mntSymbols = /* @__PURE__ */ new Set(["WMNT", "MNT"]);
-    const moeSymbols = /* @__PURE__ */ new Set(["MOE"]);
-    const sixDecimalStables = /* @__PURE__ */ new Set(["USDT", "USDC", "FDUSD"]);
-    const getTokenPriceUsd = (sym) => {
-      if (stableSymbols.has(sym)) return 1;
-      if (mntSymbols.has(sym)) return wmntPriceUsd;
-      if (moeSymbols.has(sym)) return moePriceUsd;
-      return 0;
-    };
-    const getTokenDecimals = (sym) => {
-      return sixDecimalStables.has(sym) ? 6 : 18;
-    };
     const results = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
       const { pool, rewarder } = rewardedPairs[i];
@@ -2944,10 +2999,10 @@ var MerchantMoeLBAdapter = class {
         const maxBin = Number(range[1]);
         rewardedBins = maxBin - minBin + 1;
         if (rxMap && ryMap) {
-          const priceX = getTokenPriceUsd(symX);
-          const priceY = getTokenPriceUsd(symY);
-          const decX = getTokenDecimals(symX);
-          const decY = getTokenDecimals(symY);
+          const priceX = getTokenPriceUsd(symX, tokenX);
+          const priceY = getTokenPriceUsd(symY, tokenY);
+          const decX = getTokenDecimals(symX, tokenX);
+          const decY = getTokenDecimals(symY, tokenY);
           for (let b = minBin; b <= maxBin; b++) {
             const rx = rxMap.get(b) ?? 0n;
             const ry = ryMap.get(b) ?? 0n;

@@ -52,9 +52,31 @@ export function registerStatus(
     .option("--verify", "Verify contract addresses on-chain")
     .action(async (opts) => {
       const globalOpts = parent.opts<{ chain?: string }>();
-      const chainName = globalOpts.chain ?? "hyperevm";
-
       const registry = Registry.loadEmbedded();
+
+      const chainKeys = globalOpts.chain
+        ? [globalOpts.chain]
+        : Array.from(registry.chains.keys());
+
+      if (chainKeys.length > 1) {
+        // Multi-chain summary
+        const summary: unknown[] = [];
+        for (const ck of chainKeys) {
+          const cc = registry.getChain(ck);
+          const protos = registry.getProtocolsForChain(ck);
+          summary.push({
+            chain: cc.name,
+            chain_id: cc.chain_id,
+            rpc_url: cc.effectiveRpcUrl(),
+            protocols: protos.map(p => ({ slug: p.slug, name: p.name, category: p.category, interface: p.interface })),
+            summary: { total_protocols: protos.length },
+          });
+        }
+        printOutput(summary, getOpts());
+        return;
+      }
+
+      const chainName = chainKeys[0]!;
       const chainConfig = registry.getChain(chainName);
       const chainProtocols = registry.getProtocolsForChain(chainName);
 

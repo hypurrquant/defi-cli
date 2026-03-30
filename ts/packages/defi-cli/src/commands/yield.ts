@@ -293,16 +293,20 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
     .command("yield")
     .description("Yield operations: compare, scan, optimize, execute");
 
-  // yield (no subcommand) = cross-chain scan with default USDC
+  // yield (no subcommand) = scan with default USDC; --chain filters to single chain
   yieldCmd
     .option("--asset <token>", "Token symbol or address", "USDC")
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();
         const asset = opts.asset as string;
+        const specifiedChain = parent.opts<{ chain?: string }>().chain;
+        const chainKeys = specifiedChain
+          ? [specifiedChain.toLowerCase()]
+          : Array.from(registry.chains.keys());
         const allRates: Array<{ chain: string; protocol: string; supply_apy: number; borrow_variable_apy: number }> = [];
 
-        for (const [chainKey] of registry.chains) {
+        for (const chainKey of chainKeys) {
           try {
             const chain = registry.getChain(chainKey);
             const rpc = chain.effectiveRpcUrl();
@@ -335,7 +339,9 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();
-        const chainName: string = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+        const specChain = parent.opts<{ chain?: string }>().chain;
+        if (!specChain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+        const chainName: string = specChain.toLowerCase();
         const chain = registry.getChain(chainName);
         const rpc = chain.effectiveRpcUrl();
         const assetAddr = resolveAsset(registry, chainName, opts.asset as string);
@@ -643,7 +649,9 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();
-        const chainName: string = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+        const specChain = parent.opts<{ chain?: string }>().chain;
+        if (!specChain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+        const chainName: string = specChain.toLowerCase();
         const chain = registry.getChain(chainName);
         const rpc = chain.effectiveRpcUrl();
         const asset = opts.asset as string;

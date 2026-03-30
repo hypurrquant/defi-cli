@@ -75,18 +75,27 @@ async function handleAction(
     case "schema":
       return handleSchema(p);
 
-    case "dex.swap":
-    case "dex.quote":
+    case "yield":
+    case "lending.rates":
+    case "lending.position":
     case "lending.supply":
     case "lending.borrow":
     case "lending.repay":
     case "lending.withdraw":
-    case "staking.stake":
-    case "staking.unstake":
-    case "vault.deposit":
-    case "vault.withdraw":
-    case "cdp.open":
-      throw DefiError.unsupported(`Agent action '${action}' not yet implemented in TS port`);
+    case "lp.discover":
+    case "lp.add":
+    case "lp.farm":
+    case "lp.claim":
+    case "lp.remove":
+    case "swap":
+    case "price":
+    case "token.balance":
+    case "token.approve":
+    case "token.transfer":
+    case "wallet.balance":
+    case "portfolio.show":
+    case "bridge":
+      throw DefiError.unsupported(`Agent action '${action}' — use CLI commands directly (e.g. defi --chain hyperevm lending rates --protocol hypurrfi --asset USDC)`);
 
     default:
       throw DefiError.unsupported(`Unknown action: ${action}`);
@@ -130,28 +139,37 @@ export function handleSchema(params: Record<string, unknown>): unknown {
   const action = typeof params["action"] === "string" ? params["action"] : "all";
 
   switch (action) {
-    case "dex.swap":
+    case "status":
+      return { action: "status", params: {}, cli: "defi status" };
+
+    case "list_protocols":
       return {
-        action: "dex.swap",
+        action: "list_protocols",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug (e.g. hyperswap-v3)" },
-          token_in: { type: "string", required: true, description: "Input token symbol or address" },
-          token_out: { type: "string", required: true, description: "Output token symbol or address" },
-          amount: { type: "string", required: true, description: "Amount (human-readable, e.g. '1.5')" },
-          slippage_bps: { type: "number", required: false, default: 50, description: "Slippage in basis points" },
-          recipient: { type: "string", required: false, description: "Recipient address" },
+          category: { type: "string", required: false, description: "Filter by category (e.g. dex, lending)" },
         },
+        cli: "defi status",
       };
 
-    case "dex.quote":
+    case "yield":
       return {
-        action: "dex.quote",
+        action: "yield",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug" },
-          token_in: { type: "string", required: true, description: "Input token symbol or address" },
-          token_out: { type: "string", required: true, description: "Output token symbol or address" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" },
+          chain: { type: "string", required: false, description: "Target chain (omit for all chains)" },
+          asset: { type: "string", required: false, default: "USDC", description: "Token symbol" },
         },
+        cli: "defi yield --asset USDC",
+      };
+
+    case "lending.rates":
+      return {
+        action: "lending.rates",
+        params: {
+          chain: { type: "string", required: true, description: "Target chain" },
+          protocol: { type: "string", required: true, description: "Protocol slug" },
+          asset: { type: "string", required: true, description: "Token symbol or address" },
+        },
+        cli: "defi --chain hyperevm lending rates --protocol hypurrfi --asset USDC",
       };
 
     case "lending.supply":
@@ -161,63 +179,72 @@ export function handleSchema(params: Record<string, unknown>): unknown {
       return {
         action,
         params: {
+          chain: { type: "string", required: true, description: "Target chain" },
           protocol: { type: "string", required: true, description: "Protocol slug" },
           asset: { type: "string", required: true, description: "Token symbol or address" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" },
+          amount: { type: "string", required: true, description: "Amount in wei" },
         },
+        cli: `defi --chain hyperevm lending ${action.split(".")[1]} --protocol hypurrfi --asset USDC --amount 1000000`,
       };
 
-    case "staking.stake":
-    case "staking.unstake":
+    case "lp.discover":
       return {
-        action,
+        action: "lp.discover",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" },
+          chain: { type: "string", required: true, description: "Target chain" },
+          protocol: { type: "string", required: false, description: "Filter by protocol slug" },
         },
+        cli: "defi --chain hyperevm lp discover",
       };
 
-    case "vault.deposit":
-    case "vault.withdraw":
+    case "swap":
       return {
-        action,
+        action: "swap",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug" },
-          amount: { type: "string", required: true, description: "Amount (human-readable)" },
+          chain: { type: "string", required: true, description: "Target chain" },
+          from: { type: "string", required: true, description: "Input token symbol or address" },
+          to: { type: "string", required: true, description: "Output token symbol or address" },
+          amount: { type: "string", required: true, description: "Amount in wei" },
+          provider: { type: "string", required: false, default: "kyber", description: "Aggregator: kyber, openocean, liquid" },
+          slippage: { type: "string", required: false, default: "50", description: "Slippage in bps" },
         },
+        cli: "defi --chain hyperevm swap --from USDC --to WHYPE --amount 1000000",
       };
 
-    case "cdp.open":
+    case "price":
       return {
-        action: "cdp.open",
+        action: "price",
         params: {
-          protocol: { type: "string", required: true, description: "Protocol slug" },
-          collateral: { type: "string", required: true, description: "Collateral token symbol or address" },
-          collateral_amount: { type: "string", required: true, description: "Collateral amount (human-readable)" },
-          debt_amount: { type: "string", required: true, description: "Debt amount (human-readable)" },
+          chain: { type: "string", required: true, description: "Target chain" },
+          asset: { type: "string", required: true, description: "Token symbol or address" },
         },
+        cli: "defi --chain hyperevm price --asset WHYPE",
       };
 
-    case "status":
-      return { action: "status", params: {} };
-
-    case "list_protocols":
+    case "bridge":
       return {
-        action: "list_protocols",
+        action: "bridge",
         params: {
-          category: { type: "string", required: false, description: "Filter by category (e.g. dex, lending, vault)" },
+          chain: { type: "string", required: true, description: "Source chain" },
+          token: { type: "string", required: true, description: "Token symbol or address" },
+          amount: { type: "string", required: true, description: "Amount in wei" },
+          to_chain: { type: "string", required: true, description: "Destination chain" },
         },
+        cli: "defi --chain hyperevm bridge --token USDC --amount 1000000 --to-chain mantle",
       };
 
     default:
       return {
         actions: [
           "status", "list_protocols", "schema",
-          "dex.swap", "dex.quote",
-          "lending.supply", "lending.borrow", "lending.repay", "lending.withdraw",
-          "staking.stake", "staking.unstake",
-          "vault.deposit", "vault.withdraw",
-          "cdp.open",
+          "yield",
+          "lending.rates", "lending.supply", "lending.borrow", "lending.repay", "lending.withdraw",
+          "lp.discover", "lp.add", "lp.farm", "lp.claim", "lp.remove",
+          "swap", "price",
+          "token.balance", "token.approve", "token.transfer",
+          "wallet.balance",
+          "portfolio.show",
+          "bridge",
         ],
       };
   }

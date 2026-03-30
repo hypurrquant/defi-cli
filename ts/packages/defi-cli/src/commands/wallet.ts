@@ -12,7 +12,8 @@ export function registerWallet(parent: Command, getOpts: () => OutputMode): void
     .description("Show native token balance")
     .requiredOption("--address <address>", "Wallet address to query")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });

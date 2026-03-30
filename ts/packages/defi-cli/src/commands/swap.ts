@@ -134,7 +134,8 @@ export function registerSwap(
     .option("--slippage <bps>", "Slippage tolerance in bps", "50")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const provider = (opts.provider as string).toLowerCase();
       const slippageBps = parseInt(opts.slippage as string, 10);

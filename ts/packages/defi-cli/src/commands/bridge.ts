@@ -149,7 +149,8 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
     .option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50")
     .option("--provider <name>", "Bridge provider: lifi, debridge, cctp", "lifi")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const fromChain = registry.getChain(chainName);
       const toChain = registry.getChain(opts.toChain);

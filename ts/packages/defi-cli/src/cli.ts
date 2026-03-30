@@ -43,7 +43,7 @@ export const program = new Command()
   .option("--json", "Output as JSON")
   .option("--ndjson", "Output as newline-delimited JSON")
   .option("--fields <fields>", "Select specific output fields (comma-separated)")
-  .option("--chain <chain>", "Target chain", "hyperevm")
+  .option("--chain <chain>", "Target chain")
   .option("--dry-run", "Dry-run mode (default, no broadcast)", true)
   .option("--broadcast", "Actually broadcast the transaction");
 
@@ -61,7 +61,11 @@ function getOutputMode(): OutputMode {
 function makeExecutor(): Executor {
   const opts = program.opts<{ broadcast?: boolean; chain?: string }>();
   const registry = Registry.loadEmbedded();
-  const chain = registry.getChain(opts.chain ?? "hyperevm");
+  if (!opts.chain) {
+    process.stderr.write("Error: --chain is required for this command (e.g. --chain hyperevm)\n");
+    process.exit(1);
+  }
+  const chain = registry.getChain(opts.chain);
   return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url);
 }
 

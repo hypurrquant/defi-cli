@@ -42,7 +42,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--protocol <protocol>", "Filter to a single protocol slug")
     .option("--emission-only", "Only show emission (gauge/farming) pools, skip fee-only")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const rpcUrl = chain.effectiveRpcUrl();
@@ -68,6 +69,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         aprPercent?: number;
         rangeTvlUsd?: number;
         isTopPool?: boolean;
+        rewardedBins?: number;
+        minBinId?: number;
+        maxBinId?: number;
       };
 
       const results: DiscoveredPool[] = [];
@@ -128,6 +132,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
                     aprPercent: p.aprPercent,
                     rangeTvlUsd: p.rangeTvlUsd,
                     isTopPool: p.isTopPool,
+                    rewardedBins: p.rewardedBins,
+                    minBinId: p.minBinId,
+                    maxBinId: p.maxBinId,
                   });
                 }
               }
@@ -162,7 +169,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--range <percent>", "±N% concentrated range around current price (e.g. --range 2)")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const protocol = registry.getProtocol(opts.protocol);
@@ -210,7 +218,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--range <percent>", "±N% concentrated range around current price")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const protocol = registry.getProtocol(opts.protocol);
@@ -330,7 +339,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const rpcUrl = chain.effectiveRpcUrl();
@@ -400,7 +410,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--recipient <address>", "Recipient address")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const rpcUrl = chain.effectiveRpcUrl();
@@ -487,7 +498,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--bins <binIds>", "Comma-separated bin IDs (for Merchant Moe LB, auto-detected if omitted)")
     .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const rpcUrl = chain.effectiveRpcUrl();

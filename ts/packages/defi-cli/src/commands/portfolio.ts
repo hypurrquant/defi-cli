@@ -38,7 +38,9 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
 
       const mode = getOpts();
       const registry = Registry.loadEmbedded();
-      const chainName = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+      const _chain = parent.opts<{ chain?: string }>().chain;
+      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = _chain.toLowerCase();
 
       let chain;
       try {
@@ -213,7 +215,9 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
     .requiredOption("--address <address>", "Wallet address to snapshot")
     .action(async (opts: { address: string }) => {
       const mode = getOpts();
-      const chainName = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+      const _chain = parent.opts<{ chain?: string }>().chain;
+      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = _chain.toLowerCase();
       const registry = Registry.loadEmbedded();
 
       if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
@@ -249,7 +253,9 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
     .option("--since <hours>", "Compare against snapshot from N hours ago (default: last snapshot)")
     .action(async (opts: { address: string; since?: string }) => {
       const mode = getOpts();
-      const chainName = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+      const _chain = parent.opts<{ chain?: string }>().chain;
+      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = _chain.toLowerCase();
       const registry = Registry.loadEmbedded();
 
       if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
@@ -305,7 +311,9 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
     .option("--limit <n>", "Number of snapshots to show", "10")
     .action(async (opts: { address: string; limit: string }) => {
       const mode = getOpts();
-      const chainName = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+      const _chain = parent.opts<{ chain?: string }>().chain;
+      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = _chain.toLowerCase();
 
       if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
         printOutput({ error: `Invalid address: ${opts.address}` }, mode);

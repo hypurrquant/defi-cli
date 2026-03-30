@@ -15,7 +15,8 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .requiredOption("--token <token>", "Token symbol or address")
     .requiredOption("--owner <address>", "Wallet address to query")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
@@ -47,7 +48,8 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const tokenAddr = opts.token.startsWith("0x")
         ? opts.token as Address
@@ -66,7 +68,8 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .requiredOption("--owner <address>", "Owner address")
     .requiredOption("--spender <address>", "Spender address")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
@@ -91,7 +94,8 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .requiredOption("--amount <amount>", "Amount to transfer (in wei)")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain ?? "hyperevm";
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const tokenAddr = opts.token.startsWith("0x")
         ? opts.token as Address

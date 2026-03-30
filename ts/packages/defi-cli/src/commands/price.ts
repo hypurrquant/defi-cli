@@ -47,7 +47,9 @@ export function registerPrice(parent: Command, getOpts: () => OutputMode): void 
     .action(async (opts: { asset: string; source: string }) => {
       const mode = getOpts();
       const registry = Registry.loadEmbedded();
-      const chainName = (parent.opts<{ chain?: string }>().chain ?? "hyperevm").toLowerCase();
+      const _chain = parent.opts<{ chain?: string }>().chain;
+      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = _chain.toLowerCase();
 
       let chain;
       try {
