@@ -20,7 +20,7 @@ npx -y @hypurrquant/defi-cli --json status
 - **21 Protocols** — lending (Aave V3 forks, Morpho, HypurrFi), DEX (KittenSwap, Ramses, Uniswap V3, Merchant Moe LB), vaults, CDP
 - **Lending** — rates, positions, supply, withdraw across all lending protocols
 - **DEX** — add/remove liquidity with multicall optimization
-- **LP Management** — discover 134 emission pools, add, farm, claim, remove, autopilot
+- **LP Management** — discover emission pools with APR/TVL/MOE-per-day, add, farm, claim, remove, autopilot
 - **DEX Aggregator** — best-price swap via KyberSwap, OpenOcean, LiquidSwap
 - **Bridge** — cross-chain token transfer via LI.FI, deBridge, CCTP
 - **Portfolio** — aggregate positions across lending and LP
@@ -52,9 +52,9 @@ defi --json status
 | Command | Description |
 |---------|-------------|
 | `defi` | Dashboard — multicall balances across all protocols |
-| `defi yield` | Cross-chain lending APY comparison (default: USDC) |
+| `defi yield` | Cross-chain lending APY comparison (all chains, filter with `--chain`) |
 | `defi swap` | DEX aggregator swap (KyberSwap, OpenOcean, LiquidSwap) |
-| `defi lp discover` | Scan 134 emission pools (gauge/farming/lb_hooks) |
+| `defi lp discover` | Scan emission pools with APR, TVL, rewards data |
 | `defi lp add` | Add liquidity to a pool |
 | `defi lp farm` | Add liquidity and auto-stake for emissions |
 | `defi lp claim` | Claim fee and emission rewards |
@@ -111,28 +111,28 @@ defi --json status
 # Multicall balance dashboard
 defi --json
 
-# Protocol overview for current chain
+# Protocol overview (all chains)
 defi --json status
 
-# Mantle protocols
+# Single chain
 defi --json --chain mantle status
 ```
 
 ### Lending
 
 ```bash
-# Cross-chain lending APY comparison (default: USDC)
+# Cross-chain lending APY comparison (scans all chains by default)
 defi --json yield
 defi --json --chain mantle yield --asset USDT
 
 # Check user position
-defi --json lending position --protocol hyperlend
+defi --json --chain hyperevm lending position --protocol hyperlend
 
 # Supply collateral (auto-approve included)
-defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
+defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
 
 # Withdraw collateral
-defi --json lending withdraw --protocol hyperlend --asset USDC --amount 500000000 --broadcast
+defi --json --chain hyperevm lending withdraw --protocol hyperlend --asset USDC --amount 500000000 --broadcast
 ```
 
 ### DEX Aggregator Swap
@@ -141,13 +141,13 @@ Uses KyberSwap, OpenOcean, and LiquidSwap to find the best route automatically.
 
 ```bash
 # Dry-run (default — no transaction)
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
+defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000
 
 # Execute swap
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
+defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000 --broadcast
 
 # With slippage (basis points)
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --slippage 100 --broadcast
+defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000 --slippage 100 --broadcast
 ```
 
 ### LP Operations
@@ -155,41 +155,41 @@ defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 
 #### Discover Pools
 
 ```bash
-# List all 134 emission pools across HyperEVM
-defi --json lp discover
+# Discover emission pools with APR, TVL, rewards (requires --chain)
+defi --json --chain hyperevm lp discover
+
+# Mantle LB pools with MOE/day, APR, pool TVL
+defi --json --chain mantle lp discover
 
 # Filter by protocol
-defi --json lp discover --protocol kittenswap
-
-# Show only pools with APR above threshold
-defi --json lp discover --min-apr 10
+defi --json --chain hyperevm lp discover --protocol kittenswap
 ```
 
 #### Add Liquidity
 
 ```bash
-defi --json lp add --protocol kittenswap --pool-address 0x... --amount-a 1000000000000000000 --amount-b 5000000000 --broadcast
+defi --json --chain hyperevm lp add --protocol kittenswap --pool 0x... --amount-a 1000000000000000000 --amount-b 5000000000 --broadcast
 ```
 
 #### Farm (Add + Auto-stake)
 
 ```bash
 # Add liquidity and stake into gauge/farming in one step
-defi --json lp farm --protocol kittenswap --pool-address 0x... --amount-a 1000000000000000000 --amount-b 5000000000 --broadcast
+defi --json --chain hyperevm lp farm --protocol kittenswap --pool 0x... --amount-a 1000000000000000000 --amount-b 5000000000 --broadcast
 ```
 
 #### Claim Rewards
 
 ```bash
 # Claim fee and emission rewards from a pool
-defi --json lp claim --protocol kittenswap --pool-address 0x... --broadcast
+defi --json --chain hyperevm lp claim --protocol kittenswap --pool 0x... --broadcast
 ```
 
 #### Remove Liquidity
 
 ```bash
 # Auto-unstake (if staked) and remove liquidity
-defi --json lp remove --protocol kittenswap --pool-address 0x... --broadcast
+defi --json --chain hyperevm lp remove --protocol kittenswap --pool 0x... --broadcast
 ```
 
 #### LP Autopilot
@@ -237,34 +237,33 @@ defi --json bridge --token USDC --amount 100000000 --to-chain arbitrum --provide
 
 ```bash
 # Aggregate positions across all protocols
-defi --json portfolio
+defi --json --chain hyperevm portfolio show --address 0xYourAddress
 ```
 
 ### Token & Wallet
 
 ```bash
-# Token operations
-defi --json token balance --token USDC
-defi --json token allowance --token USDC --spender 0x...
-defi --json token approve --token USDC --spender 0x... --amount max --broadcast
-defi --json token transfer --token USDC --to 0x... --amount 1000000 --broadcast
+# Token operations (--chain required)
+defi --json --chain hyperevm token balance --owner 0x... --token USDC
+defi --json --chain hyperevm token allowance --owner 0x... --token USDC --spender 0x...
+defi --json --chain hyperevm token approve --token USDC --spender 0x... --amount 1000000 --broadcast
+defi --json --chain hyperevm token transfer --token USDC --to 0x... --amount 1000000 --broadcast
 
 # Wallet management
-defi --json wallet address
-defi --json wallet balance
+defi --json --chain hyperevm wallet balance --address 0x...
 ```
 
 ### Price & Market Data
 
 ```bash
-# Oracle + DEX prices
-defi --json price --asset WHYPE
+# Oracle + DEX prices (--chain required)
+defi --json --chain hyperevm price --asset WHYPE
 
 # DEX prices only
-defi --json price --asset WHYPE --source dex
+defi --json --chain hyperevm price --asset WHYPE --source dex
 
 # Oracle prices only
-defi --json price --asset USDC --source oracle
+defi --json --chain hyperevm price --asset USDC --source oracle
 ```
 
 ## Agent-First Design
@@ -286,10 +285,10 @@ defi --json --fields balance,positions status
 defi --json --ndjson lp discover
 
 # Pre-validate before executing
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
+defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000
 
 # Safe by default: --dry-run is on, use --broadcast to execute
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
+defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000 --broadcast
 ```
 
 Responses include `needs_approval` simulation status. Auto-approve flow: check allowance → exact approve → execute tx.
@@ -303,7 +302,7 @@ Errors include `retryable` flag — only retry when `true`.
 --json              # Output as JSON (structured for agents)
 --ndjson            # Output as newline-delimited JSON
 --fields <f>        # Select output fields (comma-separated)
---chain <chain>     # Target chain: hyperevm (default) or mantle
+--chain <chain>     # Target chain: hyperevm or mantle (required for tx commands)
 --dry-run           # Dry-run mode (default, no broadcast)
 --broadcast         # Execute transaction on-chain
 ```
@@ -319,7 +318,7 @@ MANTLE_RPC_URL           # Override Mantle RPC endpoint
 
 ## MCP Server
 
-14 MCP tools for Claude Desktop, Cursor, and other MCP clients.
+17 MCP tools for Claude Desktop, Cursor, and other MCP clients.
 
 ```json
 {
@@ -332,7 +331,7 @@ MANTLE_RPC_URL           # Override Mantle RPC endpoint
 }
 ```
 
-**Available tools:** `defi_status`, `defi_lending_rates`, `defi_lending_supply`, `defi_lending_withdraw`, `defi_dex_quote`, `defi_dex_swap`, `defi_dex_lp_add`, `defi_dex_lp_remove`, `defi_bridge`, `defi_vault_info`, `defi_staking_info`, `defi_price`, `defi_scan`, `defi_portfolio`
+**Available tools:** `defi_status`, `defi_yield`, `defi_lending_rates`, `defi_lending_supply`, `defi_lending_withdraw`, `defi_lp_discover`, `defi_lp_add`, `defi_lp_farm`, `defi_lp_claim`, `defi_lp_remove`, `defi_swap`, `defi_bridge`, `defi_price`, `defi_token_balance`, `defi_token_approve`, `defi_portfolio`, `defi_schema`
 
 See `mcp-config.example.json` for full configuration.
 

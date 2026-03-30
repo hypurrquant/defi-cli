@@ -19,7 +19,7 @@ Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, yield comp
 
 1. **Always use `--json`** on every command.
 2. **Always use `--dry-run`** (default) before any mutating transaction. Only add `--broadcast` after user confirms.
-3. **Always use `--chain`** to specify the target chain when not defaulting to HyperEVM.
+3. **Always use `--chain`** for transaction commands (`lending supply`, `swap`, `lp`, `token`, `price`, `wallet`, `bridge`). Query commands (`yield`, `status`) scan all chains by default.
 4. **NEVER broadcast without user confirmation.**
 5. **NEVER read private key files or `~/.` config files.**
 6. **Amounts are in wei** (18 decimals for most tokens, 6 for USDC/USDT). Use `BigInt(humanAmount * 10**decimals)` to convert.
@@ -35,7 +35,7 @@ Use `defi` if global install works, otherwise `npx -y @hypurrquant/defi-cli@late
 
 ## Global Flags
 
-`--json` (required) | `--chain <chain>` (hyperevm or mantle) | `--dry-run` (default, safe) | `--broadcast` (executes tx) | `--fields <f1,f2>` | `--ndjson`
+`--json` (required) | `--chain <chain>` (hyperevm or mantle, required for tx commands) | `--dry-run` (default, safe) | `--broadcast` (executes tx) | `--fields <f1,f2>` | `--ndjson`
 
 **Wallet**: set `DEFI_WALLET_ADDRESS` env for read queries. Set `DEFI_PRIVATE_KEY` for tx signing.
 
@@ -93,12 +93,12 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 ## Core Workflow: Lending
 
 ```
-1. defi --json yield --asset USDC                                    # compare APYs
-2. defi --json lending position --protocol hyperlend                  # check position
-3. defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000  # dry-run
+1. defi --json yield --asset USDC                                              # compare APYs (all chains)
+2. defi --json --chain hyperevm lending position --protocol hyperlend           # check position
+3. defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000  # dry-run
 4. [show result to user, get confirmation]
-5. defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
-6. defi --json lending position --protocol hyperlend                  # verify
+5. defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
+6. defi --json --chain hyperevm lending position --protocol hyperlend           # verify
 ```
 
 ## Core Workflow: Swap (DEX Aggregator)
@@ -106,26 +106,26 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 Aggregates KyberSwap, OpenOcean, LiquidSwap for best price automatically.
 
 ```
-1. defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000   # dry-run
+1. defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000   # dry-run
 2. [confirm with user]
-3. defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
+3. defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000 --broadcast
 ```
 
 ## Core Workflow: LP Autopilot
 
 ```
-1. defi --json lp discover --min-apr 5                               # find pools
+1. defi --json --chain hyperevm lp discover                                    # find pools with APR/TVL
 2. [user reviews, edits ~/.defi/pools.toml with chosen pools]
-3. defi --json lp autopilot --budget 1000000000                      # dry-run allocation
+3. defi --json --chain hyperevm lp autopilot --budget 1000000000               # dry-run allocation
 4. [confirm with user]
-5. defi --json lp autopilot --budget 1000000000 --broadcast          # execute
+5. defi --json --chain hyperevm lp autopilot --budget 1000000000 --broadcast   # execute
 ```
 
 ## Core Workflow: Yield Comparison
 
 ```
-1. defi --json yield                                                  # HyperEVM USDC rates
-2. defi --json --chain mantle yield --asset USDC                     # Mantle USDC rates
+1. defi --json yield                                                  # all chains USDC rates
+2. defi --json --chain mantle yield --asset USDC                     # Mantle only
 ```
 
 ## Error Handling
@@ -141,34 +141,28 @@ Aggregates KyberSwap, OpenOcean, LiquidSwap for best price automatically.
 
 ## Examples
 
-**"What are the best USDC lending rates on HyperEVM?"**
+**"What are the best USDC lending rates?"**
 ```bash
 defi --json yield --asset USDC
 ```
 
 **"Supply 1000 USDC to HyperLend"**
 ```bash
-# Step 1: check rates
 defi --json yield --asset USDC
-# Step 2: dry-run (USDC=6 decimals → 1000 USDC = 1000000000)
-defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000
-# Step 3: after user confirms
-defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
+defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000
+# after user confirms:
+defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
 ```
 
 **"Swap 1 WHYPE to USDC"**
 ```bash
-# Dry-run via aggregator
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
-# After confirmation
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
+defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000
+defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000 --broadcast
 ```
 
-**"Find best LP pools and auto-allocate 500 USDC"**
+**"Find Mantle LP pools with rewards"**
 ```bash
-defi --json lp discover --min-apr 10
-# After user sets up ~/.defi/pools.toml:
-defi --json lp autopilot --budget 500000000 --broadcast
+defi --json --chain mantle lp discover
 ```
 
 **"Bridge 100 USDC from HyperEVM to Mantle"**
@@ -178,10 +172,10 @@ defi --json --chain hyperevm bridge --token USDC --amount 100000000 --to-chain m
 
 **"Check my portfolio on HyperEVM"**
 ```bash
-defi --json portfolio
+defi --json --chain hyperevm portfolio show --address 0xYourAddress
 ```
 
 **"Claim LP rewards from KittenSwap"**
 ```bash
-defi --json lp claim --protocol kittenswap --pool-address 0xYourPool --broadcast
+defi --json --chain hyperevm lp claim --protocol kittenswap --pool 0xYourPool --broadcast
 ```
