@@ -3498,7 +3498,8 @@ var lbQuoterAbi2 = parseAbi12([
   "function findBestPathFromAmountIn(address[] calldata route, uint128 amountIn) external view returns ((address[] route, address[] pairs, uint256[] binSteps, uint256[] versions, uint128[] amounts, uint128[] virtualAmountsWithoutSlippage, uint128[] fees))"
 ]);
 var erc20Abi2 = parseAbi12([
-  "function symbol() external view returns (string)"
+  "function symbol() external view returns (string)",
+  "function balanceOf(address account) external view returns (uint256)"
 ]);
 var _addressAbi = parseAbi12(["function f() external view returns (address)"]);
 function decodeAddressResult(data) {
@@ -4104,6 +4105,23 @@ var MerchantMoeLBAdapter = class {
         binReservesY.get(poolIdx).set(binId, decoded[1]);
       }
     }
+    const poolBalanceX = /* @__PURE__ */ new Map();
+    const poolBalanceY = /* @__PURE__ */ new Map();
+    {
+      const balCalls = [];
+      for (let i = 0; i < rewardedPairs.length; i++) {
+        const tx = tokenXAddresses[i];
+        const ty = tokenYAddresses[i];
+        const pool = rewardedPairs[i].pool;
+        balCalls.push([tx ?? "0x0000000000000000000000000000000000000000", encodeFunctionData12({ abi: erc20Abi2, functionName: "balanceOf", args: [pool] })]);
+        balCalls.push([ty ?? "0x0000000000000000000000000000000000000000", encodeFunctionData12({ abi: erc20Abi2, functionName: "balanceOf", args: [pool] })]);
+      }
+      const balResults = await multicallRead(rpcUrl, balCalls).catch(() => []);
+      for (let i = 0; i < rewardedPairs.length; i++) {
+        poolBalanceX.set(i, decodeUint256Result(balResults[i * 2] ?? null) ?? 0n);
+        poolBalanceY.set(i, decodeUint256Result(balResults[i * 2 + 1] ?? null) ?? 0n);
+      }
+    }
     const results = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
       const { pool, rewarder } = rewardedPairs[i];
@@ -4128,18 +4146,25 @@ var MerchantMoeLBAdapter = class {
         const maxBin = Number(range[1]);
         rewardedBins = maxBin - minBin + 1;
         if (rxMap && ryMap) {
-          const priceX = getTokenPriceUsd(symX, tokenX);
-          const priceY = getTokenPriceUsd(symY, tokenY);
-          const decX = getTokenDecimals(symX, tokenX);
-          const decY = getTokenDecimals(symY, tokenY);
+          const priceX2 = getTokenPriceUsd(symX, tokenX);
+          const priceY2 = getTokenPriceUsd(symY, tokenY);
+          const decX2 = getTokenDecimals(symX, tokenX);
+          const decY2 = getTokenDecimals(symY, tokenY);
           for (let b = minBin; b <= maxBin; b++) {
             const rx = rxMap.get(b) ?? 0n;
             const ry = ryMap.get(b) ?? 0n;
-            rangeTvlUsd += Number(rx) / 10 ** decX * priceX;
-            rangeTvlUsd += Number(ry) / 10 ** decY * priceY;
+            rangeTvlUsd += Number(rx) / 10 ** decX2 * priceX2;
+            rangeTvlUsd += Number(ry) / 10 ** decY2 * priceY2;
           }
         }
       }
+      const priceX = getTokenPriceUsd(symX, tokenX);
+      const priceY = getTokenPriceUsd(symY, tokenY);
+      const decX = getTokenDecimals(symX, tokenX);
+      const decY = getTokenDecimals(symY, tokenY);
+      const fullBalX = poolBalanceX.get(i) ?? 0n;
+      const fullBalY = poolBalanceY.get(i) ?? 0n;
+      const poolTvlUsd = Number(fullBalX) / 10 ** decX * priceX + Number(fullBalY) / 10 ** decY * priceY;
       const aprPercent = rangeTvlUsd > 0 && moePriceUsd > 0 ? poolMoePerDay * moePriceUsd * 365 / rangeTvlUsd * 100 : 0;
       results.push({
         pool,
@@ -4156,8 +4181,11 @@ var MerchantMoeLBAdapter = class {
         isTopPool,
         moePerDay: poolMoePerDay,
         rangeTvlUsd,
+        poolTvlUsd,
         aprPercent,
-        rewardedBins
+        rewardedBins,
+        totalMoePerDay: moePerDay,
+        moePriceUsd
       });
     }
     return results;
@@ -6240,10 +6268,13 @@ function registerLP(parent, getOpts, makeExecutor2) {
                   moePerDay: p.moePerDay,
                   aprPercent: p.aprPercent,
                   rangeTvlUsd: p.rangeTvlUsd,
+                  poolTvlUsd: p.poolTvlUsd,
                   isTopPool: p.isTopPool,
                   rewardedBins: p.rewardedBins,
                   minBinId: p.minBinId,
-                  maxBinId: p.maxBinId
+                  maxBinId: p.maxBinId,
+                  totalMoePerDay: p.totalMoePerDay,
+                  moePriceUsd: p.moePriceUsd
                 });
               }
             }

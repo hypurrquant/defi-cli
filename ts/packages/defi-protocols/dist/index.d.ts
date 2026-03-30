@@ -46,8 +46,12 @@ interface RewardedPool {
     isTopPool: boolean;
     moePerDay: number;
     rangeTvlUsd: number;
+    poolTvlUsd: number;
     aprPercent: number;
     rewardedBins: number;
+    /** Global: total net MOE/day flowing to all dynamic pools */
+    totalMoePerDay?: number;
+    moePriceUsd?: number;
 }
 declare class MerchantMoeLBAdapter {
     private readonly protocolName;

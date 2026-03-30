@@ -70,6 +70,7 @@ const lbQuoterAbi = parseAbi([
 
 const erc20Abi = parseAbi([
   "function symbol() external view returns (string)",
+  "function balanceOf(address account) external view returns (uint256)",
 ]);
 
 // ============================================================
@@ -124,8 +125,12 @@ export interface RewardedPool {
   isTopPool: boolean;
   moePerDay: number;
   rangeTvlUsd: number;
+  poolTvlUsd: number;
   aprPercent: number;
   rewardedBins: number;
+  /** Global: total net MOE/day flowing to all dynamic pools */
+  totalMoePerDay?: number;
+  moePriceUsd?: number;
 }
 
 // ============================================================
@@ -890,6 +895,25 @@ export class MerchantMoeLBAdapter {
       }
     }
 
+    // --- Batch 8: Full pool TVL via ERC20 balanceOf(pool) for tokenX and tokenY ---
+    const poolBalanceX = new Map<number, bigint>();
+    const poolBalanceY = new Map<number, bigint>();
+    {
+      const balCalls: Array<[Address, Hex]> = [];
+      for (let i = 0; i < rewardedPairs.length; i++) {
+        const tx = tokenXAddresses[i];
+        const ty = tokenYAddresses[i];
+        const pool = rewardedPairs[i]!.pool;
+        balCalls.push([tx ?? ("0x0000000000000000000000000000000000000000" as Address), encodeFunctionData({ abi: erc20Abi, functionName: "balanceOf", args: [pool] })]);
+        balCalls.push([ty ?? ("0x0000000000000000000000000000000000000000" as Address), encodeFunctionData({ abi: erc20Abi, functionName: "balanceOf", args: [pool] })]);
+      }
+      const balResults = await multicallRead(rpcUrl, balCalls).catch(() => [] as (Hex | undefined)[]);
+      for (let i = 0; i < rewardedPairs.length; i++) {
+        poolBalanceX.set(i, decodeUint256Result(balResults[i * 2] ?? null) ?? 0n);
+        poolBalanceY.set(i, decodeUint256Result(balResults[i * 2 + 1] ?? null) ?? 0n);
+      }
+    }
+
     const results: RewardedPool[] = [];
     for (let i = 0; i < rewardedPairs.length; i++) {
       const { pool, rewarder } = rewardedPairs[i]!;
@@ -935,6 +959,15 @@ export class MerchantMoeLBAdapter {
         }
       }
 
+      // Full pool TVL from balanceOf
+      const priceX = getTokenPriceUsd(symX, tokenX);
+      const priceY = getTokenPriceUsd(symY, tokenY);
+      const decX = getTokenDecimals(symX, tokenX);
+      const decY = getTokenDecimals(symY, tokenY);
+      const fullBalX = poolBalanceX.get(i) ?? 0n;
+      const fullBalY = poolBalanceY.get(i) ?? 0n;
+      const poolTvlUsd = (Number(fullBalX) / 10 ** decX) * priceX + (Number(fullBalY) / 10 ** decY) * priceY;
+
       // APR = (poolMoePerDay * moePriceUsd * 365) / rangeTvlUsd * 100
       const aprPercent =
         rangeTvlUsd > 0 && moePriceUsd > 0
@@ -956,8 +989,11 @@ export class MerchantMoeLBAdapter {
         isTopPool,
         moePerDay: poolMoePerDay,
         rangeTvlUsd,
+        poolTvlUsd,
         aprPercent,
         rewardedBins,
+        totalMoePerDay: moePerDay,
+        moePriceUsd,
       });
     }
 

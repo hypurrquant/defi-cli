@@ -68,10 +68,13 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         moePerDay?: number;
         aprPercent?: number;
         rangeTvlUsd?: number;
+        poolTvlUsd?: number;
         isTopPool?: boolean;
         rewardedBins?: number;
         minBinId?: number;
         maxBinId?: number;
+        totalMoePerDay?: number;
+        moePriceUsd?: number;
       };
 
       const results: DiscoveredPool[] = [];
@@ -131,10 +134,13 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
                     moePerDay: p.moePerDay,
                     aprPercent: p.aprPercent,
                     rangeTvlUsd: p.rangeTvlUsd,
+                    poolTvlUsd: p.poolTvlUsd,
                     isTopPool: p.isTopPool,
                     rewardedBins: p.rewardedBins,
                     minBinId: p.minBinId,
                     maxBinId: p.maxBinId,
+                    totalMoePerDay: p.totalMoePerDay,
+                    moePriceUsd: p.moePriceUsd,
                   });
                 }
               }
