@@ -1,19 +1,19 @@
 ---
 name: defi-cli
-description: "Multi-chain DeFi operations CLI for HyperEVM (Hyperliquid) and Mantle. Use when user asks to: supply/borrow/repay/withdraw from lending, swap tokens, add/remove LP, bridge assets, manage vaults, stake HYPE, scan for exploits, scan yield opportunities, compare APYs, check prices, open CDP positions, farm LP rewards, track portfolio, detect arb, or mentions defi-cli, HyperEVM, Hyperliquid EVM, Mantle, HypurrFi, HyperLend, HyperYield, PurrLend, Felix, Kinetiq, stHYPE, HyperSwap, KittenSwap, NestSwap, Upshift, Hyperbeat."
+description: "Multi-chain DeFi operations CLI for HyperEVM (Hyperliquid) and Mantle. Use when user asks to: supply/withdraw from lending, swap tokens, add/remove LP, bridge assets, manage LP autopilot, claim rewards, compare APYs, check prices, track portfolio, or mentions defi-cli, HyperEVM, Hyperliquid EVM, Mantle, HypurrFi, HyperLend, Felix, KittenSwap, NEST, Ramses, Merchant Moe, KyberSwap, OpenOcean, LiquidSwap."
 allowed-tools: "Bash(defi:*), Bash(npx defi-cli:*), Bash(npx -y defi-cli:*)"
 license: MIT
 metadata:
   author: hypurrquant
-  version: "0.2.0"
+  version: "0.4.0"
 ---
 
 # defi-cli Agent Guide
 
-Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, vaults, staking, yield scanning, exploit detection — all from your terminal.
+Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, yield comparison — all from your terminal.
 
 2 chains: **HyperEVM** (Hyperliquid EVM, chain ID 999) and **Mantle** (chain ID 5000).
-32 protocols across lending, DEX, vault, staking, CDP, gauge, farm, NFT.
+21 protocols across lending, DEX, vault, CDP.
 
 ## Rules
 
@@ -59,139 +59,129 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 | Slug | Protocol | Interface |
 |------|----------|-----------|
 | `hyperlend` | HyperLend | aave_v3 |
-| `hyperyield-hyperevm` | HyperYield | aave_v3 |
 | `hypurrfi` | HypurrFi | aave_v3 |
-| `purrlend-hyperevm` | PurrLend | aave_v3 |
-| `primefi-hyperevm` | PrimeFi | aave_v2 |
 | `felix-morpho` | Felix Morpho | morpho_blue |
-| `euler-v2` | Euler V2 | euler_v2 |
 
 ### HyperEVM DEX
 | Slug | Protocol | Interface |
 |------|----------|-----------|
-| `hyperswap-v3` | HyperSwap V3 | uniswap_v3 |
-| `hyperswap-v2` | HyperSwap V2 | uniswap_v2 |
 | `kittenswap` | KittenSwap | algebra_v3 |
-| `nest-v1` | NestSwap | algebra_v3 |
+| `nest-v1` | NEST V1 | algebra_v3 |
 | `ramses-cl` | Ramses CL | uniswap_v3 |
 | `ramses-hl` | Ramses HL | solidly_v2 |
-| `balancer-v3` | Balancer V3 | balancer_v3 |
-| `curve` | Curve | curve_stableswap |
-| `ring-few` | Ring/FEW | uniswap_v2 |
-| `woofi` | WooFi | woofi |
-| `project-x` | Project X | uniswap_v4 |
+| `hybra` | Hybra | solidly_v2 |
+| `project-x` | Project X | uniswap_v2 |
 
-### HyperEVM Vaults / Staking / CDP
+### HyperEVM Vaults / CDP
 | Slug | Protocol | Interface |
 |------|----------|-----------|
 | `felix` | Felix CDP | liquity_v2 |
 | `felix-vaults` | Felix Vaults | erc4626 |
 | `hyperbeat` | Hyperbeat | erc4626 |
+| `looping` | Looping | erc4626 |
 | `upshift` | Upshift | erc4626 |
-| `looping-collective` | Looping Collective | erc4626 |
 | `lazy-summer` | Lazy Summer | erc4626 |
-| `kinetiq` | Kinetiq | kinetiq_staking |
-| `sthype` | stHYPE | sthype_staking |
 
 ### Mantle Protocols
 | Slug | Protocol | Interface |
 |------|----------|-----------|
 | `aave-v3-mantle` | Aave V3 Mantle | aave_v3 |
-| `lendle-mantle` | Lendle | aave_v2 |
+| `lendle-mantle` | Lendle | aave_v3 |
 | `uniswap-v3-mantle` | Uniswap V3 | uniswap_v3 |
-| `merchantmoe-mantle` | MerchantMoe | uniswap_v2 |
+| `merchantmoe-mantle` | Merchant Moe | uniswap_v2 + lb |
 
 ## Core Workflow: Lending
 
 ```
-1. defi --json lending rates --protocol hyperlend --asset USDC      # check rates
-2. defi --json portfolio show --address 0xABC...                     # check position
-3. defi --json --dry-run lending supply --protocol hyperlend --asset USDC --amount 1000000000 # dry-run
+1. defi --json yield --asset USDC                                    # compare APYs
+2. defi --json lending position --protocol hyperlend                  # check position
+3. defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000  # dry-run
 4. [show result to user, get confirmation]
-5. defi --json --broadcast lending supply --protocol hyperlend --asset USDC --amount 1000000000
-6. defi --json portfolio show --address 0xABC...                     # verify
+5. defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
+6. defi --json lending position --protocol hyperlend                  # verify
 ```
 
-## Core Workflow: Swap
+## Core Workflow: Swap (DEX Aggregator)
+
+Aggregates KyberSwap, OpenOcean, LiquidSwap for best price automatically.
 
 ```
-1. defi --json dex quote --protocol hyperswap-v3 --token-in WHYPE --token-out USDC --amount 1000000000000000000
-2. defi --json dex compare --token-in WHYPE --token-out USDC --amount 1000000000000000000  # find best DEX
-3. defi --json --dry-run swap --token-in WHYPE --token-out USDC --amount 1000000000000000000  # ODOS aggregator
+1. defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000   # dry-run
+2. [confirm with user]
+3. defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
+```
+
+## Core Workflow: LP Autopilot
+
+```
+1. defi --json lp discover --min-apr 5                               # find pools
+2. [user reviews, edits ~/.defi/pools.toml with chosen pools]
+3. defi --json lp autopilot --budget 1000000000                      # dry-run allocation
 4. [confirm with user]
-5. defi --json --broadcast swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
+5. defi --json lp autopilot --budget 1000000000 --broadcast          # execute
 ```
 
-## Core Workflow: Yield Optimization
+## Core Workflow: Yield Comparison
 
 ```
-1. defi --json yield compare --asset USDC                            # current chain rates
-2. defi --json yield scan --asset USDC                               # all chains scan
-3. defi --json yield optimize --asset USDC --strategy auto           # best allocation
-4. defi --json --dry-run yield execute --asset USDC --amount 1000    # auto-selects best protocol
-5. [confirm with user]
-6. defi --json --broadcast yield execute --asset USDC --amount 1000
+1. defi --json yield                                                  # HyperEVM USDC rates
+2. defi --json --chain mantle yield --asset USDC                     # Mantle USDC rates
 ```
 
 ## Error Handling
-
-Response format: raw JSON object, no envelope wrapper.
 
 | Error | Action |
 |-------|--------|
 | `Chain not found: X` | use `hyperevm` or `mantle` |
 | `Protocol not found: X` | run `defi --json status` to list valid slugs |
-| `No ODOS route found` | try `dex swap` with a specific `--protocol` instead |
+| `No route found` | swap aggregator has no route — try smaller amount or different pair |
 | `No prices fetched` | asset not listed in registry — use token address directly |
 | `Multicall failed` | RPC issue — retry or check `status` |
-| `DEFI_WALLET_ADDRESS not set` | set env var or pass `--address` / `--on-behalf-of` |
+| `DEFI_WALLET_ADDRESS not set` | set env var or pass `--address` |
 
 ## Examples
 
 **"What are the best USDC lending rates on HyperEVM?"**
 ```bash
-defi --json yield compare --asset USDC
+defi --json yield --asset USDC
 ```
 
 **"Supply 1000 USDC to HyperLend"**
 ```bash
 # Step 1: check rates
-defi --json lending rates --protocol hyperlend --asset USDC
-# Step 2: dry-run (amounts in wei, USDC=6 decimals → 1000 USDC = 1000000000)
-defi --json --dry-run lending supply --protocol hyperlend --asset USDC --amount 1000000000
+defi --json yield --asset USDC
+# Step 2: dry-run (USDC=6 decimals → 1000 USDC = 1000000000)
+defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000
 # Step 3: after user confirms
-defi --json --broadcast lending supply --protocol hyperlend --asset USDC --amount 1000000000
+defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
 ```
 
 **"Swap 1 WHYPE to USDC"**
 ```bash
-# Find best route
-defi --json dex compare --token-in WHYPE --token-out USDC --amount 1000000000000000000
-# Dry-run via ODOS aggregator
-defi --json --dry-run swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
+# Dry-run via aggregator
+defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
 # After confirmation
-defi --json --broadcast swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
+defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
 ```
 
-**"Scan for DeFi exploits on HyperEVM"**
+**"Find best LP pools and auto-allocate 500 USDC"**
 ```bash
-defi --json scan --once
+defi --json lp discover --min-apr 10
+# After user sets up ~/.defi/pools.toml:
+defi --json lp autopilot --budget 500000000 --broadcast
 ```
 
 **"Bridge 100 USDC from HyperEVM to Mantle"**
 ```bash
-defi --json --chain hyperevm bridge --token USDC --amount 100000000 --to-chain mantle --provider lifi
+defi --json --chain hyperevm bridge --token USDC --amount 100000000 --to-chain mantle
 ```
 
 **"Check my portfolio on HyperEVM"**
 ```bash
-defi --json portfolio show --address 0xYourAddress
+defi --json portfolio
 ```
 
-**"Stake HYPE via Kinetiq"**
+**"Claim LP rewards from KittenSwap"**
 ```bash
-defi --json staking info --protocol kinetiq
-defi --json --dry-run staking stake --protocol kinetiq --amount 1000000000000000000
-# after confirmation
-defi --json --broadcast staking stake --protocol kinetiq --amount 1000000000000000000
+defi --json lp claim --protocol kittenswap --pool-address 0xYourPool --broadcast
 ```

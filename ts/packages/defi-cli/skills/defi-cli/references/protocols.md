@@ -7,28 +7,19 @@
 | Slug | Name | Interface | Notes |
 |------|------|-----------|-------|
 | `hyperlend` | HyperLend | aave_v3 | Main Aave V3 fork |
-| `hyperyield-hyperevm` | HyperYield | aave_v3 | Yield-focused Aave V3 fork |
 | `hypurrfi` | HypurrFi | aave_v3 | HypurrQuant native lending |
-| `purrlend-hyperevm` | PurrLend | aave_v3 | Isolated market Aave V3 |
-| `primefi-hyperevm` | PrimeFi | aave_v2 | Aave V2 fork |
 | `felix-morpho` | Felix Morpho | morpho_blue | Morpho Blue vaults |
-| `euler-v2` | Euler V2 | euler_v2 | Euler V2 lending |
 
 ### DEX Protocols
 
 | Slug | Name | Interface | Notes |
 |------|------|-----------|-------|
-| `hyperswap-v3` | HyperSwap V3 | uniswap_v3 | Main V3 DEX |
-| `hyperswap-v2` | HyperSwap V2 | uniswap_v2 | V2 AMM |
-| `kittenswap` | KittenSwap | algebra_v3 | Algebra V3 (concentrated) |
-| `nest-v1` | NestSwap V1 | algebra_v3 | Algebra V3 fork |
-| `ramses-cl` | Ramses CL | uniswap_v3 | Concentrated liquidity |
-| `ramses-hl` | Ramses HL | solidly_v2 | Solidly V2 (ve(3,3)) |
-| `balancer-v3` | Balancer V3 | balancer_v3 | Multi-token pools |
-| `curve` | Curve | curve_stableswap | Stablecoin AMM |
-| `ring-few` | Ring/FEW | uniswap_v2 | Uniswap V2 fork |
-| `woofi` | WooFi | woofi | WooFi PMM |
-| `project-x` | Project X | uniswap_v4 | Uniswap V4 |
+| `kittenswap` | KittenSwap | algebra_v3 | Algebra V3 (concentrated); 16 gauge pools |
+| `nest-v1` | NEST V1 | algebra_v3 | Algebra V3 fork; 13 gauge pools |
+| `ramses-cl` | Ramses CL | uniswap_v3 | Concentrated liquidity; 25 gauge pools |
+| `ramses-hl` | Ramses HL | solidly_v2 | Solidly V2 ve(3,3) |
+| `hybra` | Hybra | solidly_v2 | Solidly V2; 45 gauge pools |
+| `project-x` | Project X | uniswap_v2 | Uniswap V2 fork |
 
 ### Vault Protocols (ERC-4626)
 
@@ -36,22 +27,15 @@
 |------|------|-------|
 | `felix-vaults` | Felix Vaults | CDP-backed vaults |
 | `hyperbeat` | Hyperbeat | Auto-compounding vault |
+| `looping` | Looping | Leverage looping |
 | `upshift` | Upshift | Yield optimization |
-| `looping-collective` | Looping Collective | Leverage looping |
 | `lazy-summer` | Lazy Summer | Yield aggregator |
 
 ### CDP Protocols
 
 | Slug | Name | Interface | Stablecoin |
 |------|------|-----------|------------|
-| `felix` | Felix | liquity_v2 | feUSD |
-
-### Staking Protocols
-
-| Slug | Name | Interface | Token |
-|------|------|-----------|-------|
-| `kinetiq` | Kinetiq | kinetiq_staking | kHYPE |
-| `sthype` | stHYPE | sthype_staking | stHYPE |
+| `felix` | Felix CDP | liquity_v2 | feUSD |
 
 ### Other
 
@@ -69,14 +53,24 @@
 | Slug | Name | Interface | Notes |
 |------|------|-----------|-------|
 | `aave-v3-mantle` | Aave V3 Mantle | aave_v3 | Official Aave V3 |
-| `lendle-mantle` | Lendle | aave_v2 | Mantle native lending |
+| `lendle-mantle` | Lendle | aave_v3 | Mantle native lending |
 
 ### DEX Protocols
 
 | Slug | Name | Interface | Notes |
 |------|------|-----------|-------|
 | `uniswap-v3-mantle` | Uniswap V3 | uniswap_v3 | Concentrated liquidity |
-| `merchantmoe-mantle` | MerchantMoe | uniswap_v2 | Mantle native DEX |
+| `merchantmoe-mantle` | Merchant Moe | uniswap_v2 + lb | V2 AMM + Liquidity Book; 35 LB pools |
+
+---
+
+## DEX Aggregator Providers (swap command)
+
+| Provider | Chains | Notes |
+|----------|--------|-------|
+| KyberSwap | HyperEVM, Mantle | Default for HyperEVM |
+| OpenOcean | HyperEVM, Mantle | Fallback aggregator |
+| LiquidSwap | HyperEVM | HyperEVM-native |
 
 ---
 

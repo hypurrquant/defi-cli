@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dw/@hypurrquant/defi-cli.svg)](https://www.npmjs.com/package/@hypurrquant/defi-cli)
 [![license](https://img.shields.io/npm/l/@hypurrquant/defi-cli.svg)](https://github.com/hypurrquant/defi-cli/blob/main/LICENSE)
 
-Multi-chain DeFi CLI — **HyperEVM** and **Mantle** with 32 protocols for lending, DEX, LP, bridge, vault, staking, gauge, and farm operations.
+Multi-chain DeFi CLI — **HyperEVM** (17 protocols) and **Mantle** (4 protocols) for lending, DEX, LP, bridge, and portfolio operations.
 
 ```bash
 npm install -g @hypurrquant/defi-cli    # global install
@@ -17,18 +17,17 @@ npx -y @hypurrquant/defi-cli --json status
 ## Features
 
 - **2 Chains** — HyperEVM (chain 999) and Mantle (chain 5000)
-- **32 Protocols** — 14 DEX (Uniswap, Algebra, Balancer, Curve, Solidly, etc.), 9 lending (Aave, Compound, Euler, Morpho, etc.), vaults, liquid staking, CDP, yield aggregators
-- **Lending** — rates, positions, supply, borrow, repay, withdraw across all lending protocols
-- **DEX** — quote, swap, LP add/remove, compare prices across DEXes
-- **LP Management** — add/remove liquidity, manage concentrated positions
-- **Bridge** — cross-chain token transfer via Lifi and deBridge
-- **Vault** — deposit, withdraw, yield tracking
-- **Staking** — stake, unstake, claim rewards
-- **Gauge** — deposit, withdraw, lock, vote, claim rewards
-- **Farm** — deposit, withdraw, claim yields
-- **Portfolio** — unified balance and position overview
+- **21 Protocols** — lending (Aave V3 forks, Morpho, HypurrFi), DEX (KittenSwap, Ramses, Uniswap V3, Merchant Moe LB), vaults, CDP
+- **Lending** — rates, positions, supply, withdraw across all lending protocols
+- **DEX** — add/remove liquidity with multicall optimization
+- **LP Management** — discover 134 emission pools, add, farm, claim, remove, autopilot
+- **DEX Aggregator** — best-price swap via KyberSwap, OpenOcean, LiquidSwap
+- **Bridge** — cross-chain token transfer via LI.FI, deBridge, CCTP
+- **Portfolio** — aggregate positions across lending and LP
+- **Auto-Approve** — checks allowance, exact-approves, then executes in one flow
 - **Agent-First Design** — `--json`, `--fields`, `--ndjson`, `--dry-run`, runtime schema introspection
-- **Safety** — pre-flight checks, dry-run validation, schema introspection
+- **MCP Server** — 14 tools for Claude Desktop, Cursor, and other MCP clients
+- **Claude Code Skill** — installable skill for AI-assisted DeFi operations
 
 ## Setup
 
@@ -41,262 +40,231 @@ export DEFI_WALLET_ADDRESS="0x..."        # Wallet address for queries
 export HYPEREVM_RPC_URL="https://..."
 export MANTLE_RPC_URL="https://..."
 
+# Interactive setup wizard
+defi setup
+
 # Verify setup
 defi --json status
 ```
 
-## Command Groups
+## Command Reference
 
-| Group | Subcommands | Description |
-|-------|------------|-------------|
-| `status` | — | Unified dashboard: balances, positions, rates |
-| `schema` | — | Runtime schema introspection for agents |
-| `dex` | quote, swap, lp-add, lp-remove, compare | DEX operations: prices, trades, liquidity |
-| `lending` | rates, position, supply, borrow, repay, withdraw | Lending protocol operations |
-| `gauge` | deposit, withdraw, lock, vote, claim | Gauge voting and reward claims |
-| `farm` | deposit, withdraw, claim, info | Yield farming operations |
-| `cdp` | open, adjust, close, info | Collateralized debt position management |
-| `staking` | stake, unstake, info | Staking and reward management |
-| `vault` | deposit, withdraw, info | Vault deposits and yield tracking |
-| `bridge` | — | Cross-chain token bridge (LI.FI, deBridge, CCTP) |
-| `yield` | compare, scan, execute, optimize | Yield aggregator and strategy tracking |
-| `portfolio` | — | Cross-protocol unified portfolio view |
-| `positions` | — | Summary of all open positions |
-| `price` | token, dex | Token prices and DEX aggregation |
-| `token` | balance, allowance, approve, transfer | ERC20 token operations |
-| `wallet` | balance, nonce, gas | Wallet info and on-chain data |
-| `whales` | watch, track, alerts | Large holder tracking |
-| `scan` | exploits, arbitrage, opportunities | Protocol scanning and opportunity detection |
-| `compare` | yields, rates, costs | Cross-protocol comparison |
-| `swap` | aggregator | Aggregated DEX swap finder |
-| `arb` | scan, execute, monitor | Arbitrage opportunities |
-| `monitor` | positions, yields, risks | Live monitoring and alerts |
-| `alert` | setup, add, test, list, start, stop | Telegram price and yield alerts |
-| `nft` | collections, balances | NFT portfolio tracking |
+| Command | Description |
+|---------|-------------|
+| `defi` | Dashboard — multicall balances across all protocols |
+| `defi yield` | Cross-chain lending APY comparison (default: USDC) |
+| `defi swap` | DEX aggregator swap (KyberSwap, OpenOcean, LiquidSwap) |
+| `defi lp discover` | Scan 134 emission pools (gauge/farming/lb_hooks) |
+| `defi lp add` | Add liquidity to a pool |
+| `defi lp farm` | Add liquidity and auto-stake for emissions |
+| `defi lp claim` | Claim fee and emission rewards |
+| `defi lp remove` | Auto-unstake and remove liquidity |
+| `defi lp autopilot` | Whitelist-based auto-allocation across pools |
+| `defi lending` | Supply, withdraw, rates, position |
+| `defi portfolio` | Aggregate positions across all protocols |
+| `defi price` | Oracle and DEX prices |
+| `defi token` | Approve, allowance, transfer, balance |
+| `defi wallet` | Address management |
+| `defi bridge` | Cross-chain transfer (LI.FI, deBridge, CCTP) |
+| `defi status` | Protocol overview |
+| `defi schema` | JSON schema for agent introspection |
+| `defi setup` | Interactive wallet/RPC config wizard |
 
 ## Supported Protocols
 
-### DEX (14 protocols)
+### HyperEVM (17 protocols)
 
-| Chain | Protocol | Type |
-|-------|----------|------|
-| HyperEVM | HyperSwap V3 | Uniswap V3 AMM |
-| HyperEVM | HyperSwap V2 | Uniswap V2 AMM |
-| HyperEVM | KittenSwap | Solidly V2 AMM |
-| HyperEVM | Ramses CL | Algebra V3 AMM |
-| HyperEVM | Ramses HL | Solidly CL AMM |
-| HyperEVM | Project X | Uniswap V2 AMM |
-| HyperEVM | Nest | Solidly V2 AMM |
-| HyperEVM | Ring Few | Solidly CL AMM |
-| HyperEVM | WooFi | Spot Trading |
-| Mantle | Uniswap V3 | Uniswap V3 AMM |
-| Mantle | Merchant Joe | Solidly V2 AMM |
-| Both | Balancer V3 | Weighted Pool AMM |
-| Both | Curve | Stablecoin Swap |
-| Both | DEX Price Feed | Oracle |
+| Protocol | Category | Interface |
+|----------|----------|-----------|
+| KittenSwap | DEX | Algebra V3 (CL) |
+| NEST V1 | DEX | Algebra V3 (CL) |
+| Ramses HL | DEX | Solidly V2 (ve(3,3)) |
+| Ramses CL | DEX | Uniswap V3 (CL) |
+| Project X | DEX | Uniswap V2 |
+| Hybra | DEX | Solidly V2 |
+| HyperLend | Lending | Aave V3 |
+| HypurrFi | Lending | Aave V3 |
+| Felix Morpho | Lending | Morpho Blue |
+| Felix Vaults | Vault | ERC-4626 |
+| Felix CDP | CDP | Liquity V2 |
+| Hyperbeat | Vault | ERC-4626 |
+| Looping | Vault | ERC-4626 |
+| Upshift | Vault | ERC-4626 |
+| Lazy Summer | Yield Aggregator | ERC-4626 |
+| Hypersurface | Options | — |
+| Seaport | NFT | — |
 
-### Lending (9 protocols)
+### Mantle (4 protocols)
 
-| Chain | Protocol | Type |
-|-------|----------|------|
-| HyperEVM | HyperLend | Aave V3 Fork |
-| HyperEVM | HyperYield | Supply Market |
-| HyperEVM | PurrlendV2 | Lendable Market |
-| HyperEVM | PrimeFi | Lending |
-| Mantle | Aave V3 | Lending |
-| Mantle | Lendle | Aave V3 Fork |
-| Both | Euler V2 | Lending |
-| Both | Morpho Blue | Lending |
-| Both | Felix Morpho | CDP + Lending |
-
-### Other Protocols
-
-| Category | Chain | Protocol |
-|----------|-------|----------|
-| **Liquid Staking** | HyperEVM | stHYPE (Generic LST) |
-| — | HyperEVM | Kinetiq (Mantle LST) |
-| **Vaults** | HyperEVM | Hyperbeat (ERC4626) |
-| — | HyperEVM | Hypersurface (ERC4626) |
-| — | HyperEVM | Looping (ERC4626) |
-| — | Mantle | Upshift (ERC4626) |
-| — | Both | Felix Vaults (ERC4626) |
-| **CDP** | Both | Felix (MorphoBlue) |
-| **Yield Aggregator** | HyperEVM | Lazy Summer |
-| **NFT** | HyperEVM | Seaport |
+| Protocol | Category | Interface |
+|----------|----------|-----------|
+| Aave V3 | Lending | Aave V3 |
+| Lendle | Lending | Aave V3 Fork |
+| Uniswap V3 | DEX | Uniswap V3 (CL) |
+| Merchant Moe | DEX | Uniswap V2 + Liquidity Book |
 
 ## Core Commands
 
-### Status & Portfolio
+### Dashboard
 
 ```bash
-# Unified dashboard: balances + positions + yields
+# Multicall balance dashboard
+defi --json
+
+# Protocol overview for current chain
 defi --json status
 
-# Cross-protocol portfolio view
-defi --json portfolio
-
-# Open positions across all protocols
-defi --json positions
+# Mantle protocols
+defi --json --chain mantle status
 ```
 
-### DEX Operations
+### Lending
 
 ```bash
-# Get swap quote (no execution)
-defi --json dex quote --protocol hyperswap --token-in HYPE --token-out USDC --amount 1000000000000000000
+# Cross-chain lending APY comparison (default: USDC)
+defi --json yield
+defi --json --chain mantle yield --asset USDT
 
-# Execute swap
-defi --json dex swap --protocol hyperswap --token-in HYPE --token-out USDC --amount 1000000000000000000 --broadcast
-
-# Add liquidity
-defi --json dex lp-add --protocol hyperswap --token-a HYPE --token-b USDC --amount-a 1000000000000000000 --amount-b 5000000000 --broadcast
-
-# Remove liquidity
-defi --json dex lp-remove --protocol hyperswap --lp-token <ADDRESS> --amount <AMOUNT> --broadcast
-
-# Compare prices across DEXes
-defi --json dex compare --token-in HYPE --token-out USDC --amount 1000000000000000000
-```
-
-### Lending Operations
-
-```bash
-# Get lending rates across all protocols
-defi --json lending rates
-
-# Check user position in a protocol
+# Check user position
 defi --json lending position --protocol hyperlend
 
-# Supply collateral
-defi --json lending supply --protocol hyperlend --token USDC --amount 1000000000 --broadcast
-
-# Borrow assets
-defi --json lending borrow --protocol hyperlend --token HYPE --amount 1000000000000000000 --broadcast
-
-# Repay debt
-defi --json lending repay --protocol hyperlend --token HYPE --amount 500000000000000000 --broadcast
+# Supply collateral (auto-approve included)
+defi --json lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
 
 # Withdraw collateral
-defi --json lending withdraw --protocol hyperlend --token USDC --amount 500000000 --broadcast
+defi --json lending withdraw --protocol hyperlend --asset USDC --amount 500000000 --broadcast
 ```
 
-### Staking
+### DEX Aggregator Swap
+
+Uses KyberSwap, OpenOcean, and LiquidSwap to find the best route automatically.
 
 ```bash
-# Stake tokens
-defi --json staking stake --protocol kinetiq --amount 1000000000000000000 --broadcast
+# Dry-run (default — no transaction)
+defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
 
-# Unstake tokens
-defi --json staking unstake --protocol kinetiq --amount 500000000000000000 --broadcast
+# Execute swap
+defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
 
-# Check staking info
-defi --json staking info --protocol kinetiq
+# With slippage (basis points)
+defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --slippage 100 --broadcast
 ```
 
-### Gauge & Voting
+### LP Operations
+
+#### Discover Pools
 
 ```bash
-# Deposit into gauge
-defi --json gauge deposit --protocol kinetiq --amount 1000000000000000000 --broadcast
+# List all 134 emission pools across HyperEVM
+defi --json lp discover
 
-# Lock tokens for voting power
-defi --json gauge lock --protocol kinetiq --amount 1000000000000000000 --weeks 52 --broadcast
+# Filter by protocol
+defi --json lp discover --protocol kittenswap
 
-# Vote on proposals
-defi --json gauge vote --protocol kinetiq --gauge <ADDRESS> --weight 100 --broadcast
-
-# Claim gauge rewards
-defi --json gauge claim --protocol kinetiq --broadcast
+# Show only pools with APR above threshold
+defi --json lp discover --min-apr 10
 ```
 
-### Vaults
+#### Add Liquidity
 
 ```bash
-# Deposit into vault
-defi --json vault deposit --protocol hyperbeat --amount 1000000000000000000 --broadcast
-
-# Withdraw from vault
-defi --json vault withdraw --protocol hyperbeat --shares 1000000000000000000 --broadcast
-
-# Check vault info and yield
-defi --json vault info --protocol hyperbeat
+defi --json lp add --protocol kittenswap --pool-address 0x... --amount-a 1000000000000000000 --amount-b 5000000000 --broadcast
 ```
+
+#### Farm (Add + Auto-stake)
+
+```bash
+# Add liquidity and stake into gauge/farming in one step
+defi --json lp farm --protocol kittenswap --pool-address 0x... --amount-a 1000000000000000000 --amount-b 5000000000 --broadcast
+```
+
+#### Claim Rewards
+
+```bash
+# Claim fee and emission rewards from a pool
+defi --json lp claim --protocol kittenswap --pool-address 0x... --broadcast
+```
+
+#### Remove Liquidity
+
+```bash
+# Auto-unstake (if staked) and remove liquidity
+defi --json lp remove --protocol kittenswap --pool-address 0x... --broadcast
+```
+
+#### LP Autopilot
+
+Reads `~/.defi/pools.toml` for whitelisted pools and allocates budget automatically.
+
+```bash
+# Dry-run autopilot allocation
+defi --json lp autopilot --budget 1000000000   # 1000 USDC
+
+# Execute
+defi --json lp autopilot --budget 1000000000 --broadcast
+```
+
+**pools.toml example:**
+
+```toml
+[[pools]]
+protocol = "kittenswap"
+pool_address = "0xYourPoolAddress"
+weight = 50   # 50% of budget
+
+[[pools]]
+protocol = "nest-v1"
+pool_address = "0xAnotherPool"
+weight = 50
+```
+
+Default location: `~/.defi/pools.toml`
 
 ### Bridge
 
 ```bash
-# Bridge tokens (LI.FI, deBridge, or CCTP)
-defi --json bridge --token USDC --amount 1000000000 --to-chain mantle --provider lifi
+# Bridge via LI.FI (default)
+defi --json bridge --token USDC --amount 100000000 --to-chain mantle
 
-# Bridge via deBridge
-defi --json bridge --token USDC --amount 1000000000 --to-chain mantle --provider debridge --broadcast
+# Bridge via deBridge DLN
+defi --json bridge --token USDC --amount 100000000 --to-chain arbitrum --provider debridge --broadcast
 
-# Cross-chain transfer via CCTP
-defi --json bridge --token USDC --amount 1000000000 --to-chain mantle --provider cctp --broadcast
+# Native USDC via Circle CCTP V2
+defi --json bridge --token USDC --amount 100000000 --to-chain arbitrum --provider cctp --broadcast
 ```
 
-### Yield & Farming
+### Portfolio
 
 ```bash
-# Get yield comparison across protocols
-defi --json yield compare
-
-# Scan yield opportunities
-defi --json yield scan
-
-# Execute yield strategy
-defi --json yield execute --strategy lazy-summer --amount 1000000000000000000 --broadcast
-
-# Farm deposit via MasterChef
-defi --json farm deposit --protocol lazy-summer --amount 1000000000000000000 --broadcast
-
-# Farm withdraw
-defi --json farm withdraw --protocol lazy-summer --amount 500000000000000000 --broadcast
-
-# Farm claim rewards
-defi --json farm claim --protocol lazy-summer --broadcast
+# Aggregate positions across all protocols
+defi --json portfolio
 ```
 
-### Scanning & Arbitrage
+### Token & Wallet
 
 ```bash
-# Scan for exploits and opportunities
-defi --json scan exploits
+# Token operations
+defi --json token balance --token USDC
+defi --json token allowance --token USDC --spender 0x...
+defi --json token approve --token USDC --spender 0x... --amount max --broadcast
+defi --json token transfer --token USDC --to 0x... --amount 1000000 --broadcast
 
-# Scan arbitrage opportunities
-defi --json arb scan --min 0.5
-
-# Execute arbitrage
-defi --json arb execute --symbol token --buy-exchange exchange1 --sell-exchange exchange2 --amount 1000000000000000000 --broadcast
-```
-
-### Token & Wallet Operations
-
-```bash
-# Check token balance
-defi --json token balance --address 0x... --token USDC
-
-# Approve token spending
-defi --json token approve --token USDC --spender 0x... --amount 1000000000 --broadcast
-
-# Check wallet balance
-defi --json wallet balance --address 0x...
-
-# Get wallet nonce
-defi --json wallet nonce --address 0x...
+# Wallet management
+defi --json wallet address
+defi --json wallet balance
 ```
 
 ### Price & Market Data
 
 ```bash
-# Get token price from oracles and DEXes
-defi --json price --asset HYPE
+# Oracle + DEX prices
+defi --json price --asset WHYPE
 
-# Get price from DEX sources only
-defi --json price --asset HYPE --source dex
+# DEX prices only
+defi --json price --asset WHYPE --source dex
 
-# Get price from oracle sources only
-defi --json price --asset HYPE --source oracle
+# Oracle prices only
+defi --json price --asset USDC --source oracle
 ```
 
 ## Agent-First Design
@@ -315,14 +283,16 @@ defi --json schema
 defi --json --fields balance,positions status
 
 # Stream large lists as NDJSON (one JSON per line)
-defi --json --ndjson dex quote --protocol hyperswap --token-in HYPE --token-out USDC --amount 1000000000000000000
+defi --json --ndjson lp discover
 
 # Pre-validate before executing
-defi --json --dry-run dex swap --protocol hyperswap --token-in HYPE --token-out USDC --amount 1000000000000000000
+defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000
 
 # Safe by default: --dry-run is on, use --broadcast to execute
-defi --json dex swap --protocol hyperswap --token-in HYPE --token-out USDC --amount 1000000000000000000 --broadcast
+defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --broadcast
 ```
+
+Responses include `needs_approval` simulation status. Auto-approve flow: check allowance → exact approve → execute tx.
 
 All responses are auto-sanitized (control chars stripped, prompt injection patterns blocked).
 Errors include `retryable` flag — only retry when `true`.
@@ -347,9 +317,35 @@ HYPEREVM_RPC_URL         # Override HyperEVM RPC endpoint
 MANTLE_RPC_URL           # Override Mantle RPC endpoint
 ```
 
-## MCP Server (Coming Soon)
+## MCP Server
 
-MCP server support for Claude Desktop, Cursor, and other MCP clients is in development. Full tool integrations for lending, DEX, staking, and portfolio tracking will be available soon.
+14 MCP tools for Claude Desktop, Cursor, and other MCP clients.
+
+```json
+{
+  "mcpServers": {
+    "defi-cli": {
+      "command": "npx",
+      "args": ["-y", "@hypurrquant/defi-cli", "mcp"]
+    }
+  }
+}
+```
+
+**Available tools:** `defi_status`, `defi_lending_rates`, `defi_lending_supply`, `defi_lending_withdraw`, `defi_dex_quote`, `defi_dex_swap`, `defi_dex_lp_add`, `defi_dex_lp_remove`, `defi_bridge`, `defi_vault_info`, `defi_staking_info`, `defi_price`, `defi_scan`, `defi_portfolio`
+
+See `mcp-config.example.json` for full configuration.
+
+## Claude Code Skill
+
+Install the skill for AI-assisted DeFi operations:
+
+```bash
+# Install from npm package
+npx -y @hypurrquant/defi-cli skill install
+```
+
+Or copy `skills/defi-cli/` into your Claude Code skills directory.
 
 ## License
 

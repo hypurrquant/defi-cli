@@ -6868,6 +6868,277 @@ server.tool(
   }
 );
 server.tool(
+  "defi_swap",
+  "Swap tokens via DEX aggregator (KyberSwap or OpenOcean). Finds the best route automatically. Defaults to dry-run. Set broadcast=true to send transaction (requires DEFI_PRIVATE_KEY)",
+  {
+    chain: z.string().optional().describe("Chain name (default: hyperevm)"),
+    token_in: z.string().describe("Input token symbol (e.g. WHYPE) or address (0x...)"),
+    token_out: z.string().describe("Output token symbol (e.g. USDC) or address (0x...)"),
+    amount_in: z.string().describe("Amount of input token in wei (as string)"),
+    slippage_bps: z.number().optional().describe("Slippage tolerance in basis points (default: 50 = 0.5%)"),
+    provider: z.enum(["kyber", "openocean"]).optional().describe("Aggregator to use: kyber (default) or openocean"),
+    broadcast: z.boolean().optional().describe("Set true to broadcast the transaction (default: false = dry run)")
+  },
+  async ({ chain, token_in, token_out, amount_in, slippage_bps, provider, broadcast }) => {
+    try {
+      const chainName = (chain ?? "hyperevm").toLowerCase();
+      const registry = getRegistry();
+      const chainConfig = registry.getChain(chainName);
+      const rpcUrl = chainConfig.effectiveRpcUrl();
+      const fromAddr = token_in.startsWith("0x") ? token_in : registry.resolveToken(chainName, token_in).address;
+      const toAddr = token_out.startsWith("0x") ? token_out : registry.resolveToken(chainName, token_out).address;
+      const wallet = process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
+      const slippage = slippage_bps ?? 50;
+      const agg = provider ?? "kyber";
+      const KYBER_API = "https://aggregator-api.kyberswap.com";
+      const OPENOCEAN_API = "https://open-api.openocean.finance/v4";
+      let txParams;
+      if (agg === "kyber") {
+        const CHAIN_KYBER = { hyperevm: "hyperevm", mantle: "mantle" };
+        const kyberChain = CHAIN_KYBER[chainName];
+        if (!kyberChain) throw new Error(`KyberSwap: unsupported chain '${chainName}'`);
+        const qparams = new URLSearchParams({ tokenIn: fromAddr, tokenOut: toAddr, amountIn: amount_in });
+        const qres = await fetch(`${KYBER_API}/${kyberChain}/api/v1/routes?${qparams}`, {
+          headers: { "x-client-id": "defi-cli" }
+        });
+        if (!qres.ok) throw new Error(`KyberSwap quote failed: ${qres.status}`);
+        const qjson = await qres.json();
+        const qdata = qjson.data;
+        if (!qdata?.routeSummary) throw new Error("KyberSwap: no route found");
+        const routeSummary = qdata.routeSummary;
+        const amountOut = String(routeSummary.amountOut ?? "0");
+        const bres = await fetch(`${KYBER_API}/${kyberChain}/api/v1/route/build`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-client-id": "defi-cli" },
+          body: JSON.stringify({ routeSummary, sender: wallet, recipient: wallet, slippageTolerance: slippage })
+        });
+        if (!bres.ok) throw new Error(`KyberSwap build failed: ${bres.status}`);
+        const bjson = await bres.json();
+        const bdata = bjson.data;
+        if (!bdata) throw new Error("KyberSwap: no build data");
+        txParams = {
+          to: String(bdata.routerAddress),
+          data: String(bdata.data),
+          value: String(bdata.value ?? "0x0"),
+          amountOut
+        };
+      } else {
+        const CHAIN_OO = { hyperevm: "hyperevm", mantle: "mantle" };
+        const ooChain = CHAIN_OO[chainName] ?? chainName;
+        const humanAmount = (BigInt(amount_in) / BigInt(10 ** 18)).toString();
+        const ooParams = new URLSearchParams({
+          inTokenAddress: fromAddr,
+          outTokenAddress: toAddr,
+          amount: humanAmount,
+          gasPrice: "0.1",
+          slippage: String(slippage / 100),
+          account: wallet
+        });
+        const ores = await fetch(`${OPENOCEAN_API}/${ooChain}/swap?${ooParams}`);
+        if (!ores.ok) throw new Error(`OpenOcean swap failed: ${ores.status}`);
+        const ojson = await ores.json();
+        const odata = ojson.data;
+        if (!odata) throw new Error("OpenOcean: no swap data");
+        txParams = {
+          to: String(odata.to),
+          data: String(odata.data),
+          value: String(odata.value ?? "0"),
+          amountOut: String(odata.outAmount ?? "0")
+        };
+      }
+      const tx = {
+        description: `${agg === "kyber" ? "KyberSwap" : "OpenOcean"}: swap ${amount_in} ${token_in} -> ${token_out}`,
+        to: txParams.to,
+        data: txParams.data,
+        value: txParams.value.startsWith("0x") ? BigInt(txParams.value) : BigInt(txParams.value || 0),
+        approvals: [{ token: fromAddr, spender: txParams.to, amount: BigInt(amount_in) }]
+      };
+      const executor = makeExecutor(broadcast ?? false, rpcUrl, chainConfig.explorer_url);
+      const result = await executor.execute(tx);
+      return {
+        content: [{
+          type: "text",
+          text: ok(
+            { ...result, amount_out: txParams.amountOut, provider: agg },
+            { chain: chainName, token_in, token_out, broadcast: broadcast ?? false }
+          )
+        }]
+      };
+    } catch (e) {
+      return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e), { token_in, token_out }) }], isError: true };
+    }
+  }
+);
+server.tool(
+  "defi_lp_discover",
+  "Scan all protocols on a chain for fee and emission pools (gauges, farming, Liquidity Book rewards). Returns up to 134 pools on HyperEVM.",
+  {
+    chain: z.string().optional().describe("Chain name (default: hyperevm)"),
+    protocol: z.string().optional().describe("Filter to a single protocol slug (optional)"),
+    emission_only: z.boolean().optional().describe("Only show emission pools (gauge/farming), skip fee-only pools")
+  },
+  async ({ chain, protocol, emission_only }) => {
+    try {
+      const chainName = (chain ?? "hyperevm").toLowerCase();
+      const registry = getRegistry();
+      const chainConfig = registry.getChain(chainName);
+      const rpcUrl = chainConfig.effectiveRpcUrl();
+      const { createGauge: createGauge2, createKittenSwapFarming: createKittenSwapFarming2, createMerchantMoeLB: createMerchantMoeLB2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports2));
+      const allProtocols = registry.getProtocolsForChain(chainName);
+      const protocols = protocol ? [registry.getProtocol(protocol)] : allProtocols;
+      const results = [];
+      await Promise.allSettled(
+        protocols.map(async (p) => {
+          try {
+            if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(p.interface)) {
+              const adapter = createGauge2(p, rpcUrl);
+              if (adapter.discoverGaugedPools) {
+                const pools = await adapter.discoverGaugedPools();
+                for (const pool of pools) {
+                  results.push({
+                    protocol: p.slug,
+                    pool: pool.pool,
+                    pair: `${pool.token0}/${pool.token1}`,
+                    type: "EMISSION",
+                    source: "gauge"
+                  });
+                }
+              }
+            }
+            if (p.interface === "algebra_v3" && p.contracts?.["farming_center"]) {
+              const adapter = createKittenSwapFarming2(p, rpcUrl);
+              const pools = await adapter.discoverFarmingPools();
+              for (const pool of pools) {
+                results.push({
+                  protocol: p.slug,
+                  pool: pool.pool,
+                  type: "EMISSION",
+                  source: "farming",
+                  active: pool.active
+                });
+              }
+            }
+            if (p.interface === "uniswap_v2" && p.contracts?.["lb_factory"]) {
+              const adapter = createMerchantMoeLB2(p, rpcUrl);
+              const pools = await adapter.discoverRewardedPools();
+              for (const pool of pools) {
+                if (emission_only && pool.stopped) continue;
+                results.push({
+                  protocol: p.slug,
+                  pool: pool.pool,
+                  pair: `${pool.symbolX}/${pool.symbolY}`,
+                  type: "EMISSION",
+                  source: "lb_hooks",
+                  active: !pool.stopped,
+                  apr: pool.aprPercent ? `${pool.aprPercent}%` : void 0
+                });
+              }
+            }
+          } catch {
+          }
+        })
+      );
+      const filtered = emission_only ? results.filter((r) => r.type === "EMISSION") : results;
+      return {
+        content: [{
+          type: "text",
+          text: ok(
+            { chain: chainName, pools: filtered, total: filtered.length },
+            { scanned_protocols: protocols.length }
+          )
+        }]
+      };
+    } catch (e) {
+      return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e)) }], isError: true };
+    }
+  }
+);
+server.tool(
+  "defi_lp_autopilot",
+  "Generate an LP autopilot allocation plan from the whitelisted pools in ~/.defi/pools.toml. Returns a dry-run plan with budget splits per pool. Always runs as dry-run (read-only).",
+  {
+    chain: z.string().optional().describe("Chain name (default: hyperevm)"),
+    budget_usd: z.number().describe("Total budget in USD to allocate across whitelisted pools")
+  },
+  async ({ chain, budget_usd }) => {
+    try {
+      const chainName = (chain ?? "hyperevm").toLowerCase();
+      if (budget_usd <= 0) throw new Error("budget_usd must be greater than 0");
+      const { readFileSync: readFileSync2, existsSync: existsSync2 } = await import("fs");
+      const { homedir } = await import("os");
+      const { join } = await import("path");
+      const whitelistPath = join(homedir(), ".defi", "pools.toml");
+      if (!existsSync2(whitelistPath)) {
+        return {
+          content: [{
+            type: "text",
+            text: err(
+              `No whitelist found at ${whitelistPath}. Create it with [[pools]] entries (see defi-cli README).`,
+              { path: whitelistPath }
+            )
+          }],
+          isError: true
+        };
+      }
+      const raw = readFileSync2(whitelistPath, "utf8");
+      const entries = [];
+      let current = null;
+      for (const line of raw.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed === "[[pools]]") {
+          if (current) entries.push(current);
+          current = {};
+        } else if (current && trimmed.includes("=")) {
+          const [k, ...rest] = trimmed.split("=");
+          const key = k.trim();
+          const val = rest.join("=").trim().replace(/^"|"$/g, "");
+          if (key === "weight") {
+            current[key] = parseFloat(val);
+          } else {
+            current[key] = val;
+          }
+        }
+      }
+      if (current) entries.push(current);
+      const chainFiltered = entries.filter((e) => !e.chain || e.chain.toLowerCase() === chainName);
+      if (chainFiltered.length === 0) {
+        throw new Error(`No whitelisted pools for chain '${chainName}' in ${whitelistPath}`);
+      }
+      const totalWeight = chainFiltered.reduce((s, e) => s + (e.weight ?? 1), 0);
+      const plan = chainFiltered.map((e) => {
+        const weight = e.weight ?? 1;
+        const alloc = weight / totalWeight * budget_usd;
+        return {
+          protocol: e.protocol ?? "unknown",
+          pool_address: e.pool_address ?? "unknown",
+          type: e.type ?? "lp",
+          asset: e.asset,
+          weight,
+          weight_pct: Math.round(weight / totalWeight * 1e4) / 100,
+          allocated_usd: Math.round(alloc * 100) / 100
+        };
+      });
+      return {
+        content: [{
+          type: "text",
+          text: ok(
+            {
+              chain: chainName,
+              budget_usd,
+              plan,
+              total_pools: plan.length,
+              note: "This is a dry-run plan. Use the defi CLI with --broadcast to execute."
+            },
+            { whitelist_path: whitelistPath }
+          )
+        }]
+      };
+    } catch (e) {
+      return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e)) }], isError: true };
+    }
+  }
+);
+server.tool(
   "defi_price",
   "Query asset price from on-chain oracles (Aave V3) and/or DEX spot prices",
   {
