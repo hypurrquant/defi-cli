@@ -3,8 +3,10 @@ import type { OutputMode } from "../output.js";
 import type { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
 import { Registry, ProtocolCategory } from "@hypurrquant/defi-core";
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
+import { parseAbi, encodeFunctionData, decodeFunctionResult } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { multicallRead, decodeU256 } from "@hypurrquant/defi-core";
 import {
   createDex,
   createGauge,
@@ -31,6 +33,191 @@ function resolvePoolAddress(registry: ReturnType<typeof Registry.loadEmbedded>, 
   return registry.resolvePool(protocolSlug, pool).address;
 }
 
+// ── Gauge APR enrichment ──
+
+const V2_PAIR_ABI = parseAbi([
+  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+  "function totalSupply() external view returns (uint256)",
+]);
+const ERC20_DECIMALS_ABI = parseAbi(["function decimals() external view returns (uint8)"]);
+
+interface DiscoveredPool {
+  protocol: string;
+  pool: string;
+  pair?: string;
+  type: "FEE" | "EMISSION";
+  source: "gauge" | "farming" | "lb_hooks" | "fee";
+  apr?: string;
+  total_reward?: string;
+  bonus_reward?: string;
+  active?: boolean;
+  stopped?: boolean;
+  moePerDay?: number;
+  aprPercent?: number;
+  rangeTvlUsd?: number;
+  poolTvlUsd?: number;
+  isTopPool?: boolean;
+  rewardedBins?: number;
+  minBinId?: number;
+  maxBinId?: number;
+  totalMoePerDay?: number;
+  moePriceUsd?: number;
+  rewardRate?: string;
+  totalStaked?: string;
+  rewardToken?: string;
+  rewardPerDay?: number;
+  rewardTokenSymbol?: string;
+}
+
+/**
+ * Enrich gauge pools with APR by querying on-chain prices.
+ * Only processes pools with rewardRate > 0.
+ */
+async function _enrichGaugeAprs(
+  pools: DiscoveredPool[],
+  rpcUrl: string,
+  registry: ReturnType<typeof Registry.loadEmbedded>,
+  chainName: string,
+): Promise<void> {
+  const active = pools.filter(p => p.source === "gauge" && p.rewardRate && BigInt(p.rewardRate) > 0n);
+  if (active.length === 0) return;
+
+  const WHYPE = "0x5555555555555555555555555555555555555555" as Address;
+
+  try {
+    // Step 1: Get WHYPE price via lending oracle (most reliable on HyperEVM)
+    let whypePriceUsd = 0;
+    try {
+      const protos = registry.getProtocolsForChain(chainName).filter(p => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
+      if (protos.length > 0) {
+        const { createOracleFromLending } = await import("@hypurrquant/defi-protocols");
+        const chain = registry.getChain(chainName);
+        const oracle = createOracleFromLending(protos[0]!, chain.effectiveRpcUrl());
+        const price = await oracle.getPrice(WHYPE);
+        whypePriceUsd = price.price_f64;
+      }
+    } catch { /* skip */ }
+
+    if (whypePriceUsd === 0) return;
+
+    // Step 2: For each active gauge pool, compute APR
+    for (const p of active) {
+      const rewardRate = BigInt(p.rewardRate!);
+      const totalStaked = BigInt(p.totalStaked || "0");
+      const rewardPerDay = Number(rewardRate * 86400n) / 1e18;
+      p.rewardPerDay = rewardPerDay;
+
+      if (totalStaked === 0n || rewardPerDay === 0) continue;
+
+      // Get reward token price
+      // For now: assume reward tokens trade against WHYPE
+      // NEST, HYBR, xRAM all have WHYPE pairs
+      let rewardTokenPriceUsd = 0;
+      const rewardToken = p.rewardToken as Address | undefined;
+
+      if (rewardToken) {
+        if (rewardToken.toLowerCase() === WHYPE.toLowerCase()) {
+          rewardTokenPriceUsd = whypePriceUsd;
+        } else {
+          // Find the reward token's pool paired with WHYPE
+          // Use the pool from this gauge itself if it contains the reward token + WHYPE
+          // Otherwise search all discovered pools
+          const pair = p.pair ?? "";
+          const isRewardWhypePair = pair.includes("WHYPE") || pair.includes("HYPE");
+          const tokenPoolAddr = isRewardWhypePair ? p.pool : pools.find(q =>
+            q.source === "gauge" && q.pool.startsWith("0x") && q.pair &&
+            q.pair.includes("WHYPE") && q.rewardToken?.toLowerCase() === rewardToken.toLowerCase()
+          )?.pool;
+
+          if (tokenPoolAddr) {
+            try {
+              const [resRaw] = await multicallRead(rpcUrl, [
+                [tokenPoolAddr as Address, encodeFunctionData({ abi: V2_PAIR_ABI, functionName: "getReserves" })],
+              ]);
+              if (resRaw) {
+                const _resAbi = parseAbi(["function f() view returns (uint112, uint112, uint32)"]);
+                const [r0, r1] = decodeFunctionResult({ abi: _resAbi, functionName: "f", data: resRaw }) as unknown as [bigint, bigint, bigint];
+                const rewardIsToken0 = rewardToken.toLowerCase() < WHYPE.toLowerCase();
+                const reserveReward = Number(rewardIsToken0 ? r0 : r1) / 1e18;
+                const reserveWhype = Number(rewardIsToken0 ? r1 : r0) / 1e18;
+                if (reserveReward > 0) {
+                  rewardTokenPriceUsd = (reserveWhype / reserveReward) * whypePriceUsd;
+                }
+              }
+            } catch { /* skip - might be CL pool */ }
+          }
+
+          // Fallback: try oracle for reward token price
+          if (rewardTokenPriceUsd === 0) {
+            try {
+              const protos = registry.getProtocolsForChain(chainName).filter(pr => pr.category === ProtocolCategory.Lending);
+              if (protos.length > 0) {
+                const { createOracleFromLending } = await import("@hypurrquant/defi-protocols");
+                const chain = registry.getChain(chainName);
+                const oracle = createOracleFromLending(protos[0]!, chain.effectiveRpcUrl());
+                const price = await oracle.getPrice(rewardToken);
+                rewardTokenPriceUsd = price.price_f64;
+              }
+            } catch { /* no oracle price */ }
+          }
+        }
+
+        // Find symbol for reward token
+        const tokens = registry.tokens.get(chainName);
+        const tokenInfo = tokens?.find(t => t.address.toLowerCase() === rewardToken.toLowerCase());
+        if (tokenInfo) p.rewardTokenSymbol = tokenInfo.symbol;
+      }
+
+      if (rewardTokenPriceUsd === 0) continue;
+
+      // Get LP token value: query pool reserves + totalSupply
+      try {
+        const [resRaw, tsRaw] = await multicallRead(rpcUrl, [
+          [p.pool as Address, encodeFunctionData({ abi: V2_PAIR_ABI, functionName: "getReserves" })],
+          [p.pool as Address, encodeFunctionData({ abi: V2_PAIR_ABI, functionName: "totalSupply" })],
+        ]);
+
+        if (resRaw && tsRaw) {
+          const _resAbi = parseAbi(["function f() view returns (uint112, uint112, uint32)"]);
+          const [r0, r1] = decodeFunctionResult({ abi: _resAbi, functionName: "f", data: resRaw }) as unknown as [bigint, bigint, bigint];
+          const totalSupply = decodeU256(tsRaw);
+
+          // Simplified: assume both tokens are 18 decimals for V2 pairs
+          // TVL = 2 × reserve_whype_side × whype_price (since V2 pools are 50/50)
+          const pair = p.pair ?? "";
+          const tokens = pair.split("/");
+
+          // Figure out which side is WHYPE (or valued token)
+          let poolTvlUsd = 0;
+          const r0F = Number(r0) / 1e18;
+          const r1F = Number(r1) / 1e18;
+
+          // If one side is WHYPE, double it for total TVL
+          if (tokens[0] === "WHYPE" || tokens[0] === "HYPE") {
+            poolTvlUsd = r0F * whypePriceUsd * 2;
+          } else if (tokens[1] === "WHYPE" || tokens[1] === "HYPE") {
+            poolTvlUsd = r1F * whypePriceUsd * 2;
+          } else {
+            // Try both reserves with known prices
+            poolTvlUsd = r0F * rewardTokenPriceUsd + r1F * whypePriceUsd;
+          }
+
+          p.poolTvlUsd = poolTvlUsd;
+
+          // Staked ratio
+          const stakedRatio = totalSupply > 0n ? Number(totalStaked) / Number(totalSupply) : 0;
+          const stakedTvlUsd = poolTvlUsd * stakedRatio;
+
+          // APR = (rewardPerDay × rewardPrice × 365) / stakedTvlUsd × 100
+          if (stakedTvlUsd > 10) { // minimum $10 staked to avoid division-by-dust
+            p.aprPercent = (rewardPerDay * rewardTokenPriceUsd * 365 / stakedTvlUsd) * 100;
+          }
+        }
+      } catch { /* skip pool with no V2 reserves (CL pool) */ }
+    }
+  } catch { /* APR enrichment failed, pools still have basic data */ }
+}
+
 export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const lp = parent.command("lp").description("Unified LP operations: discover, add, farm, claim, remove, positions");
 
@@ -53,32 +240,6 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const protocols = opts.protocol
         ? [registry.getProtocol(opts.protocol)]
         : allProtocols;
-
-      type DiscoveredPool = {
-        protocol: string;
-        pool: string;
-        pair?: string;
-        type: "FEE" | "EMISSION";
-        source: "gauge" | "farming" | "lb_hooks" | "fee";
-        apr?: string;
-        total_reward?: string;
-        bonus_reward?: string;
-        active?: boolean;
-        stopped?: boolean;
-        moePerDay?: number;
-        aprPercent?: number;
-        rangeTvlUsd?: number;
-        poolTvlUsd?: number;
-        isTopPool?: boolean;
-        rewardedBins?: number;
-        minBinId?: number;
-        maxBinId?: number;
-        totalMoePerDay?: number;
-        moePriceUsd?: number;
-        rewardRate?: string;
-        totalStaked?: string;
-        rewardToken?: string;
-      };
 
       const results: DiscoveredPool[] = [];
 
@@ -156,6 +317,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
           }
         }),
       );
+
+      // Compute APR for gauge pools with active rewardRate
+      await _enrichGaugeAprs(results, rpcUrl, registry, chainName);
 
       if (opts.emissionOnly) {
         printOutput(results.filter((r) => r.type === "EMISSION"), getOpts());
