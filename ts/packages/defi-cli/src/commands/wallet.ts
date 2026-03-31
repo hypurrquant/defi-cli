@@ -3,6 +3,7 @@ import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
 import { Registry } from "@hypurrquant/defi-core";
 import { createPublicClient, http, formatEther } from "viem";
+import { requireChain } from "../utils.js";
 
 export function registerWallet(parent: Command, getOpts: () => OutputMode): void {
   const wallet = parent.command("wallet").description("Wallet management");
@@ -12,8 +13,8 @@ export function registerWallet(parent: Command, getOpts: () => OutputMode): void
     .description("Show native token balance")
     .requiredOption("--address <address>", "Wallet address to query")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });

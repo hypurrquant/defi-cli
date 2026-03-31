@@ -5,6 +5,7 @@ import { Registry, ProtocolCategory, multicallRead } from "@hypurrquant/defi-cor
 import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
 import { takeSnapshot, saveSnapshot, loadSnapshots, calculatePnL } from "../portfolio-tracker.js";
+import { requireChain, errMsg } from "../utils.js";
 
 const ERC20_ABI = parseAbi([
   "function balanceOf(address owner) external view returns (uint256)",
@@ -38,9 +39,8 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
 
       const mode = getOpts();
       const registry = Registry.loadEmbedded();
-      const _chain = parent.opts<{ chain?: string }>().chain;
-      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const chainName = _chain.toLowerCase();
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
 
       let chain;
       try {
@@ -123,7 +123,7 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
       try {
         results = await multicallRead(rpc, calls);
       } catch (e) {
-        printOutput({ error: `Multicall failed: ${e instanceof Error ? e.message : String(e)}` }, mode);
+        printOutput({ error: `Multicall failed: ${errMsg(e)}` }, mode);
         return;
       }
 
@@ -215,9 +215,8 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
     .requiredOption("--address <address>", "Wallet address to snapshot")
     .action(async (opts: { address: string }) => {
       const mode = getOpts();
-      const _chain = parent.opts<{ chain?: string }>().chain;
-      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const chainName = _chain.toLowerCase();
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
 
       if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
@@ -241,7 +240,7 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
           mode,
         );
       } catch (e) {
-        printOutput({ error: e instanceof Error ? e.message : String(e) }, mode);
+        printOutput({ error: errMsg(e) }, mode);
       }
     });
 
@@ -253,9 +252,8 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
     .option("--since <hours>", "Compare against snapshot from N hours ago (default: last snapshot)")
     .action(async (opts: { address: string; since?: string }) => {
       const mode = getOpts();
-      const _chain = parent.opts<{ chain?: string }>().chain;
-      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const chainName = _chain.toLowerCase();
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
 
       if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
@@ -299,7 +297,7 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
           mode,
         );
       } catch (e) {
-        printOutput({ error: e instanceof Error ? e.message : String(e) }, mode);
+        printOutput({ error: errMsg(e) }, mode);
       }
     });
 
@@ -311,9 +309,8 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
     .option("--limit <n>", "Number of snapshots to show", "10")
     .action(async (opts: { address: string; limit: string }) => {
       const mode = getOpts();
-      const _chain = parent.opts<{ chain?: string }>().chain;
-      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const chainName = _chain.toLowerCase();
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
 
       if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
         printOutput({ error: `Invalid address: ${opts.address}` }, mode);

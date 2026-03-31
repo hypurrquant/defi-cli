@@ -4,6 +4,7 @@ import { Registry, ProtocolCategory } from "@hypurrquant/defi-core";
 import { createOracleFromLending, createOracleFromCdp, createDex, DexSpotPrice } from "@hypurrquant/defi-protocols";
 import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
+import { requireChain } from "../utils.js";
 
 interface PriceEntry {
   source: string;
@@ -47,9 +48,8 @@ export function registerPrice(parent: Command, getOpts: () => OutputMode): void 
     .action(async (opts: { asset: string; source: string }) => {
       const mode = getOpts();
       const registry = Registry.loadEmbedded();
-      const _chain = parent.opts<{ chain?: string }>().chain;
-      if (!_chain) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const chainName = _chain.toLowerCase();
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
 
       let chain;
       try {

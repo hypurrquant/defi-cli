@@ -3,6 +3,7 @@ import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
 import { Registry } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
+import { requireChain, resolveWallet, errMsg } from "../utils.js";
 
 const LIFI_API = "https://li.quest/v1";
 const DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
@@ -149,13 +150,13 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
     .option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50")
     .option("--provider <name>", "Bridge provider: lifi, debridge, cctp", "lifi")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
       const fromChain = registry.getChain(chainName);
       const toChain = registry.getChain(opts.toChain);
       const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
-      const recipient = (opts.recipient ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001") as Address;
+      const recipient = resolveWallet(opts.recipient);
       const provider = (opts.provider as string).toLowerCase();
 
       if (provider === "debridge") {
@@ -180,7 +181,7 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
             tx: tx ? { to: tx.to, data: tx.data, value: tx.value } : undefined,
           }, getOpts());
         } catch (e) {
-          printOutput({ error: `deBridge API error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+          printOutput({ error: `deBridge API error: ${errMsg(e)}` }, getOpts());
         }
         return;
       }
@@ -249,7 +250,7 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
             },
           }, getOpts());
         } catch (e) {
-          printOutput({ error: `CCTP error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+          printOutput({ error: `CCTP error: ${errMsg(e)}` }, getOpts());
         }
         return;
       }
@@ -277,7 +278,7 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
           printOutput({ error: "No LI.FI route found", details: quote }, getOpts());
         }
       } catch (e) {
-        printOutput({ error: `LI.FI API error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+        printOutput({ error: `LI.FI API error: ${errMsg(e)}` }, getOpts());
       }
     });
 }

@@ -2,9 +2,10 @@ import type { Command } from "commander";
 import type { OutputMode } from "../output.js";
 import type { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
-import { Registry, InterestRateMode } from "@hypurrquant/defi-core";
+import { InterestRateMode } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { createLending } from "@hypurrquant/defi-protocols";
+import { resolveContext, resolveTokenAddress, resolveWallet } from "../utils.js";
 
 export function registerLending(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
@@ -14,13 +15,10 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .requiredOption("--protocol <protocol>", "Protocol slug")
     .requiredOption("--asset <token>", "Token symbol or address")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const registry = Registry.loadEmbedded();
-      const chain = registry.getChain(chainName);
-      const protocol = registry.getProtocol(opts.protocol);
-      const adapter = createLending(protocol, chain.effectiveRpcUrl());
-      const asset = opts.asset.startsWith("0x") ? opts.asset as Address : registry.resolveToken(chainName, opts.asset).address as Address;
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
       const rates = await adapter.getRates(asset);
       printOutput(rates, getOpts());
     });
@@ -30,12 +28,9 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .requiredOption("--protocol <protocol>", "Protocol slug")
     .requiredOption("--address <address>", "Wallet address to query")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const registry = Registry.loadEmbedded();
-      const chain = registry.getChain(chainName);
-      const protocol = registry.getProtocol(opts.protocol);
-      const adapter = createLending(protocol, chain.effectiveRpcUrl());
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
       const position = await adapter.getUserPosition(opts.address as Address);
       printOutput(position, getOpts());
     });
@@ -48,15 +43,12 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const registry = Registry.loadEmbedded();
-      const chain = registry.getChain(chainName);
-      const protocol = registry.getProtocol(opts.protocol);
-      const adapter = createLending(protocol, chain.effectiveRpcUrl());
-      const asset = opts.asset.startsWith("0x") ? opts.asset as Address : registry.resolveToken(chainName, opts.asset).address as Address;
-      const onBehalfOf = (opts.onBehalfOf ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001") as Address;
-      const tx = await adapter.buildSupply({ protocol: protocol.name, asset, amount: BigInt(opts.amount), on_behalf_of: onBehalfOf });
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const onBehalfOf = resolveWallet(opts.onBehalfOf);
+      const tx = await adapter.buildSupply({ protocol: ctx.protocol!.name, asset, amount: BigInt(opts.amount), on_behalf_of: onBehalfOf });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
     });
@@ -70,16 +62,13 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const registry = Registry.loadEmbedded();
-      const chain = registry.getChain(chainName);
-      const protocol = registry.getProtocol(opts.protocol);
-      const adapter = createLending(protocol, chain.effectiveRpcUrl());
-      const asset = opts.asset.startsWith("0x") ? opts.asset as Address : registry.resolveToken(chainName, opts.asset).address as Address;
-      const onBehalfOf = (opts.onBehalfOf ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001") as Address;
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const onBehalfOf = resolveWallet(opts.onBehalfOf);
       const tx = await adapter.buildBorrow({
-        protocol: protocol.name, asset, amount: BigInt(opts.amount),
+        protocol: ctx.protocol!.name, asset, amount: BigInt(opts.amount),
         interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
         on_behalf_of: onBehalfOf,
       });
@@ -96,16 +85,13 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const registry = Registry.loadEmbedded();
-      const chain = registry.getChain(chainName);
-      const protocol = registry.getProtocol(opts.protocol);
-      const adapter = createLending(protocol, chain.effectiveRpcUrl());
-      const asset = opts.asset.startsWith("0x") ? opts.asset as Address : registry.resolveToken(chainName, opts.asset).address as Address;
-      const onBehalfOf = (opts.onBehalfOf ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001") as Address;
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const onBehalfOf = resolveWallet(opts.onBehalfOf);
       const tx = await adapter.buildRepay({
-        protocol: protocol.name, asset, amount: BigInt(opts.amount),
+        protocol: ctx.protocol!.name, asset, amount: BigInt(opts.amount),
         interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
         on_behalf_of: onBehalfOf,
       });
@@ -121,15 +107,12 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .option("--to <address>", "Recipient address")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
-      const registry = Registry.loadEmbedded();
-      const chain = registry.getChain(chainName);
-      const protocol = registry.getProtocol(opts.protocol);
-      const adapter = createLending(protocol, chain.effectiveRpcUrl());
-      const asset = opts.asset.startsWith("0x") ? opts.asset as Address : registry.resolveToken(chainName, opts.asset).address as Address;
-      const to = (opts.to ?? process.env.DEFI_WALLET_ADDRESS ?? "0x0000000000000000000000000000000000000001") as Address;
-      const tx = await adapter.buildWithdraw({ protocol: protocol.name, asset, amount: BigInt(opts.amount), to });
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const to = resolveWallet(opts.to);
+      const tx = await adapter.buildWithdraw({ protocol: ctx.protocol!.name, asset, amount: BigInt(opts.amount), to });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
     });

@@ -5,6 +5,7 @@ import { printOutput } from "../output.js";
 import { Registry, buildApprove, buildTransfer, erc20Abi } from "@hypurrquant/defi-core";
 import { createPublicClient, http, maxUint256 } from "viem";
 import type { Address } from "viem";
+import { requireChain, resolveTokenAddress } from "../utils.js";
 
 export function registerToken(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
@@ -15,15 +16,13 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .requiredOption("--token <token>", "Token symbol or address")
     .requiredOption("--owner <address>", "Wallet address to query")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
 
-      const tokenAddr = opts.token.startsWith("0x")
-        ? opts.token as Address
-        : registry.resolveToken(chainName, opts.token).address as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
 
       const [balance, symbol, decimals] = await Promise.all([
         client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [opts.owner as Address] }),
@@ -48,12 +47,10 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
-      const tokenAddr = opts.token.startsWith("0x")
-        ? opts.token as Address
-        : registry.resolveToken(chainName, opts.token).address as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
 
       const amount = opts.amount === "max" ? maxUint256 : BigInt(opts.amount);
       const tx = buildApprove(tokenAddr, opts.spender as Address, amount);
@@ -68,15 +65,13 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .requiredOption("--owner <address>", "Owner address")
     .requiredOption("--spender <address>", "Spender address")
     .action(async (opts) => {
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
 
-      const tokenAddr = opts.token.startsWith("0x")
-        ? opts.token as Address
-        : registry.resolveToken(chainName, opts.token).address as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
 
       const allowance = await client.readContract({
         address: tokenAddr, abi: erc20Abi, functionName: "allowance",
@@ -94,12 +89,10 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .requiredOption("--amount <amount>", "Amount to transfer (in wei)")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
-      const tokenAddr = opts.token.startsWith("0x")
-        ? opts.token as Address
-        : registry.resolveToken(chainName, opts.token).address as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
 
       const tx = buildTransfer(tokenAddr, opts.to as Address, BigInt(opts.amount));
       const result = await executor.execute(tx);

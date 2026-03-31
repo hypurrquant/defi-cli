@@ -4,6 +4,7 @@ import type { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
 import { Registry } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
+import { requireChain, resolveTokenAddress, resolveWallet, errMsg, parseBigIntValue } from "../utils.js";
 
 // ── Chain name mappings ──
 
@@ -134,21 +135,17 @@ export function registerSwap(
     .option("--slippage <bps>", "Slippage tolerance in bps", "50")
     .action(async (opts) => {
       const executor = makeExecutor();
-      const chainName = parent.opts<{ chain?: string }>().chain;
-      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
       const registry = Registry.loadEmbedded();
       const provider = (opts.provider as string).toLowerCase();
       const slippageBps = parseInt(opts.slippage as string, 10);
 
       // Resolve token addresses
-      const fromAddr: string = (opts.from as string).startsWith("0x")
-        ? opts.from as string
-        : registry.resolveToken(chainName, opts.from as string).address;
-      const toAddr: string = (opts.to as string).startsWith("0x")
-        ? opts.to as string
-        : registry.resolveToken(chainName, opts.to as string).address;
+      const fromAddr: string = resolveTokenAddress(registry, chainName, opts.from as string);
+      const toAddr: string = resolveTokenAddress(registry, chainName, opts.to as string);
 
-      const wallet = (process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001") as Address;
+      const wallet = resolveWallet();
 
       if (provider === "kyber") {
         const chainNames = CHAIN_NAMES[chainName];
@@ -176,7 +173,7 @@ export function registerSwap(
             description: `KyberSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
             to: txData.to as Address,
             data: txData.data as `0x${string}`,
-            value: txData.value.startsWith("0x") ? BigInt(txData.value) : BigInt(txData.value || 0),
+            value: parseBigIntValue(txData.value),
             approvals: [{ token: fromAddr as Address, spender: txData.to as Address, amount: BigInt(opts.amount as string) }],
           };
 
@@ -192,7 +189,7 @@ export function registerSwap(
             ...result,
           }, getOpts());
         } catch (e) {
-          printOutput({ error: `KyberSwap error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+          printOutput({ error: `KyberSwap error: ${errMsg(e)}` }, getOpts());
         }
         return;
       }
@@ -226,7 +223,7 @@ export function registerSwap(
             description: `OpenOcean: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
             to: swap.to as Address,
             data: swap.data as `0x${string}`,
-            value: swap.value.startsWith("0x") ? BigInt(swap.value) : BigInt(swap.value || 0),
+            value: parseBigIntValue(swap.value),
             approvals: [{ token: fromAddr as Address, spender: swap.to as Address, amount: BigInt(opts.amount as string) }],
           };
 
@@ -242,7 +239,7 @@ export function registerSwap(
             ...result,
           }, getOpts());
         } catch (e) {
-          printOutput({ error: `OpenOcean error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+          printOutput({ error: `OpenOcean error: ${errMsg(e)}` }, getOpts());
         }
         return;
       }
@@ -261,7 +258,7 @@ export function registerSwap(
             description: `LiquidSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
             to: route.to as Address,
             data: route.data as `0x${string}`,
-            value: route.value.startsWith("0x") ? BigInt(route.value) : BigInt(route.value || 0),
+            value: parseBigIntValue(route.value),
             approvals: [{ token: fromAddr as Address, spender: route.to as Address, amount: BigInt(opts.amount as string) }],
           };
 
@@ -277,7 +274,7 @@ export function registerSwap(
             ...result,
           }, getOpts());
         } catch (e) {
-          printOutput({ error: `LiquidSwap error: ${e instanceof Error ? e.message : String(e)}` }, getOpts());
+          printOutput({ error: `LiquidSwap error: ${errMsg(e)}` }, getOpts());
         }
         return;
       }
