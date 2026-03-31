@@ -198,6 +198,8 @@ export class HybraGaugeAdapter implements IGaugeSystem {
         gauge,
         token0: t0 ? (symbolMap.get(t0) ?? t0.slice(0, 10)) : "?",
         token1: t1 ? (symbolMap.get(t1) ?? t1.slice(0, 10)) : "?",
+        token0Addr: t0 ?? undefined,
+        token1Addr: t1 ?? undefined,
         type: "CL",
       });
     }

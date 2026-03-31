@@ -2295,6 +2295,8 @@ var init_dist2 = __esm({
             gauge,
             token0: t0 ? symbolMap.get(t0) ?? t0.slice(0, 10) : "?",
             token1: t1 ? symbolMap.get(t1) ?? t1.slice(0, 10) : "?",
+            token0Addr: t0 ?? void 0,
+            token1Addr: t1 ?? void 0,
             type: "CL"
           });
         }
@@ -2577,7 +2579,79 @@ var init_dist2 = __esm({
           this._discoverV2GaugedPools(results),
           this._discoverCLGaugedPools(results)
         ]);
+        await this._enrichGaugeMetrics(results);
         return results;
+      }
+      /**
+       * Batch query rewardRate, totalSupply, rewardToken for all discovered gauges.
+       * Handles both single-token (rewardRate) and multi-token (rewardData) gauges.
+       */
+      async _enrichGaugeMetrics(pools) {
+        if (!this.rpcUrl || pools.length === 0) return;
+        const _u256Abi = parseAbi10(["function f() view returns (uint256)"]);
+        const calls = [];
+        for (const p of pools) {
+          calls.push([p.gauge, encodeFunctionData10({ abi: gaugeAbi, functionName: "rewardRate" })]);
+          calls.push([p.gauge, encodeFunctionData10({ abi: gaugeAbi, functionName: "totalSupply" })]);
+          calls.push([p.gauge, encodeFunctionData10({ abi: gaugeAbi, functionName: "rewardToken" })]);
+        }
+        const results = await multicallRead(this.rpcUrl, calls).catch(() => []);
+        for (let i = 0; i < pools.length; i++) {
+          const base = i * 3;
+          try {
+            pools[i].rewardRate = results[base] ? decodeFunctionResult3({ abi: _u256Abi, functionName: "f", data: results[base] }) : 0n;
+          } catch {
+            pools[i].rewardRate = 0n;
+          }
+          try {
+            pools[i].totalStaked = results[base + 1] ? decodeFunctionResult3({ abi: _u256Abi, functionName: "f", data: results[base + 1] }) : 0n;
+          } catch {
+            pools[i].totalStaked = 0n;
+          }
+          try {
+            pools[i].rewardToken = results[base + 2] ? decodeAddress2(results[base + 2]) ?? void 0 : void 0;
+          } catch {
+          }
+        }
+        const KNOWN_REWARD_TOKENS = [
+          "0x555570a286F15EbDFE42B66eDE2f724Aa1AB5555",
+          // xRAM
+          "0x5555555555555555555555555555555555555555",
+          // WHYPE
+          "0x067b0C72aa4C6Bd3BFEFfF443c536DCd6a25a9C8",
+          // HYBR
+          "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035"
+          // NEST
+        ];
+        const needsFallback = pools.filter((p) => (p.rewardRate ?? 0n) === 0n && (p.totalStaked ?? 0n) > 0n);
+        if (needsFallback.length === 0) return;
+        const rdCalls = [];
+        const rdMeta = [];
+        for (const p of needsFallback) {
+          const poolIdx = pools.indexOf(p);
+          for (const token of KNOWN_REWARD_TOKENS) {
+            rdCalls.push([p.gauge, encodeFunctionData10({ abi: gaugeAbi, functionName: "rewardData", args: [token] })]);
+            rdMeta.push({ poolIdx, token });
+          }
+        }
+        const rdResults = await multicallRead(this.rpcUrl, rdCalls).catch(() => []);
+        const _rdAbi = parseAbi10(["function f() view returns (uint256, uint256, uint256, uint256)"]);
+        for (let i = 0; i < rdMeta.length; i++) {
+          const { poolIdx, token } = rdMeta[i];
+          const pool = pools[poolIdx];
+          if ((pool.rewardRate ?? 0n) > 0n) continue;
+          try {
+            if (!rdResults[i]) continue;
+            const decoded = decodeFunctionResult3({ abi: _rdAbi, functionName: "f", data: rdResults[i] });
+            const [periodFinish, rewardRate] = decoded;
+            const now = BigInt(Math.floor(Date.now() / 1e3));
+            if (rewardRate > 0n && periodFinish > now) {
+              pool.rewardRate = rewardRate;
+              pool.rewardToken = token;
+            }
+          } catch {
+          }
+        }
       }
       async _discoverV2GaugedPools(out) {
         if (!this.rpcUrl || !this.v2Factory) return;
@@ -2672,6 +2746,8 @@ var init_dist2 = __esm({
             gauge,
             token0: t0 ? symbolMap.get(t0) ?? t0.slice(0, 10) : "?",
             token1: t1 ? symbolMap.get(t1) ?? t1.slice(0, 10) : "?",
+            token0Addr: t0 ?? void 0,
+            token1Addr: t1 ?? void 0,
             type: "V2",
             stable
           });
@@ -2798,6 +2874,8 @@ var init_dist2 = __esm({
             gauge,
             token0: symbolMap.get(t0) ?? t0.slice(0, 10),
             token1: symbolMap.get(t1) ?? t1.slice(0, 10),
+            token0Addr: t0,
+            token1Addr: t1,
             type: "CL",
             tickSpacing
           });

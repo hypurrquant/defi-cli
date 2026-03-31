@@ -323,6 +323,11 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
     name(): string;
     /** Scan V2 and CL factories for pools that have active emission gauges. */
     discoverGaugedPools(): Promise<GaugedPool[]>;
+    /**
+     * Batch query rewardRate, totalSupply, rewardToken for all discovered gauges.
+     * Handles both single-token (rewardRate) and multi-token (rewardData) gauges.
+     */
+    private _enrichGaugeMetrics;
     private _discoverV2GaugedPools;
     private _discoverCLGaugedPools;
     buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx>;

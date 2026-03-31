@@ -135,7 +135,87 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
       this._discoverCLGaugedPools(results),
     ]);
 
+    // Batch query rewardRate + totalSupply + rewardToken for all gauges
+    await this._enrichGaugeMetrics(results);
+
     return results;
+  }
+
+  /**
+   * Batch query rewardRate, totalSupply, rewardToken for all discovered gauges.
+   * Handles both single-token (rewardRate) and multi-token (rewardData) gauges.
+   */
+  private async _enrichGaugeMetrics(pools: GaugedPool[]): Promise<void> {
+    if (!this.rpcUrl || pools.length === 0) return;
+
+    const _u256Abi = parseAbi(["function f() view returns (uint256)"]);
+
+    // Phase 1: batch rewardRate + totalSupply + rewardToken
+    const calls: Array<[Address, Hex]> = [];
+    for (const p of pools) {
+      calls.push([p.gauge, encodeFunctionData({ abi: gaugeAbi, functionName: "rewardRate" })]);
+      calls.push([p.gauge, encodeFunctionData({ abi: gaugeAbi, functionName: "totalSupply" })]);
+      calls.push([p.gauge, encodeFunctionData({ abi: gaugeAbi, functionName: "rewardToken" })]);
+    }
+
+    const results = await multicallRead(this.rpcUrl, calls).catch(() => [] as (Hex | undefined)[]);
+
+    for (let i = 0; i < pools.length; i++) {
+      const base = i * 3;
+      try {
+        pools[i]!.rewardRate = results[base] ? decodeFunctionResult({ abi: _u256Abi, functionName: "f", data: results[base]! }) as bigint : 0n;
+      } catch { pools[i]!.rewardRate = 0n; }
+      try {
+        pools[i]!.totalStaked = results[base + 1] ? decodeFunctionResult({ abi: _u256Abi, functionName: "f", data: results[base + 1]! }) as bigint : 0n;
+      } catch { pools[i]!.totalStaked = 0n; }
+      try {
+        pools[i]!.rewardToken = results[base + 2] ? decodeAddress(results[base + 2]!) ?? undefined : undefined;
+      } catch { /* skip */ }
+    }
+
+    // Phase 2: for gauges with rewardRate=0, try rewardData(token) with known reward tokens
+    // These are multi-token gauges (e.g. Ramses uses xRAM/WHYPE)
+    const KNOWN_REWARD_TOKENS: Address[] = [
+      "0x555570a286F15EbDFE42B66eDE2f724Aa1AB5555" as Address, // xRAM
+      "0x5555555555555555555555555555555555555555" as Address, // WHYPE
+      "0x067b0C72aa4C6Bd3BFEFfF443c536DCd6a25a9C8" as Address, // HYBR
+      "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035" as Address, // NEST
+    ];
+
+    const needsFallback = pools.filter(p => (p.rewardRate ?? 0n) === 0n && (p.totalStaked ?? 0n) > 0n);
+    if (needsFallback.length === 0) return;
+
+    // Batch: rewardData(token) for each candidate token × each gauge
+    const rdCalls: Array<[Address, Hex]> = [];
+    const rdMeta: Array<{ poolIdx: number; token: Address }> = [];
+    for (const p of needsFallback) {
+      const poolIdx = pools.indexOf(p);
+      for (const token of KNOWN_REWARD_TOKENS) {
+        rdCalls.push([p.gauge, encodeFunctionData({ abi: gaugeAbi, functionName: "rewardData", args: [token] })]);
+        rdMeta.push({ poolIdx, token });
+      }
+    }
+
+    const rdResults = await multicallRead(this.rpcUrl, rdCalls).catch(() => [] as (Hex | undefined)[]);
+
+    // rewardData returns (uint256 periodFinish, uint256 rewardRate, uint256 lastUpdateTime, uint256 rewardPerTokenStored)
+    const _rdAbi = parseAbi(["function f() view returns (uint256, uint256, uint256, uint256)"]);
+    for (let i = 0; i < rdMeta.length; i++) {
+      const { poolIdx, token } = rdMeta[i]!;
+      const pool = pools[poolIdx]!;
+      // Skip if already found a reward rate for this pool
+      if ((pool.rewardRate ?? 0n) > 0n) continue;
+      try {
+        if (!rdResults[i]) continue;
+        const decoded = decodeFunctionResult({ abi: _rdAbi, functionName: "f", data: rdResults[i]! }) as [bigint, bigint, bigint, bigint];
+        const [periodFinish, rewardRate] = decoded;
+        const now = BigInt(Math.floor(Date.now() / 1000));
+        if (rewardRate > 0n && periodFinish > now) {
+          pool.rewardRate = rewardRate;
+          pool.rewardToken = token;
+        }
+      } catch { /* skip */ }
+    }
   }
 
   private async _discoverV2GaugedPools(out: GaugedPool[]): Promise<void> {
@@ -252,6 +332,8 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
         gauge,
         token0: t0 ? (symbolMap.get(t0) ?? t0.slice(0, 10)) : "?",
         token1: t1 ? (symbolMap.get(t1) ?? t1.slice(0, 10)) : "?",
+        token0Addr: t0 ?? undefined,
+        token1Addr: t1 ?? undefined,
         type: "V2",
         stable,
       });
@@ -407,6 +489,8 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
         gauge,
         token0: symbolMap.get(t0) ?? t0.slice(0, 10),
         token1: symbolMap.get(t1) ?? t1.slice(0, 10),
+        token0Addr: t0,
+        token1Addr: t1,
         type: "CL",
         tickSpacing,
       });

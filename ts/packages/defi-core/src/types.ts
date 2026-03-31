@@ -310,9 +310,21 @@ export interface GaugedPool {
   gauge: Address;
   token0: string;  // symbol
   token1: string;  // symbol
+  token0Addr?: Address;
+  token1Addr?: Address;
   type: "V2" | "CL";
   tickSpacing?: number;  // for CL pools
   stable?: boolean;      // for V2 pools
+  /** Reward rate in wei per second (from gauge.rewardRate or rewardData) */
+  rewardRate?: bigint;
+  /** Total LP staked in gauge (wei) */
+  totalStaked?: bigint;
+  /** Reward token address */
+  rewardToken?: Address;
+  /** Calculated emission APR (%) — set by caller if prices available */
+  aprPercent?: number;
+  /** Pool TVL in USD — set by caller if prices available */
+  poolTvlUsd?: number;
 }
 
 export interface RewardInfo {

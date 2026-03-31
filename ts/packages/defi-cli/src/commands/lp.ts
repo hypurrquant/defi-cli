@@ -75,6 +75,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         maxBinId?: number;
         totalMoePerDay?: number;
         moePriceUsd?: number;
+        rewardRate?: string;
+        totalStaked?: string;
+        rewardToken?: string;
       };
 
       const results: DiscoveredPool[] = [];
@@ -96,6 +99,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
                     pair: `${p.token0}/${p.token1}`,
                     type: "EMISSION",
                     source: "gauge",
+                    rewardRate: p.rewardRate ? p.rewardRate.toString() : undefined,
+                    totalStaked: p.totalStaked ? p.totalStaked.toString() : undefined,
+                    rewardToken: p.rewardToken,
                   });
                 }
               }
