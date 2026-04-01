@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .banner {
+    width: 1250px;
+    height: 500px;
+    background: linear-gradient(135deg, #0a0a0a 0%, #111 40%, #0d1117 100%);
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    padding: 50px 60px;
+  }
+
+  /* Gradient orbs */
+  .banner::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    right: -60px;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(101, 217, 165, 0.12) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .banner::after {
+    content: '';
+    position: absolute;
+    bottom: -100px;
+    left: 200px;
+    width: 350px;
+    height: 350px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  /* Grid pattern overlay */
+  .grid-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Top gradient line */
+  .top-line {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #65d9a5, #3b82f6, #a855f7);
+  }
+
+  .left-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    z-index: 1;
+    position: relative;
+  }
+
+  .right-col {
+    width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    position: relative;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #65d9a5;
+    background: rgba(101, 217, 165, 0.1);
+    border: 1px solid rgba(101, 217, 165, 0.2);
+    padding: 6px 14px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+    letter-spacing: 0.5px;
+    width: fit-content;
+  }
+
+  .tag-dot {
+    width: 6px;
+    height: 6px;
+    background: #65d9a5;
+    border-radius: 50%;
+  }
+
+  .title {
+    font-family: 'Inter', sans-serif;
+    font-size: 48px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+
+  .title span {
+    background: linear-gradient(135deg, #65d9a5, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: 17px;
+    color: #888;
+    line-height: 1.5;
+    margin-bottom: 28px;
+    max-width: 480px;
+  }
+
+  .metrics-row {
+    display: flex;
+    gap: 24px;
+  }
+
+  .metric {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .metric-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .metric-val.green { color: #65d9a5; }
+  .metric-val.blue { color: #3b82f6; }
+  .metric-val.purple { color: #a855f7; }
+
+  .metric-lbl {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  /* Right side: terminal mockup */
+  .terminal {
+    background: rgba(13, 17, 23, 0.9);
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    width: 380px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #161616;
+    border-bottom: 1px solid #2a2a2a;
+  }
+
+  .terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .dot-red { background: #ff5f57; }
+  .dot-yellow { background: #ffbd2e; }
+  .dot-green { background: #28c840; }
+
+  .terminal-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: #666;
+    margin-left: 8px;
+  }
+
+  .terminal-body {
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    line-height: 1.7;
+  }
+
+  .cmd { color: #65d9a5; }
+  .flag { color: #3b82f6; }
+  .val { color: #e0e0e0; }
+  .dim { color: #555; }
+  .result { color: #888; }
+  .highlight { color: #fbbf24; }
+  .arrow { color: #65d9a5; }
+
+  /* Mantle logo area */
+  .powered-by {
+    position: absolute;
+    bottom: 20px;
+    right: 30px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: #444;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 2;
+  }
+
+  .npm-badge {
+    position: absolute;
+    bottom: 20px;
+    left: 60px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #555;
+    z-index: 2;
+  }
+
+  .npm-badge code {
+    color: #65d9a5;
+    background: rgba(101,217,165,0.08);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <div class="top-line"></div>
+  <div class="grid-overlay"></div>
+
+  <div class="left-col">
+    <div class="tag"><span class="tag-dot"></span> AI-NATIVE DEFI TOOLKIT</div>
+    <div class="title">
+      <span>defi-cli</span><br>
+      for Mantle
+    </div>
+    <div class="subtitle">
+      AI agents execute DeFi — lending, LP, swap, bridge — with one JSON line. Local models welcome.
+    </div>
+    <div class="metrics-row">
+      <div class="metric">
+        <div class="metric-val green">4</div>
+        <div class="metric-lbl">Protocols</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val blue">17</div>
+        <div class="metric-lbl">MCP Tools</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val purple">~$0</div>
+        <div class="metric-lbl">Agent Cost/mo</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val" style="color:#fbbf24;">85x</div>
+        <div class="metric-lbl">Cost Reduction</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div class="terminal">
+      <div class="terminal-header">
+        <div class="terminal-dot dot-red"></div>
+        <div class="terminal-dot dot-yellow"></div>
+        <div class="terminal-dot dot-green"></div>
+        <div class="terminal-title">defi-cli · mantle</div>
+      </div>
+      <div class="terminal-body">
+        <div><span class="cmd">$</span> <span class="val">defi</span> <span class="flag">--json --chain mantle</span> <span class="val">yield</span></div>
+        <div class="dim">// scanning lending rates...</div>
+        <div><span class="result">Aave V3:</span> <span class="highlight">2.13%</span> <span class="dim">APY</span></div>
+        <div><span class="result">Lendle:</span>  <span class="val">0.73%</span> <span class="dim">APY</span></div>
+        <div style="height:10px;"></div>
+        <div><span class="cmd">$</span> <span class="val">defi</span> <span class="flag">--json --chain mantle</span> <span class="val">lp discover</span></div>
+        <div class="dim">// 7 reward pools found</div>
+        <div><span class="result">mETH/WETH:</span> <span class="highlight">1,720</span> <span class="dim">MOE/day</span></div>
+        <div><span class="result">Pool TVL:</span> <span class="val">$291,075</span></div>
+        <div style="height:10px;"></div>
+        <div><span class="arrow">→</span> <span class="val">Strategy:</span> <span class="highlight">34.56%</span> <span class="dim">blended APY</span></div>
+        <div><span class="arrow">→</span> <span class="dim">needs_approval</span> <span class="result">· awaiting user</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="npm-badge">
+    <code>npm i -g @hypurrquant/defi-cli</code>
+  </div>
+  <div class="powered-by">
+    Powered by Mantle · @Mantle_Official
+  </div>
+</div>
+
+</body>
+</html>

@@ -35,5 +35,11 @@ run.log
 .omc/
 .playwright-mcp/
 
+# Drafts & visuals
+ts/docs/mantle-bounty-draft.md
+ts/docs/mantle-bounty-en.md
+ts/docs/mantle-bounty-visuals.html
+ts/docs/images/
+
 # Node
 node_modules/
