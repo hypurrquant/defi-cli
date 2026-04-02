@@ -5,7 +5,8 @@ category = "lending"
 interface = "aave_v3"
 chain = "bnb"
 native = false
-description = "Avalon Labs — Aave V3 fork Bitcoin-backed lending on BNB Chain with ~$167M TVL"
+verified = false
+description = "Avalon Labs — Aave V3 fork Bitcoin-backed lending on BNB Chain with ~$167M TVL [UNVERIFIED: pool not EIP-1967 proxy, getReservesList()/ADDRESSES_PROVIDER() revert]"
 
 [protocol.contracts]
 pool_addresses_provider = "0x672b19DdA450120C505214D149Ee7F7B6DEd8C39"

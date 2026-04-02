@@ -408,9 +408,9 @@ var Registry = class _Registry {
   getProtocolsByCategory(category) {
     return this.protocols.filter((p) => p.category === category);
   }
-  getProtocolsForChain(chain) {
+  getProtocolsForChain(chain, includeUnverified = false) {
     return this.protocols.filter(
-      (p) => p.chain.toLowerCase() === chain.toLowerCase()
+      (p) => p.chain.toLowerCase() === chain.toLowerCase() && (includeUnverified || p.verified !== false)
     );
   }
   resolveToken(chain, symbol) {

@@ -46,7 +46,7 @@ protocols:
       interface: "uniswap_v3"
       contracts:
         router: "0xBe6D8f0d05cC4be24d5167a3eF062215bE6D18a5"
-        factory: "0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831"
+        factory: "0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A"
         quoter: "0x254cF9E1E6e233aa1AC962CB9B05b2cfeaae15b0"
       test:
         swap_pair: ["wrapped","stablecoin"]
@@ -68,7 +68,7 @@ protocols:
       contracts:
         router: "0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86"
         factory: "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
-        quoter: "0x3d146FcE6c1006857750cBe8aF44f76a28041CCc"
+        quoter: "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
       test:
         swap_pair: ["wrapped","stablecoin"]
         swap_amount: "1000000000000000000"  # 1 token

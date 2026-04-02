@@ -133,9 +133,11 @@ export class Registry {
     return this.protocols.filter((p) => p.category === category);
   }
 
-  getProtocolsForChain(chain: string): ProtocolEntry[] {
+  getProtocolsForChain(chain: string, includeUnverified = false): ProtocolEntry[] {
     return this.protocols.filter(
-      (p) => p.chain.toLowerCase() === chain.toLowerCase(),
+      (p) =>
+        p.chain.toLowerCase() === chain.toLowerCase() &&
+        (includeUnverified || p.verified !== false),
     );
   }
 

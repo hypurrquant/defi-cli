@@ -677,6 +677,7 @@ interface ProtocolEntry {
     interface: string;
     chain: string;
     native?: boolean;
+    verified?: boolean;
     contracts?: Record<string, Address>;
     pools?: PoolInfo[];
     description?: string;
@@ -694,7 +695,7 @@ declare class Registry {
     getChain(name: string): ChainConfig;
     getProtocol(name: string): ProtocolEntry;
     getProtocolsByCategory(category: ProtocolCategory): ProtocolEntry[];
-    getProtocolsForChain(chain: string): ProtocolEntry[];
+    getProtocolsForChain(chain: string, includeUnverified?: boolean): ProtocolEntry[];
     resolveToken(chain: string, symbol: string): TokenEntry;
     /**
      * Resolve a pool by name (e.g. "WHYPE/USDC") from a protocol's pool list.

@@ -5,7 +5,8 @@ category = "vault"
 interface = "erc4626"
 chain = "base"
 native = false
-description = "Maple Finance syrupUSDC ERC-4626 lending pool on Base"
+verified = false
+description = "Maple Finance syrupUSDC ERC-4626 lending pool on Base [UNVERIFIED: asset()/totalAssets()/convertToAssets() all revert]"
 
 [protocol.contracts]
 vault = "0x660975730059246a68521a3e2fbd4740173100f5"

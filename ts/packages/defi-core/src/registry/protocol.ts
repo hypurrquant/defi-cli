@@ -64,6 +64,7 @@ export interface ProtocolEntry {
   interface: string;
   chain: string;
   native?: boolean;
+  verified?: boolean;
   contracts?: Record<string, Address>;
   pools?: PoolInfo[];
   description?: string;
