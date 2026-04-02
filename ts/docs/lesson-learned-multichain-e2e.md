@@ -27,7 +27,7 @@ Mode: Mainnet + Anvil Fork
 | Ramses HL | HyperEVM | addLiquidity | ✅ anvil |
 | Aerodrome Slipstream | Base | mint (both tokens) | ✅ anvil |
 | Uniswap V3 | Base | single-side mint | ❌ see Finding #1 |
-| KittenSwap | HyperEVM | Algebra mint | ❌ shared NPM issue |
+| KittenSwap | HyperEVM | Algebra mint | ✅ FIXED — use Algebra Integral ABI (11-field with deployer=0x0), not Uniswap V3 ABI (10-field) |
 | Hybra | HyperEVM | poolByPair | ❌ no WHYPE/USDC pool |
 
 ### Gauge Staking + Emission: 2/2 ✅

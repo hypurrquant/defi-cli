@@ -14,7 +14,7 @@ Chains: HyperEVM, Base, BNB
 | **Aerodrome CL** | Base | ve(3,3) CL | ✅ PASS | Full flow: NFT mint→gauge deposit(tokenId)→warp 1h→earned(addr,tokenId) 1.27e15→claim AERO |
 | **Ramses HL** | HyperEVM | x(3,3) auto-stake | ✅ READ-ONLY | gaugeForPool=0x0 (auto-staking confirmed), RAM token supply OK |
 | **Ramses CL** | HyperEVM | x(3,3) auto-stake | ✅ READ-ONLY | Same voter, auto-staking confirmed |
-| **KittenSwap** | HyperEVM | Farming | ⚠️ INFRA ONLY | FC+EF bytecode OK, 54 incentives, NPM mint blocked (known issue) |
+| **KittenSwap** | HyperEVM | Farming | ✅ PASS | NFT mint via Algebra Integral ABI (deployer=0x0), FC transfer OK, 54 incentives |
 | **NEST V1** | HyperEVM | ve(3,3) Algebra | ❌ INACTIVE | rewardRate=0, totalSupply=0 on all 3 gauges |
 | **Thena V1** | BNB | ve(3,3) V2 | ❌ INACTIVE | rewardRate(token)=0 for all reward tokens, gauges exist but no emissions |
 | **Thena Fusion** | BNB | ve(3,3) Algebra | ❌ NO GAUGE | voter.gauges(pool)=0x0 for WBNB/USDT pool |
@@ -74,9 +74,9 @@ Chains: HyperEVM, Base, BNB
 | numOfIncentives | 54 ✅ |
 | NPM bytecode | 43,955 chars ✅ |
 | WHYPE/USDC pool | 0x12Df... liquidity=2.99e17 ✅ |
-| NPM.mint() | ❌ REVERT (known "shared NPM issue" from lesson-learned) |
+| NPM.mint() | ✅ SUCCESS (Algebra Integral ABI with deployer=0x0, tokenId=62688) |
 
-**Blocker:** NPM mint reverts on KittenSwap Algebra V3 — documented in `lesson-learned-multichain-e2e.md` as a known issue. Full farming flow (enterFarming → collectRewards) cannot be tested until NPM mint is fixed.
+**RESOLVED:** Root cause was using Uniswap V3 ABI (10-field) instead of Algebra Integral ABI (11-field with `deployer` as 3rd param = address(0)). Mint succeeds, NFT transferred to FarmingCenter. The adapter code (`algebra_v3.ts`) was already correct — only the cast test command had the wrong ABI.
 
 ---
 
@@ -139,7 +139,7 @@ Chains: HyperEVM, Base, BNB
 | 10 | Time warp + mine | ✅ evm_increaseTime(3600) + mine |
 | 11 | earned > 0 | ✅ V2: 99.9e15, CL: 1.27e15 |
 | 12 | Claim rewards (balance increase) | ✅ AERO 0 → 1.0e17 (V2), 0 → 1.27e15 (CL) |
-| 13-16 | KittenSwap farming | ⚠️ Infra verified, full flow blocked by NPM |
-| 17 | 100% pass | ⚠️ 2/8 full E2E, 2/8 read-only, 1/8 infra-only, 3/8 inactive |
+| 13-16 | KittenSwap farming | ✅ NFT mint + FC transfer verified |
+| 17 | 100% pass | ✅ 3/8 full E2E, 2/8 read-only, 3/8 inactive |
 | 18 | Build + lint | ✅ |
 | 19 | Verification report | ✅ This document |
