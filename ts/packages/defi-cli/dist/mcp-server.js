@@ -932,7 +932,7 @@ function createLiquidStaking(entry, rpcUrl) {
       return new GenericLstAdapter(entry, rpcUrl);
   }
 }
-function createGauge(entry, rpcUrl) {
+function createGauge(entry, rpcUrl, tokens) {
   if (entry.interface === "hybra" || entry.contracts?.["gauge_manager"]) {
     return new HybraGaugeAdapter(entry, rpcUrl);
   }
@@ -940,7 +940,11 @@ function createGauge(entry, rpcUrl) {
     case "solidly_v2":
     case "solidly_cl":
     case "algebra_v3":
-      return new SolidlyGaugeAdapter(entry, rpcUrl);
+      return new SolidlyGaugeAdapter(entry, rpcUrl, tokens);
+    // uniswap_v3 with voter = ve(3,3) CL (e.g., Aerodrome Slipstream, Ramses CL)
+    case "uniswap_v3":
+      if (entry.contracts?.["voter"]) return new SolidlyGaugeAdapter(entry, rpcUrl, tokens);
+      throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported (no voter contract)`);
     default:
       throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported`);
   }
@@ -2552,7 +2556,8 @@ var init_dist2 = __esm({
       rpcUrl;
       clFactory;
       v2Factory;
-      constructor(entry, rpcUrl) {
+      tokens;
+      constructor(entry, rpcUrl, tokens) {
         this.protocolName = entry.name;
         const voter = entry.contracts?.["voter"];
         if (!voter) {
@@ -2565,6 +2570,7 @@ var init_dist2 = __esm({
         this.voter = voter;
         this.veToken = veToken;
         this.rpcUrl = rpcUrl;
+        this.tokens = tokens;
         this.clFactory = entry.contracts?.["cl_factory"] ?? entry.contracts?.["factory"];
         this.v2Factory = entry.contracts?.["pair_factory"] ?? entry.contracts?.["factory"];
       }
@@ -2768,8 +2774,7 @@ var init_dist2 = __esm({
         const erc20SymbolAbi = parseAbi10(["function symbol() external view returns (string)"]);
         const gaugeForPoolAbi = parseAbi10(["function gaugeForPool(address) external view returns (address)"]);
         const poolToGaugeAbi = parseAbi10(["function poolToGauge(address) external view returns (address)"]);
-        const tokenEntries = Object.entries(HYPEREVM_TOKENS);
-        const tokenAddresses = tokenEntries.map(([, addr]) => addr);
+        const tokenAddresses = this.tokens ?? Object.values(HYPEREVM_TOKENS);
         const pairs = [];
         for (let i = 0; i < tokenAddresses.length; i++) {
           for (let j = i + 1; j < tokenAddresses.length; j++) {

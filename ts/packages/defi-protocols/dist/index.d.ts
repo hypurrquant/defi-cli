@@ -194,7 +194,7 @@ declare function createVault(entry: ProtocolEntry, rpcUrl?: string): IVault;
 /** Create a LiquidStaking implementation from a protocol registry entry */
 declare function createLiquidStaking(entry: ProtocolEntry, rpcUrl?: string): ILiquidStaking;
 /** Create a GaugeSystem implementation from a protocol registry entry */
-declare function createGauge(entry: ProtocolEntry, rpcUrl?: string): IGaugeSystem;
+declare function createGauge(entry: ProtocolEntry, rpcUrl?: string, tokens?: Address[]): IGaugeSystem;
 /** Create a MasterChef IGauge implementation from a protocol registry entry */
 declare function createMasterChef(entry: ProtocolEntry, rpcUrl?: string): IGauge;
 /** Create a YieldSource implementation — falls back to GenericYield for unknown interfaces */
@@ -319,7 +319,8 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
     private readonly rpcUrl;
     private readonly clFactory;
     private readonly v2Factory;
-    constructor(entry: ProtocolEntry, rpcUrl?: string);
+    private readonly tokens;
+    constructor(entry: ProtocolEntry, rpcUrl?: string, tokens?: Address[]);
     name(): string;
     /** Scan V2 and CL factories for pools that have active emission gauges. */
     discoverGaugedPools(): Promise<GaugedPool[]>;

@@ -820,7 +820,7 @@ function createLiquidStaking(entry, rpcUrl) {
       return new GenericLstAdapter(entry, rpcUrl);
   }
 }
-function createGauge(entry, rpcUrl) {
+function createGauge(entry, rpcUrl, tokens) {
   if (entry.interface === "hybra" || entry.contracts?.["gauge_manager"]) {
     return new HybraGaugeAdapter(entry, rpcUrl);
   }
@@ -828,7 +828,11 @@ function createGauge(entry, rpcUrl) {
     case "solidly_v2":
     case "solidly_cl":
     case "algebra_v3":
-      return new SolidlyGaugeAdapter(entry, rpcUrl);
+      return new SolidlyGaugeAdapter(entry, rpcUrl, tokens);
+    // uniswap_v3 with voter = ve(3,3) CL (e.g., Aerodrome Slipstream, Ramses CL)
+    case "uniswap_v3":
+      if (entry.contracts?.["voter"]) return new SolidlyGaugeAdapter(entry, rpcUrl, tokens);
+      throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported (no voter contract)`);
     default:
       throw DefiError.unsupported(`Gauge interface '${entry.interface}' not supported`);
   }
@@ -2440,7 +2444,8 @@ var init_dist2 = __esm({
       rpcUrl;
       clFactory;
       v2Factory;
-      constructor(entry, rpcUrl) {
+      tokens;
+      constructor(entry, rpcUrl, tokens) {
         this.protocolName = entry.name;
         const voter = entry.contracts?.["voter"];
         if (!voter) {
@@ -2453,6 +2458,7 @@ var init_dist2 = __esm({
         this.voter = voter;
         this.veToken = veToken;
         this.rpcUrl = rpcUrl;
+        this.tokens = tokens;
         this.clFactory = entry.contracts?.["cl_factory"] ?? entry.contracts?.["factory"];
         this.v2Factory = entry.contracts?.["pair_factory"] ?? entry.contracts?.["factory"];
       }
@@ -2656,8 +2662,7 @@ var init_dist2 = __esm({
         const erc20SymbolAbi = parseAbi10(["function symbol() external view returns (string)"]);
         const gaugeForPoolAbi = parseAbi10(["function gaugeForPool(address) external view returns (address)"]);
         const poolToGaugeAbi = parseAbi10(["function poolToGauge(address) external view returns (address)"]);
-        const tokenEntries = Object.entries(HYPEREVM_TOKENS);
-        const tokenAddresses = tokenEntries.map(([, addr]) => addr);
+        const tokenAddresses = this.tokens ?? Object.values(HYPEREVM_TOKENS);
         const pairs = [];
         for (let i = 0; i < tokenAddresses.length; i++) {
           for (let j = i + 1; j < tokenAddresses.length; j++) {
@@ -7268,8 +7273,10 @@ function registerLP(parent, getOpts, makeExecutor2) {
     await Promise.allSettled(
       protocols.map(async (protocol) => {
         try {
-          if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(protocol.interface)) {
-            const adapter = createGauge(protocol, rpcUrl);
+          const isGaugeProtocol = ["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(protocol.interface) || protocol.interface === "uniswap_v3" && protocol.contracts?.["voter"];
+          if (isGaugeProtocol) {
+            const chainTokens = registry.tokens.get(chainName)?.map((t) => t.address);
+            const adapter = createGauge(protocol, rpcUrl, chainTokens);
             if (adapter.discoverGaugedPools) {
               const pools = await adapter.discoverGaugedPools();
               for (const p of pools) {
@@ -7485,7 +7492,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       printOutput(result, getOpts());
       return;
     }
-    if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(iface)) {
+    if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(iface) || iface === "uniswap_v3" && protocol.contracts?.["voter"]) {
       if (!opts.gauge) throw new Error("--gauge is required for gauge claim");
       const adapter = createGauge(protocol, rpcUrl);
       let tx;
@@ -7700,8 +7707,9 @@ function registerLP(parent, getOpts, makeExecutor2) {
               return { entry, scan_error: `Protocol not found: ${entry.protocol}` };
             }
             const proto = protos[0];
-            if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(proto.interface)) {
-              const adapter = createGauge(proto, rpcUrl);
+            if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(proto.interface) || proto.interface === "uniswap_v3" && proto.contracts?.["voter"]) {
+              const chainTokens = registry.tokens.get(chainName)?.map((t) => t.address);
+              const adapter = createGauge(proto, rpcUrl, chainTokens);
               if (adapter.discoverGaugedPools) {
                 const pools = await adapter.discoverGaugedPools();
                 const poolAddr = entry.pool.startsWith("0x") ? entry.pool.toLowerCase() : void 0;
