@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -7127,7 +7133,6 @@ init_dist();
 init_dist();
 init_dist2();
 import { parseAbi as parseAbi30, encodeFunctionData as encodeFunctionData27, decodeFunctionResult as decodeFunctionResult8 } from "viem";
-import { privateKeyToAccount as privateKeyToAccount2 } from "viem/accounts";
 
 // src/whitelist.ts
 import { readFileSync as readFileSync2 } from "fs";
@@ -7144,14 +7149,127 @@ function loadWhitelist() {
   }
 }
 
+// src/signer/ows-loader.ts
+import { createRequire } from "module";
+var _require = createRequire(import.meta.url);
+function loadOws() {
+  try {
+    return _require("@open-wallet-standard/core");
+  } catch {
+    throw new Error(
+      "OWS not installed. Run: curl -fsSL https://docs.openwallet.sh/install.sh | bash"
+    );
+  }
+}
+
+// src/signer/ows-evm.ts
+var OwsEvmSigner = class _OwsEvmSigner {
+  _address;
+  _walletName;
+  _passphrase;
+  constructor(walletName, address, passphrase) {
+    this._walletName = walletName;
+    this._address = address;
+    this._passphrase = passphrase;
+  }
+  static create(walletName, passphrase = "") {
+    const ows = loadOws();
+    const wallet = ows.getWallet(walletName);
+    const evmAccount = wallet.accounts.find(
+      (a) => a.chainId.startsWith("eip155:")
+    );
+    if (!evmAccount) {
+      throw new Error(`OWS wallet "${walletName}" has no EVM account`);
+    }
+    return new _OwsEvmSigner(walletName, evmAccount.address, passphrase);
+  }
+  getAddress() {
+    return this._address;
+  }
+  async signTypedData(domain, types, value) {
+    const ows = loadOws();
+    const typedData = JSON.stringify({
+      types: {
+        EIP712Domain: Object.keys(domain).map((key) => ({
+          name: key,
+          type: inferEip712DomainType(key)
+        })),
+        ...types
+      },
+      primaryType: Object.keys(types)[0],
+      domain,
+      message: value
+    });
+    const result = ows.signTypedData(this._walletName, "evm", typedData, this._passphrase);
+    const sig = result.signature.startsWith("0x") ? result.signature : `0x${result.signature}`;
+    const v = result.recoveryId !== void 0 ? result.recoveryId + 27 : 27;
+    return `${sig}${v.toString(16).padStart(2, "0")}`;
+  }
+  async signMessage(message) {
+    const ows = loadOws();
+    const msgStr = typeof message === "string" ? message : Buffer.from(message).toString("hex");
+    const encoding = typeof message === "string" ? "utf8" : "hex";
+    const result = ows.signMessage(this._walletName, "evm", msgStr, this._passphrase, encoding);
+    const sig = result.signature.startsWith("0x") ? result.signature : `0x${result.signature}`;
+    const v = result.recoveryId !== void 0 ? result.recoveryId + 27 : 27;
+    return `${sig}${v.toString(16).padStart(2, "0")}`;
+  }
+  /**
+   * Sign a raw serialized transaction for viem compatibility.
+   * Returns the signed transaction as a hex string.
+   */
+  async signTransaction(serializedTx) {
+    const ows = loadOws();
+    const txHex = serializedTx.startsWith("0x") ? serializedTx.slice(2) : serializedTx;
+    const result = ows.signMessage(this._walletName, "evm", txHex, this._passphrase, "hex");
+    const sig = result.signature.startsWith("0x") ? result.signature : `0x${result.signature}`;
+    const v = result.recoveryId !== void 0 ? result.recoveryId + 27 : 27;
+    return `${sig}${v.toString(16).padStart(2, "0")}`;
+  }
+};
+function inferEip712DomainType(key) {
+  switch (key) {
+    case "chainId":
+      return "uint256";
+    case "verifyingContract":
+      return "address";
+    case "salt":
+      return "bytes32";
+    default:
+      return "string";
+  }
+}
+
+// src/signer/resolve.ts
+function resolveWalletWithSigner(opts) {
+  if (opts?.wallet) {
+    const signer = OwsEvmSigner.create(opts.wallet, opts.passphrase);
+    return { address: signer.getAddress(), signer };
+  }
+  const envWallet = process.env["DEFI_WALLET_ADDRESS"];
+  if (envWallet?.startsWith("ows:")) {
+    const walletName = envWallet.slice(4);
+    const signer = OwsEvmSigner.create(walletName);
+    return { address: signer.getAddress(), signer };
+  }
+  const pk = process.env["DEFI_PRIVATE_KEY"];
+  if (pk) {
+    const { privateKeyToAccount: privateKeyToAccount2 } = __require("viem/accounts");
+    return { address: privateKeyToAccount2(pk).address, signer: null };
+  }
+  if (envWallet) {
+    return { address: envWallet, signer: null };
+  }
+  throw new Error(
+    "No wallet configured. Use --wallet <name>, set DEFI_WALLET_ADDRESS, or set DEFI_PRIVATE_KEY"
+  );
+}
+
 // src/commands/lp.ts
-function resolveAccount(optOwner) {
+function resolveAccount(optOwner, optWallet) {
   if (optOwner) return optOwner;
-  const walletAddr = process.env["DEFI_WALLET_ADDRESS"];
-  if (walletAddr) return walletAddr;
-  const privateKey = process.env["DEFI_PRIVATE_KEY"];
-  if (privateKey) return privateKeyToAccount2(privateKey).address;
-  throw new Error("--address, DEFI_WALLET_ADDRESS, or DEFI_PRIVATE_KEY is required");
+  const { address } = resolveWalletWithSigner(optWallet ? { wallet: optWallet } : void 0);
+  return address;
 }
 function resolvePoolAddress(registry, protocolSlug, pool) {
   if (pool.startsWith("0x")) return pool;
@@ -7269,7 +7387,7 @@ async function _enrichGaugeAprs(pools, rpcUrl, registry, chainName) {
   }
 }
 function registerLP(parent, getOpts, makeExecutor2) {
-  const lp = parent.command("lp").description("Unified LP operations: discover, add, farm, claim, remove, positions");
+  const lp = parent.command("lp").description("Unified LP operations: discover, add, farm, claim, remove, positions").option("--wallet <name>", "OWS wallet name (alternative to DEFI_WALLET_ADDRESS)");
   lp.command("discover").description("Scan all protocols for fee + emission pools (gauges, farming, LB rewards)").option("--protocol <protocol>", "Filter to a single protocol slug").option("--emission-only", "Only show emission (gauge/farming) pools, skip fee-only").action(async (opts) => {
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -7480,7 +7598,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
     const chain = registry.getChain(chainName);
     const rpcUrl = chain.effectiveRpcUrl();
     const protocol = registry.getProtocol(opts.protocol);
-    const account = resolveAccount(opts.address);
+    const account = resolveAccount(opts.address, lp.opts().wallet);
     const iface = protocol.interface;
     if (iface === "algebra_v3" && protocol.contracts?.["farming_center"]) {
       if (!opts.pool) throw new Error("--pool is required for KittenSwap farming claim");
@@ -7597,7 +7715,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const rpcUrl = chain.effectiveRpcUrl();
-    const user = resolveAccount(opts.address);
+    const user = resolveAccount(opts.address, lp.opts().wallet);
     const allProtocols = registry.getProtocolsForChain(chainName);
     const protocols = opts.protocol ? [registry.getProtocol(opts.protocol)] : allProtocols;
     const results = [];
@@ -7827,7 +7945,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
           const assetAddr = tokenInfo.address;
           const decimals = tokenInfo.decimals ?? 18;
           const amountWei = BigInt(Math.floor(alloc["amount_usd"] * 10 ** decimals));
-          const wallet = resolveAccount();
+          const wallet = resolveAccount(void 0, lp.opts().wallet);
           const tx = await adapter.buildSupply({
             protocol: alloc["protocol"],
             asset: assetAddr,
@@ -7889,7 +8007,13 @@ function resolveTokenAddress(registry, chainName, tokenOrAddress) {
 }
 var FALLBACK_ADDRESS = "0x0000000000000000000000000000000000000001";
 function resolveWallet(override) {
-  return override ?? process.env["DEFI_WALLET_ADDRESS"] ?? FALLBACK_ADDRESS;
+  if (override) return override;
+  try {
+    const { address } = resolveWalletWithSigner();
+    return address;
+  } catch {
+    return FALLBACK_ADDRESS;
+  }
 }
 function errMsg(e) {
   return e instanceof Error ? e.message : String(e);
@@ -9764,8 +9888,8 @@ function isValidPrivateKey(s) {
 }
 async function deriveAddress(privateKey) {
   try {
-    const { privateKeyToAccount: privateKeyToAccount3 } = await import("viem/accounts");
-    const account = privateKeyToAccount3(privateKey);
+    const { privateKeyToAccount: privateKeyToAccount2 } = await import("viem/accounts");
+    const account = privateKeyToAccount2(privateKey);
     return account.address;
   } catch {
     return null;
@@ -9862,21 +9986,6 @@ function registerSetup(program2) {
 
 // src/commands/ows.ts
 import pc3 from "picocolors";
-
-// src/signer/ows-loader.ts
-import { createRequire } from "module";
-var _require = createRequire(import.meta.url);
-function loadOws() {
-  try {
-    return _require("@open-wallet-standard/core");
-  } catch {
-    throw new Error(
-      "OWS not installed. Run: curl -fsSL https://docs.openwallet.sh/install.sh | bash"
-    );
-  }
-}
-
-// src/commands/ows.ts
 init_dist();
 import { createPublicClient as createPublicClient25, http as http25, formatEther as formatEther2 } from "viem";
 async function getEvmBalance(address, chainName) {

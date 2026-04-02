@@ -5,7 +5,6 @@ import { printOutput } from "../output.js";
 import { Registry, ProtocolCategory } from "@hypurrquant/defi-core";
 import type { Address, Hex } from "viem";
 import { parseAbi, encodeFunctionData, decodeFunctionResult } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { multicallRead, decodeU256 } from "@hypurrquant/defi-core";
 import {
   createDex,
@@ -16,15 +15,13 @@ import {
 } from "@hypurrquant/defi-protocols";
 import { loadWhitelist } from "../whitelist.js";
 import type { WhitelistEntry } from "../whitelist.js";
+import { resolveWalletWithSigner } from "../signer/resolve.js";
 
-/** Resolve the wallet owner address from options or env vars */
-function resolveAccount(optOwner?: string): Address {
+/** Resolve the wallet owner address from options or env vars (including OWS wallets) */
+function resolveAccount(optOwner?: string, optWallet?: string): Address {
   if (optOwner) return optOwner as Address;
-  const walletAddr = process.env["DEFI_WALLET_ADDRESS"];
-  if (walletAddr) return walletAddr as Address;
-  const privateKey = process.env["DEFI_PRIVATE_KEY"];
-  if (privateKey) return privateKeyToAccount(privateKey as `0x${string}`).address;
-  throw new Error("--address, DEFI_WALLET_ADDRESS, or DEFI_PRIVATE_KEY is required");
+  const { address } = resolveWalletWithSigner(optWallet ? { wallet: optWallet } : undefined);
+  return address;
 }
 
 /** Resolve a pool: "TOKEN_A/TOKEN_B" name → address from registry, or raw 0x address */
@@ -219,7 +216,10 @@ async function _enrichGaugeAprs(
 }
 
 export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
-  const lp = parent.command("lp").description("Unified LP operations: discover, add, farm, claim, remove, positions");
+  const lp = parent
+    .command("lp")
+    .description("Unified LP operations: discover, add, farm, claim, remove, positions")
+    .option("--wallet <name>", "OWS wallet name (alternative to DEFI_WALLET_ADDRESS)");
 
   // ─────────────────────────────────────────
   // lp discover
@@ -522,7 +522,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const chain = registry.getChain(chainName);
       const rpcUrl = chain.effectiveRpcUrl();
       const protocol = registry.getProtocol(opts.protocol);
-      const account = resolveAccount(opts.address);
+      const account = resolveAccount(opts.address, lp.opts<{ wallet?: string }>().wallet);
       const iface = protocol.interface;
 
       // KittenSwap farming: collectRewards (collect + claim in one tx)
@@ -681,7 +681,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const rpcUrl = chain.effectiveRpcUrl();
-      const user = resolveAccount(opts.address);
+      const user = resolveAccount(opts.address, lp.opts<{ wallet?: string }>().wallet);
 
       const allProtocols = registry.getProtocolsForChain(chainName);
       const protocols = opts.protocol
@@ -996,7 +996,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
             const assetAddr = tokenInfo.address as Address;
             const decimals = tokenInfo.decimals ?? 18;
             const amountWei = BigInt(Math.floor((alloc["amount_usd"] as number) * 10 ** decimals));
-            const wallet = resolveAccount();
+            const wallet = resolveAccount(undefined, lp.opts<{ wallet?: string }>().wallet);
             const tx = await adapter.buildSupply({
               protocol: alloc["protocol"] as string,
               asset: assetAddr,

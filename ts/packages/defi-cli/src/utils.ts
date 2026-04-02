@@ -4,6 +4,7 @@ import type { OutputMode } from "./output.js";
 import { printOutput } from "./output.js";
 import { Registry } from "@hypurrquant/defi-core";
 import type { ProtocolEntry, ChainConfig } from "@hypurrquant/defi-core";
+import { resolveWalletWithSigner } from "./signer/resolve.js";
 
 // ── Chain validation ──
 
@@ -71,10 +72,16 @@ export function resolveTokenAddress(registry: Registry, chainName: string, token
 const FALLBACK_ADDRESS = "0x0000000000000000000000000000000000000001" as Address;
 
 /**
- * Resolve wallet address from explicit option, env var, or fallback.
+ * Resolve wallet address from explicit option, env var (including OWS), or fallback.
  */
 export function resolveWallet(override?: string): Address {
-  return (override ?? process.env["DEFI_WALLET_ADDRESS"] ?? FALLBACK_ADDRESS) as Address;
+  if (override) return override as Address;
+  try {
+    const { address } = resolveWalletWithSigner();
+    return address;
+  } catch {
+    return FALLBACK_ADDRESS;
+  }
 }
 
 // ── Error formatting ──
