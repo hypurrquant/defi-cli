@@ -353,6 +353,12 @@ declare class SolidlyGaugeAdapter implements IGaugeSystem {
      * Get pending rewards for a CL gauge NFT position (Hybra V4 style).
      */
     getPendingRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<bigint>;
+    /**
+     * Get pending rewards for an Aerodrome Slipstream CL gauge NFT position.
+     * Uses the earned(address account, uint256 tokenId) overload, which is required
+     * for CL gauges — the single-param earned(address) reverts on these contracts.
+     */
+    getPendingRewardsByCLTokenId(gauge: Address, user: Address, tokenId: bigint): Promise<bigint>;
     buildCreateLock(amount: bigint, lockDuration: number): Promise<DeFiTx>;
     buildIncreaseAmount(tokenId: bigint, amount: bigint): Promise<DeFiTx>;
     buildIncreaseUnlockTime(tokenId: bigint, lockDuration: number): Promise<DeFiTx>;

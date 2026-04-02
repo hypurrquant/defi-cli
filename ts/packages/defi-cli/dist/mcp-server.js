@@ -2506,6 +2506,7 @@ var init_dist2 = __esm({
       "function getReward(address account, address[] tokens) external",
       "function getReward(uint256 tokenId) external",
       "function earned(address account) external view returns (uint256)",
+      "function earned(address account, uint256 tokenId) external view returns (uint256)",
       "function earned(address token, address account) external view returns (uint256)",
       "function earned(uint256 tokenId) external view returns (uint256)",
       "function rewardRate() external view returns (uint256)",
@@ -3113,6 +3114,21 @@ var init_dist2 = __esm({
           abi: gaugeAbi,
           functionName: "earned",
           args: [tokenId]
+        });
+      }
+      /**
+       * Get pending rewards for an Aerodrome Slipstream CL gauge NFT position.
+       * Uses the earned(address account, uint256 tokenId) overload, which is required
+       * for CL gauges — the single-param earned(address) reverts on these contracts.
+       */
+      async getPendingRewardsByCLTokenId(gauge, user, tokenId) {
+        if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
+        const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+        return await client.readContract({
+          address: gauge,
+          abi: gaugeAbi,
+          functionName: "earned",
+          args: [user, tokenId]
         });
       }
       // IVoteEscrow

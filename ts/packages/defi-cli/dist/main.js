@@ -2394,6 +2394,7 @@ var init_dist2 = __esm({
       "function getReward(address account, address[] tokens) external",
       "function getReward(uint256 tokenId) external",
       "function earned(address account) external view returns (uint256)",
+      "function earned(address account, uint256 tokenId) external view returns (uint256)",
       "function earned(address token, address account) external view returns (uint256)",
       "function earned(uint256 tokenId) external view returns (uint256)",
       "function rewardRate() external view returns (uint256)",
@@ -3001,6 +3002,21 @@ var init_dist2 = __esm({
           abi: gaugeAbi,
           functionName: "earned",
           args: [tokenId]
+        });
+      }
+      /**
+       * Get pending rewards for an Aerodrome Slipstream CL gauge NFT position.
+       * Uses the earned(address account, uint256 tokenId) overload, which is required
+       * for CL gauges — the single-param earned(address) reverts on these contracts.
+       */
+      async getPendingRewardsByCLTokenId(gauge, user, tokenId) {
+        if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
+        const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+        return await client.readContract({
+          address: gauge,
+          abi: gaugeAbi,
+          functionName: "earned",
+          args: [user, tokenId]
         });
       }
       // IVoteEscrow
@@ -6193,7 +6209,7 @@ import { resolve as resolve5 } from "path";
 
 // src/cli.ts
 import { Command } from "commander";
-import { createRequire } from "module";
+import { createRequire as createRequire2 } from "module";
 
 // src/executor.ts
 init_dist();
@@ -9848,9 +9864,212 @@ function registerSetup(program2) {
   });
 }
 
-// src/cli.ts
+// src/commands/ows.ts
+import pc3 from "picocolors";
+
+// src/signer/ows-loader.ts
+import { createRequire } from "module";
 var _require = createRequire(import.meta.url);
-var _pkg = _require("../package.json");
+function loadOws() {
+  try {
+    return _require("@open-wallet-standard/core");
+  } catch {
+    throw new Error(
+      "OWS not installed. Run: curl -fsSL https://docs.openwallet.sh/install.sh | bash"
+    );
+  }
+}
+
+// src/commands/ows.ts
+init_dist();
+import { createPublicClient as createPublicClient25, http as http25, formatEther as formatEther2 } from "viem";
+async function getEvmBalance(address, chainName) {
+  const registry = Registry.loadEmbedded();
+  const chain = registry.getChain(chainName);
+  const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
+  const balance = await client.getBalance({ address });
+  return {
+    native_token: chain.native_token,
+    balance: formatEther2(balance),
+    balance_wei: balance.toString()
+  };
+}
+function makeTable2(headers, rows) {
+  const widths = headers.map(
+    (h, i) => Math.max(h.length, ...rows.map((r) => stripAnsi(r[i] ?? "").length))
+  );
+  const sep = widths.map((w) => "-".repeat(w + 2)).join("+");
+  const fmtRow = (cells) => cells.map((c, i) => ` ${padEnd(c, widths[i])} `).join("|");
+  return [fmtRow(headers.map((h) => pc3.bold(h))), sep, ...rows.map(fmtRow)].join("\n");
+}
+function stripAnsi(s) {
+  return s.replace(/\x1B\[\d+m/g, "");
+}
+function padEnd(s, len) {
+  const visible = stripAnsi(s).length;
+  return visible >= len ? s : s + " ".repeat(len - visible);
+}
+function registerOws(parent, getOpts) {
+  const ows = parent.command("ows").description("Open Wallet Standard \u2014 encrypted vault wallet management");
+  ows.command("create <name>").description("Create a new OWS wallet (multi-chain)").option("--words <count>", "Mnemonic word count (12 or 24)", "12").action(async (name, opts) => {
+    try {
+      const o = loadOws();
+      const w = o.createWallet(name, "", parseInt(opts.words));
+      const mode = getOpts();
+      if (mode.json) {
+        return printOutput(
+          { id: w.id, name: w.name, accounts: w.accounts, createdAt: w.createdAt },
+          mode
+        );
+      }
+      console.log(pc3.cyan(pc3.bold("\n  OWS Wallet Created\n")));
+      console.log(`  Name: ${pc3.bold(w.name)}`);
+      console.log(`  ID:   ${pc3.gray(w.id)}`);
+      console.log();
+      for (const acct of w.accounts) {
+        const chain = acct.chainId.split(":")[0];
+        console.log(`  ${pc3.cyan(chain.padEnd(10))} ${pc3.green(acct.address)}`);
+      }
+      console.log(pc3.gray(`
+  Vault: ~/.ows/`));
+      console.log(pc3.cyan(`
+  Usage: defi --wallet ${name} lp deposit ...
+`));
+    } catch (e) {
+      handleOwsError(e, getOpts);
+    }
+  });
+  ows.command("list").description("List all OWS wallets in the vault").action(async () => {
+    try {
+      const o = loadOws();
+      const wallets = o.listWallets();
+      const mode = getOpts();
+      if (mode.json) return printOutput({ wallets }, mode);
+      if (wallets.length === 0) {
+        console.log(pc3.gray("\n  No OWS wallets found."));
+        console.log(pc3.gray(`  Create one: ${pc3.cyan("defi ows create <name>")}
+`));
+        return;
+      }
+      console.log(pc3.cyan(pc3.bold("\n  OWS Vault Wallets\n")));
+      const rows = wallets.map(
+        (w) => {
+          const evmAddr = w.accounts.find((a) => a.chainId.startsWith("eip155:"))?.address ?? "-";
+          const short = evmAddr.length > 14 ? evmAddr.slice(0, 10) + "..." + evmAddr.slice(-4) : evmAddr;
+          return [
+            pc3.bold(w.name),
+            pc3.green(short),
+            pc3.gray(w.createdAt.split("T")[0])
+          ];
+        }
+      );
+      console.log(makeTable2(["Name", "EVM Address", "Created"], rows));
+      console.log(pc3.gray(`
+  Usage: defi --wallet <name> lp deposit ...
+`));
+    } catch (e) {
+      handleOwsError(e, getOpts);
+    }
+  });
+  ows.command("address <name>").description("Show EVM address for an OWS wallet").action(async (name) => {
+    try {
+      const o = loadOws();
+      const w = o.getWallet(name);
+      const evmAccount = w.accounts.find(
+        (a) => a.chainId.startsWith("eip155:")
+      );
+      if (!evmAccount) throw new Error(`OWS wallet "${name}" has no EVM account`);
+      const mode = getOpts();
+      if (mode.json) return printOutput({ wallet: name, address: evmAccount.address }, mode);
+      console.log(pc3.cyan(pc3.bold(`
+  OWS Wallet: ${name}
+`)));
+      console.log(`  EVM Address: ${pc3.green(evmAccount.address)}
+`);
+    } catch (e) {
+      handleOwsError(e, getOpts);
+    }
+  });
+  ows.command("balance <name>").description("Show on-chain balance for an OWS wallet").action(async (name) => {
+    try {
+      const o = loadOws();
+      const w = o.getWallet(name);
+      const evmAccount = w.accounts.find(
+        (a) => a.chainId.startsWith("eip155:")
+      );
+      if (!evmAccount) throw new Error(`OWS wallet "${name}" has no EVM account`);
+      const chainOpt = parent.opts().chain;
+      const chainName = chainOpt ?? "hyperevm";
+      const bal = await getEvmBalance(evmAccount.address, chainName);
+      const mode = getOpts();
+      if (mode.json) {
+        return printOutput(
+          { wallet: name, chain: chainName, address: evmAccount.address, ...bal },
+          mode
+        );
+      }
+      console.log(pc3.cyan(pc3.bold(`
+  ${name} \u2014 ${chainName}
+`)));
+      console.log(`  Address: ${pc3.green(evmAccount.address)}`);
+      console.log(`  ${pc3.bold(bal.native_token)}: ${bal.balance}
+`);
+    } catch (e) {
+      handleOwsError(e, getOpts);
+    }
+  });
+  ows.command("delete <name>").description("Delete an OWS wallet from the vault").action(async (name) => {
+    try {
+      const o = loadOws();
+      const w = o.getWallet(name);
+      o.deleteWallet(name);
+      const mode = getOpts();
+      if (mode.json) return printOutput({ deleted: name, id: w.id }, mode);
+      console.log(pc3.yellow(`
+  OWS wallet "${name}" deleted from vault.
+`));
+    } catch (e) {
+      handleOwsError(e, getOpts);
+    }
+  });
+  ows.command("info <name>").description("Show detailed OWS wallet info (all chains & derivation paths)").action(async (name) => {
+    try {
+      const o = loadOws();
+      const w = o.getWallet(name);
+      const mode = getOpts();
+      if (mode.json) return printOutput(w, mode);
+      console.log(pc3.cyan(pc3.bold(`
+  OWS Wallet: ${w.name}
+`)));
+      console.log(`  ID:      ${pc3.gray(w.id)}`);
+      console.log(`  Created: ${pc3.gray(w.createdAt)}`);
+      console.log();
+      for (const acct of w.accounts) {
+        console.log(`  ${pc3.cyan(acct.chainId.padEnd(40))} ${pc3.green(acct.address)}`);
+        console.log(`  ${pc3.gray(" ".repeat(40) + acct.derivationPath)}`);
+      }
+      console.log();
+    } catch (e) {
+      handleOwsError(e, getOpts);
+    }
+  });
+}
+function handleOwsError(e, getOpts) {
+  const msg = errMsg(e);
+  const mode = getOpts();
+  if (mode.json) {
+    printOutput({ error: msg }, mode);
+  } else {
+    console.error(pc3.red(`
+  OWS error: ${msg}
+`));
+  }
+  process.exit(1);
+}
+
+// src/cli.ts
+var _require2 = createRequire2(import.meta.url);
+var _pkg = _require2("../package.json");
 var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2557
   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551    \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551     \u2588\u2588\u2551
@@ -9891,10 +10110,11 @@ registerToken(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
 registerSwap(program, getOutputMode, makeExecutor);
 registerSetup(program);
+registerOws(program, getOutputMode);
 
 // src/landing.ts
 init_dist();
-import pc3 from "picocolors";
+import pc4 from "picocolors";
 import { encodeFunctionData as encodeFunctionData30, parseAbi as parseAbi34, formatUnits } from "viem";
 var HYPEREVM_DISPLAY = ["HYPE", "WHYPE", "USDC", "USDT0", "USDe", "kHYPE", "wstHYPE"];
 var MANTLE_DISPLAY = ["MNT", "WMNT", "USDC", "USDT", "WETH", "mETH"];
@@ -9982,26 +10202,26 @@ async function showLandingPage(isJson) {
     }, null, 2));
     return;
   }
-  const { createRequire: createRequire2 } = await import("module");
-  const _require2 = createRequire2(import.meta.url);
-  const pkg = _require2("../package.json");
+  const { createRequire: createRequire3 } = await import("module");
+  const _require3 = createRequire3(import.meta.url);
+  const pkg = _require3("../package.json");
   const version = pkg.version;
   if (!wallet) {
     console.log("");
-    console.log(pc3.bold(pc3.cyan("  DeFi CLI v" + version)));
+    console.log(pc4.bold(pc4.cyan("  DeFi CLI v" + version)));
     console.log("");
-    console.log(pc3.yellow("  Wallet not configured."));
+    console.log(pc4.yellow("  Wallet not configured."));
     console.log("  Set DEFI_WALLET_ADDRESS to see your balances:");
     console.log("");
-    console.log(pc3.dim("    export DEFI_WALLET_ADDRESS=0x..."));
+    console.log(pc4.dim("    export DEFI_WALLET_ADDRESS=0x..."));
     console.log("");
     console.log("  Commands:");
-    console.log(pc3.dim("    defi status              Protocol overview"));
-    console.log(pc3.dim("    defi lending rates       Compare lending APYs"));
-    console.log(pc3.dim("    defi lp discover         Find LP farming pools"));
-    console.log(pc3.dim("    defi portfolio           View all positions"));
-    console.log(pc3.dim("    defi scan                Exploit detection"));
-    console.log(pc3.dim("    defi --help              Full command list"));
+    console.log(pc4.dim("    defi status              Protocol overview"));
+    console.log(pc4.dim("    defi lending rates       Compare lending APYs"));
+    console.log(pc4.dim("    defi lp discover         Find LP farming pools"));
+    console.log(pc4.dim("    defi portfolio           View all positions"));
+    console.log(pc4.dim("    defi scan                Exploit detection"));
+    console.log(pc4.dim("    defi --help              Full command list"));
     console.log("");
     return;
   }
@@ -10023,20 +10243,20 @@ async function showLandingPage(isJson) {
   const divider = "\u2500".repeat(colWidth - 2);
   console.log("");
   console.log(
-    pc3.bold(pc3.cyan("  DeFi CLI v" + version)) + pc3.dim("  \u2014  ") + pc3.bold(heChain.name) + pc3.dim(" \xB7 ") + pc3.bold(mantleChain.name)
+    pc4.bold(pc4.cyan("  DeFi CLI v" + version)) + pc4.dim("  \u2014  ") + pc4.bold(heChain.name) + pc4.dim(" \xB7 ") + pc4.bold(mantleChain.name)
   );
   console.log("");
-  console.log("  Wallet: " + pc3.yellow(shortenAddress(wallet)));
+  console.log("  Wallet: " + pc4.yellow(shortenAddress(wallet)));
   console.log("");
   const heHeader = padRight(
-    "  " + pc3.bold(heChain.name),
+    "  " + pc4.bold(heChain.name),
     colWidth + 10
     /* account for ANSI */
   );
-  const mantleHeader = pc3.bold(mantleChain.name);
+  const mantleHeader = pc4.bold(mantleChain.name);
   console.log(heHeader + "  " + mantleHeader);
-  const heDivider = padRight("  " + pc3.dim(divider), colWidth + 10);
-  const mantleDivider = pc3.dim(divider);
+  const heDivider = padRight("  " + pc4.dim(divider), colWidth + 10);
+  const mantleDivider = pc4.dim(divider);
   console.log(heDivider + "  " + mantleDivider);
   const maxRows = Math.max(heBalances.length, mantleBalances.length);
   for (let i = 0; i < maxRows; i++) {
@@ -10044,21 +10264,21 @@ async function showLandingPage(isJson) {
     const mantleEntry = mantleBalances[i];
     const heText = heEntry ? formatBalanceLine(heEntry.symbol, heEntry.balance) : "";
     const mantleText = mantleEntry ? formatBalanceLine(mantleEntry.symbol, mantleEntry.balance) : "";
-    const heColored = heEntry ? heEntry.balance === "0.00" || heEntry.balance === "?" ? pc3.dim(heText) : heText : "";
-    const mantleColored = mantleEntry ? mantleEntry.balance === "0.00" || mantleEntry.balance === "?" ? pc3.dim(mantleText) : mantleText : "";
+    const heColored = heEntry ? heEntry.balance === "0.00" || heEntry.balance === "?" ? pc4.dim(heText) : heText : "";
+    const mantleColored = mantleEntry ? mantleEntry.balance === "0.00" || mantleEntry.balance === "?" ? pc4.dim(mantleText) : mantleText : "";
     const visibleLen = heText.length;
     const padNeeded = colWidth - visibleLen;
     const paddedHe = heColored + (padNeeded > 0 ? " ".repeat(padNeeded) : "");
     console.log(paddedHe + "  " + mantleColored);
   }
   console.log("");
-  console.log("  " + pc3.bold("Commands:"));
-  console.log("    " + pc3.cyan("defi status") + "              Protocol overview");
-  console.log("    " + pc3.cyan("defi lending rates") + "       Compare lending APYs");
-  console.log("    " + pc3.cyan("defi dex quote") + "           Get swap quotes");
-  console.log("    " + pc3.cyan("defi portfolio") + "           View all positions");
-  console.log("    " + pc3.cyan("defi scan") + "                Exploit detection");
-  console.log("    " + pc3.cyan("defi --help") + "              Full command list");
+  console.log("  " + pc4.bold("Commands:"));
+  console.log("    " + pc4.cyan("defi status") + "              Protocol overview");
+  console.log("    " + pc4.cyan("defi lending rates") + "       Compare lending APYs");
+  console.log("    " + pc4.cyan("defi dex quote") + "           Get swap quotes");
+  console.log("    " + pc4.cyan("defi portfolio") + "           View all positions");
+  console.log("    " + pc4.cyan("defi scan") + "                Exploit detection");
+  console.log("    " + pc4.cyan("defi --help") + "              Full command list");
   console.log("");
 }
 
@@ -10084,7 +10304,8 @@ async function main() {
       "swap",
       "agent",
       "setup",
-      "init"
+      "init",
+      "ows"
     ]);
     const hasSubcommand = rawArgs.some((a) => !a.startsWith("-") && knownSubcommands.has(a));
     const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");

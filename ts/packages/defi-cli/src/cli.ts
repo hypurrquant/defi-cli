@@ -20,6 +20,7 @@ import { registerToken } from "./commands/token.js";
 import { registerBridge } from "./commands/bridge.js";
 import { registerSwap } from "./commands/swap.js";
 import { registerSetup } from "./commands/setup.js";
+import { registerOws } from "./commands/ows.js";
 
 const BANNER = `
   ██████╗ ███████╗███████╗██╗     ██████╗██╗     ██╗
@@ -82,3 +83,4 @@ registerToken(program, getOutputMode, makeExecutor);
 registerBridge(program, getOutputMode);
 registerSwap(program, getOutputMode, makeExecutor);
 registerSetup(program);
+registerOws(program, getOutputMode);

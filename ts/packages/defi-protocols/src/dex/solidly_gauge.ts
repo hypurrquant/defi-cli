@@ -19,6 +19,7 @@ const gaugeAbi = parseAbi([
   "function getReward(address account, address[] tokens) external",
   "function getReward(uint256 tokenId) external",
   "function earned(address account) external view returns (uint256)",
+  "function earned(address account, uint256 tokenId) external view returns (uint256)",
   "function earned(address token, address account) external view returns (uint256)",
   "function earned(uint256 tokenId) external view returns (uint256)",
   "function rewardRate() external view returns (uint256)",
@@ -730,6 +731,22 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
       abi: gaugeAbi,
       functionName: "earned",
       args: [tokenId],
+    }) as bigint;
+  }
+
+  /**
+   * Get pending rewards for an Aerodrome Slipstream CL gauge NFT position.
+   * Uses the earned(address account, uint256 tokenId) overload, which is required
+   * for CL gauges — the single-param earned(address) reverts on these contracts.
+   */
+  async getPendingRewardsByCLTokenId(gauge: Address, user: Address, tokenId: bigint): Promise<bigint> {
+    if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    return await client.readContract({
+      address: gauge,
+      abi: gaugeAbi,
+      functionName: "earned",
+      args: [user, tokenId],
     }) as bigint;
   }
 

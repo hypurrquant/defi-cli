@@ -18,6 +18,8 @@ export interface IGauge {
   getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
   /** Get pending rewards for a CL gauge NFT position */
   getPendingRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<bigint>;
+  /** Get pending rewards for an Aerodrome Slipstream CL gauge using earned(address, uint256) */
+  getPendingRewardsByCLTokenId?(gauge: Address, user: Address, tokenId: bigint): Promise<bigint>;
   /** Discover all pools that have active emission gauges */
   discoverGaugedPools?(): Promise<GaugedPool[]>;
 }
