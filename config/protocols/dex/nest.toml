@@ -5,7 +5,7 @@ category = "dex"
 interface = "algebra_v3"
 chain = "hyperevm"
 native = true
-description = "Algebra V3 ve(3,3) MetaDEX on HyperEVM ($4M TVL)"
+description = "Algebra V3 ve(3,3) MetaDEX on HyperEVM ($4M TVL) [gauge emissions inactive: rewardRate=0, totalSupply=0 as of 2026-04-03]"
 
 [protocol.contracts]
 # DEX

@@ -5,8 +5,9 @@ category = "dex"
 interface = "solidly_v2"
 chain = "bnb"
 native = true
-description = "Thena V1 (Solidly) on BNB ($2M TVL)"
+description = "Thena V1 (Solidly) on BNB ($2M TVL) [gauge emissions inactive: rewardRate=0 for all reward tokens as of 2026-04-03]"
 [protocol.contracts]
 router = "0x20a304a7d126758dfe6B243D0fc515F83bCA8431"
 factory = "0xAFD89d21BdB66d00817d4153E055830B1c2B3970"
 voter = "0xb594c0337580Bd06AFf6aB50973A7eF228616cbD"
+ve_token = "0xd9693EfEbD93133e1cd406d6d516F2d610ADae7c"

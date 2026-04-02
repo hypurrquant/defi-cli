@@ -102,8 +102,9 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
   private readonly rpcUrl: string | undefined;
   private readonly clFactory: Address | undefined;
   private readonly v2Factory: Address | undefined;
+  private readonly tokens: Address[] | undefined;
 
-  constructor(entry: ProtocolEntry, rpcUrl?: string) {
+  constructor(entry: ProtocolEntry, rpcUrl?: string, tokens?: Address[]) {
     this.protocolName = entry.name;
     const voter = entry.contracts?.["voter"];
     if (!voter) {
@@ -116,6 +117,7 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     this.voter = voter;
     this.veToken = veToken;
     this.rpcUrl = rpcUrl;
+    this.tokens = tokens;
     this.clFactory = entry.contracts?.["cl_factory"] ?? entry.contracts?.["factory"];
     this.v2Factory = entry.contracts?.["pair_factory"] ?? entry.contracts?.["factory"];
   }
@@ -357,8 +359,7 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     const gaugeForPoolAbi = parseAbi(["function gaugeForPool(address) external view returns (address)"]);
     const poolToGaugeAbi = parseAbi(["function poolToGauge(address) external view returns (address)"]);
 
-    const tokenEntries = Object.entries(HYPEREVM_TOKENS);
-    const tokenAddresses = tokenEntries.map(([, addr]) => addr);
+    const tokenAddresses = this.tokens ?? Object.values(HYPEREVM_TOKENS);
 
     // Generate all unique token pairs
     const pairs: Array<[Address, Address]> = [];
