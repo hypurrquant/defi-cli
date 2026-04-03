@@ -4,7 +4,7 @@ import type { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
 import { Registry, ProtocolCategory } from "@hypurrquant/defi-core";
 import type { Address, Hex } from "viem";
-import { parseAbi, encodeFunctionData, decodeFunctionResult } from "viem";
+import { parseAbi, encodeFunctionData, decodeFunctionResult, createPublicClient, http, zeroAddress } from "viem";
 import { multicallRead, decodeU256 } from "@hypurrquant/defi-core";
 import {
   createDex,
@@ -43,7 +43,7 @@ interface DiscoveredPool {
   pool: string;
   pair?: string;
   type: "FEE" | "EMISSION";
-  source: "gauge" | "farming" | "lb_hooks" | "fee";
+  source: "gauge" | "farming" | "lb_hooks" | "fee" | "masterchef";
   apr?: string;
   total_reward?: string;
   bonus_reward?: string;
@@ -346,6 +346,72 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
                 }
               }
             }
+            // PancakeSwap V3 MasterChef emissions
+            if (protocol.interface === "uniswap_v3" && protocol.contracts?.["masterchef"]) {
+              const mcAddr = protocol.contracts["masterchef"] as Address;
+              const mcAbi = parseAbi([
+                "function poolLength() view returns (uint256)",
+                "function poolInfo(uint256) view returns (uint256 allocPoint, address v3Pool, address token0, address token1, uint24 fee, uint256 totalLiquidity, uint256 totalBoostLiquidity)",
+                "function totalAllocPoint() view returns (uint256)",
+                "function latestPeriodCakePerSecond() view returns (uint256)",
+                "function CAKE() view returns (address)",
+              ]);
+              const mcClient = createPublicClient({ transport: http(rpcUrl) });
+              try {
+                const [poolLen, totalAlloc, cakePerSec, cakeAddr] = await Promise.all([
+                  mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "poolLength" }) as Promise<bigint>,
+                  mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "totalAllocPoint" }) as Promise<bigint>,
+                  mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "latestPeriodCakePerSecond" }) as Promise<bigint>,
+                  mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "CAKE" }) as Promise<Address>,
+                ]);
+                // Scan top pools (limit to 100 with highest allocPoint)
+                const MAX_MC_SCAN = Math.min(Number(poolLen), 100);
+                const poolInfoCalls: Array<[Address, Hex]> = [];
+                for (let i = 0; i < MAX_MC_SCAN; i++) {
+                  poolInfoCalls.push([mcAddr, encodeFunctionData({ abi: mcAbi, functionName: "poolInfo", args: [BigInt(i)] })]);
+                }
+                const poolInfoResults = await multicallRead(rpcUrl, poolInfoCalls);
+                // Get CAKE price via oracle
+                let cakePriceUsd = 0;
+                try {
+                  const lendingProtos = registry.getProtocolsForChain(chainName).filter(lp => lp.category === ProtocolCategory.Lending && lp.interface === "aave_v3");
+                  if (lendingProtos.length > 0) {
+                    const { createOracleFromLending } = await import("@hypurrquant/defi-protocols");
+                    const oracleInst = createOracleFromLending(lendingProtos[0]!, rpcUrl);
+                    const price = await oracleInst.getPrice(cakeAddr);
+                    cakePriceUsd = price.price_f64;
+                  }
+                } catch { /* skip */ }
+
+                for (let i = 0; i < poolInfoResults.length; i++) {
+                  const raw = poolInfoResults[i];
+                  if (!raw || raw.length < 66) continue;
+                  try {
+                    const decoded = decodeFunctionResult({ abi: mcAbi, functionName: "poolInfo", data: raw }) as unknown as [bigint, Address, Address, Address, number, bigint, bigint];
+                    const [allocPoint, v3Pool, t0, t1, , totalLiq] = decoded;
+                    if (allocPoint === 0n || v3Pool === zeroAddress) continue;
+                    const tokens = registry.tokens.get(chainName);
+                    const sym0 = tokens?.find(t => t.address.toLowerCase() === t0?.toLowerCase())?.symbol ?? t0?.slice(0, 8) ?? "?";
+                    const sym1 = tokens?.find(t => t.address.toLowerCase() === t1?.toLowerCase())?.symbol ?? t1?.slice(0, 8) ?? "?";
+                    // Compute APR: (allocPoint/totalAlloc) * cakePerSec * 86400 * 365 * cakePrice / poolTvl
+                    const cakePerDay = totalAlloc > 0n ? Number(cakePerSec * BigInt(allocPoint) * 86400n / totalAlloc) / 1e18 : 0;
+                    results.push({
+                      protocol: protocol.slug,
+                      pool: v3Pool,
+                      pair: `${sym0}/${sym1}`,
+                      type: "EMISSION",
+                      source: "masterchef",
+                      rewardRate: totalAlloc > 0n ? String(cakePerSec * BigInt(allocPoint) / totalAlloc) : "0",
+                      totalStaked: String(totalLiq),
+                      rewardToken: cakeAddr,
+                      rewardTokenSymbol: "CAKE",
+                      rewardPerDay: cakePerDay,
+                    } as DiscoveredPool);
+                  } catch { /* skip malformed pool */ }
+                }
+              } catch { /* masterchef query failed */ }
+            }
+
           } catch {
             // Skip protocols that fail discovery (no adapter, missing contracts, etc.)
           }

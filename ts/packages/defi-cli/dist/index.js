@@ -7151,7 +7151,7 @@ function registerSchema(parent, getOpts) {
 init_dist();
 init_dist();
 init_dist2();
-import { parseAbi as parseAbi30, encodeFunctionData as encodeFunctionData27, decodeFunctionResult as decodeFunctionResult8 } from "viem";
+import { parseAbi as parseAbi30, encodeFunctionData as encodeFunctionData27, decodeFunctionResult as decodeFunctionResult8, createPublicClient as createPublicClient23, http as http23, zeroAddress as zeroAddress14 } from "viem";
 
 // src/whitelist.ts
 import { readFileSync as readFileSync2 } from "fs";
@@ -7511,6 +7511,69 @@ function registerLP(parent, getOpts, makeExecutor2) {
                   moePriceUsd: p.moePriceUsd
                 });
               }
+            }
+          }
+          if (protocol.interface === "uniswap_v3" && protocol.contracts?.["masterchef"]) {
+            const mcAddr = protocol.contracts["masterchef"];
+            const mcAbi = parseAbi30([
+              "function poolLength() view returns (uint256)",
+              "function poolInfo(uint256) view returns (uint256 allocPoint, address v3Pool, address token0, address token1, uint24 fee, uint256 totalLiquidity, uint256 totalBoostLiquidity)",
+              "function totalAllocPoint() view returns (uint256)",
+              "function latestPeriodCakePerSecond() view returns (uint256)",
+              "function CAKE() view returns (address)"
+            ]);
+            const mcClient = createPublicClient23({ transport: http23(rpcUrl) });
+            try {
+              const [poolLen, totalAlloc, cakePerSec, cakeAddr] = await Promise.all([
+                mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "poolLength" }),
+                mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "totalAllocPoint" }),
+                mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "latestPeriodCakePerSecond" }),
+                mcClient.readContract({ address: mcAddr, abi: mcAbi, functionName: "CAKE" })
+              ]);
+              const MAX_MC_SCAN = Math.min(Number(poolLen), 100);
+              const poolInfoCalls = [];
+              for (let i = 0; i < MAX_MC_SCAN; i++) {
+                poolInfoCalls.push([mcAddr, encodeFunctionData27({ abi: mcAbi, functionName: "poolInfo", args: [BigInt(i)] })]);
+              }
+              const poolInfoResults = await multicallRead(rpcUrl, poolInfoCalls);
+              let cakePriceUsd = 0;
+              try {
+                const lendingProtos = registry.getProtocolsForChain(chainName).filter((lp2) => lp2.category === ProtocolCategory.Lending && lp2.interface === "aave_v3");
+                if (lendingProtos.length > 0) {
+                  const { createOracleFromLending: createOracleFromLending2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
+                  const oracleInst = createOracleFromLending2(lendingProtos[0], rpcUrl);
+                  const price = await oracleInst.getPrice(cakeAddr);
+                  cakePriceUsd = price.price_f64;
+                }
+              } catch {
+              }
+              for (let i = 0; i < poolInfoResults.length; i++) {
+                const raw = poolInfoResults[i];
+                if (!raw || raw.length < 66) continue;
+                try {
+                  const decoded = decodeFunctionResult8({ abi: mcAbi, functionName: "poolInfo", data: raw });
+                  const [allocPoint, v3Pool, t0, t1, , totalLiq] = decoded;
+                  if (allocPoint === 0n || v3Pool === zeroAddress14) continue;
+                  const tokens = registry.tokens.get(chainName);
+                  const sym0 = tokens?.find((t) => t.address.toLowerCase() === t0?.toLowerCase())?.symbol ?? t0?.slice(0, 8) ?? "?";
+                  const sym1 = tokens?.find((t) => t.address.toLowerCase() === t1?.toLowerCase())?.symbol ?? t1?.slice(0, 8) ?? "?";
+                  const cakePerDay = totalAlloc > 0n ? Number(cakePerSec * BigInt(allocPoint) * 86400n / totalAlloc) / 1e18 : 0;
+                  results.push({
+                    protocol: protocol.slug,
+                    pool: v3Pool,
+                    pair: `${sym0}/${sym1}`,
+                    type: "EMISSION",
+                    source: "masterchef",
+                    rewardRate: totalAlloc > 0n ? String(cakePerSec * BigInt(allocPoint) / totalAlloc) : "0",
+                    totalStaked: String(totalLiq),
+                    rewardToken: cakeAddr,
+                    rewardTokenSymbol: "CAKE",
+                    rewardPerDay: cakePerDay
+                  });
+                } catch {
+                }
+              }
+            } catch {
             }
           }
         } catch {
@@ -9370,7 +9433,7 @@ function registerPrice(parent, getOpts) {
 
 // src/commands/wallet.ts
 init_dist();
-import { createPublicClient as createPublicClient23, http as http23, formatEther } from "viem";
+import { createPublicClient as createPublicClient24, http as http24, formatEther } from "viem";
 function registerWallet(parent, getOpts) {
   const wallet = parent.command("wallet").description("Wallet management");
   wallet.command("balance").description("Show native token balance").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
@@ -9378,7 +9441,7 @@ function registerWallet(parent, getOpts) {
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient23({ transport: http23(chain.effectiveRpcUrl()) });
+    const client = createPublicClient24({ transport: http24(chain.effectiveRpcUrl()) });
     const balance = await client.getBalance({ address: opts.address });
     printOutput({
       chain: chain.name,
@@ -9396,7 +9459,7 @@ function registerWallet(parent, getOpts) {
 
 // src/commands/token.ts
 init_dist();
-import { createPublicClient as createPublicClient24, http as http24, maxUint256 } from "viem";
+import { createPublicClient as createPublicClient25, http as http25, maxUint256 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--owner <address>", "Wallet address to query").action(async (opts) => {
@@ -9404,7 +9467,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient24({ transport: http24(chain.effectiveRpcUrl()) });
+    const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
     const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
     const [balance, symbol, decimals] = await Promise.all([
       client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [opts.owner] }),
@@ -9435,7 +9498,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient24({ transport: http24(chain.effectiveRpcUrl()) });
+    const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
     const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
     const allowance = await client.readContract({
       address: tokenAddr,
@@ -10036,11 +10099,11 @@ function registerSetup(program2) {
 // src/commands/ows.ts
 import pc3 from "picocolors";
 init_dist();
-import { createPublicClient as createPublicClient25, http as http25, formatEther as formatEther2 } from "viem";
+import { createPublicClient as createPublicClient26, http as http26, formatEther as formatEther2 } from "viem";
 async function getEvmBalance(address, chainName) {
   const registry = Registry.loadEmbedded();
   const chain = registry.getChain(chainName);
-  const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
+  const client = createPublicClient26({ transport: http26(chain.effectiveRpcUrl()) });
   const balance = await client.getBalance({ address });
   return {
     native_token: chain.native_token,
