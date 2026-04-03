@@ -2662,53 +2662,72 @@ var init_dist2 = __esm({
       }
       async _discoverV2GaugedPools(out) {
         if (!this.rpcUrl || !this.v2Factory) return;
-        const v2FactoryAbi = parseAbi10([
-          "function allPairsLength() external view returns (uint256)",
-          "function allPairs(uint256) external view returns (address)"
-        ]);
         const pairAbi = parseAbi10([
           "function token0() external view returns (address)",
           "function token1() external view returns (address)",
           "function stable() external view returns (bool)"
         ]);
         const erc20SymbolAbi = parseAbi10(["function symbol() external view returns (string)"]);
-        const client = createPublicClient6({ transport: http6(this.rpcUrl) });
-        let pairCount;
-        try {
-          pairCount = await client.readContract({
-            address: this.v2Factory,
-            abi: v2FactoryAbi,
-            functionName: "allPairsLength"
-          });
-        } catch {
-          return;
-        }
-        const count = Number(pairCount);
-        if (count === 0) return;
-        const pairAddressCalls = [];
-        for (let i = 0; i < count; i++) {
-          pairAddressCalls.push([
-            this.v2Factory,
-            encodeFunctionData10({ abi: v2FactoryAbi, functionName: "allPairs", args: [BigInt(i)] })
-          ]);
-        }
-        const pairAddressResults = await multicallRead(this.rpcUrl, pairAddressCalls);
-        const pairs = pairAddressResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress6);
-        if (pairs.length === 0) return;
+        const voterLengthAbi = parseAbi10(["function length() external view returns (uint256)"]);
+        const voterPoolsAbi = parseAbi10(["function pools(uint256) external view returns (address)"]);
         const gaugeForPoolAbi = parseAbi10(["function gaugeForPool(address) external view returns (address)"]);
         const poolToGaugeAbi = parseAbi10(["function poolToGauge(address) external view returns (address)"]);
-        const gaugeCalls = pairs.map((pair) => [
-          this.voter,
-          encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pair] })
-        ]);
+        const gaugesAbi = parseAbi10(["function gauges(address) external view returns (address)"]);
+        const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+        let pairs = [];
+        let voterPoolCount = 0;
+        try {
+          const len = await client.readContract({ address: this.voter, abi: voterLengthAbi, functionName: "length" });
+          voterPoolCount = Number(len);
+        } catch {
+        }
+        if (voterPoolCount > 0) {
+          const MAX_SCAN = 500;
+          const startIdx = Math.max(0, voterPoolCount - MAX_SCAN);
+          const poolCalls = [];
+          for (let i = startIdx; i < voterPoolCount; i++) {
+            poolCalls.push([this.voter, encodeFunctionData10({ abi: voterPoolsAbi, functionName: "pools", args: [BigInt(i)] })]);
+          }
+          const poolResults = await multicallRead(this.rpcUrl, poolCalls);
+          pairs = poolResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress6);
+        } else {
+          const v2FactoryAbi = parseAbi10(["function allPairsLength() view returns (uint256)", "function allPairs(uint256) view returns (address)"]);
+          const solidlyFactoryAbi = parseAbi10(["function allPoolsLength() view returns (uint256)", "function allPools(uint256) view returns (address)"]);
+          let pairCount = 0n;
+          let useSolidly = false;
+          try {
+            pairCount = await client.readContract({ address: this.v2Factory, abi: v2FactoryAbi, functionName: "allPairsLength" });
+          } catch {
+            try {
+              pairCount = await client.readContract({ address: this.v2Factory, abi: solidlyFactoryAbi, functionName: "allPoolsLength" });
+              useSolidly = true;
+            } catch {
+              return;
+            }
+          }
+          const count = Number(pairCount);
+          if (count === 0) return;
+          const MAX_SCAN = 500;
+          const startIdx = Math.max(0, count - MAX_SCAN);
+          const fetchAbi = useSolidly ? solidlyFactoryAbi : v2FactoryAbi;
+          const fetchFn = useSolidly ? "allPools" : "allPairs";
+          const pairCalls = [];
+          for (let i = startIdx; i < count; i++) pairCalls.push([this.v2Factory, encodeFunctionData10({ abi: fetchAbi, functionName: fetchFn, args: [BigInt(i)] })]);
+          const pairResults = await multicallRead(this.rpcUrl, pairCalls);
+          pairs = pairResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress6);
+        }
+        if (pairs.length === 0) return;
+        const gaugeCalls = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [p] })]);
         let gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
-        const allNullV2 = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
-        if (allNullV2) {
-          const fallbackCalls = pairs.map((pair) => [
-            this.voter,
-            encodeFunctionData10({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [pair] })
-          ]);
-          gaugeResults = await multicallRead(this.rpcUrl, fallbackCalls);
+        const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+        if (allNull) {
+          const fb1 = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [p] })]);
+          gaugeResults = await multicallRead(this.rpcUrl, fb1);
+        }
+        const allNull2 = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+        if (allNull2) {
+          const fb2 = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: gaugesAbi, functionName: "gauges", args: [p] })]);
+          gaugeResults = await multicallRead(this.rpcUrl, fb2);
         }
         const gaugedPairs = [];
         for (let i = 0; i < pairs.length; i++) {

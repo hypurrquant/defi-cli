@@ -1,0 +1,14 @@
+[protocol]
+name = "Uniswap V3 Monad"
+slug = "uniswap-v3-monad"
+category = "dex"
+interface = "uniswap_v3"
+chain = "monad"
+native = false
+description = "Uniswap V3 on Monad — concentrated liquidity DEX leveraging Monad's high-performance EVM"
+
+[protocol.contracts]
+router = "0xfE31F71C1b106EAc32F1A19239c9a9A72ddfb900"
+factory = "0x204FAca1764B154221e35c0d20aBb3c525710498"
+quoter = "0x661E93cca42AfacB172121EF892830cA3b70F08d"
+position_manager = "0x7197E214c0b767cFB76Fb734ab638E2c192F4E53"
