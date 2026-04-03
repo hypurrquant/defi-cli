@@ -7302,21 +7302,50 @@ var ERC20_DECIMALS_ABI2 = parseAbi30(["function decimals() external view returns
 async function _enrichGaugeAprs(pools, rpcUrl, registry, chainName) {
   const active = pools.filter((p) => p.source === "gauge" && p.rewardRate && BigInt(p.rewardRate) > 0n);
   if (active.length === 0) return;
-  const WHYPE2 = "0x5555555555555555555555555555555555555555";
+  const chain = registry.getChain(chainName);
+  const WRAPPED_NATIVE = chain.wrapped_native ?? "0x0000000000000000000000000000000000000000";
   try {
-    let whypePriceUsd = 0;
+    let nativePriceUsd = 0;
     try {
       const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
       if (protos.length > 0) {
         const { createOracleFromLending: createOracleFromLending2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
-        const chain = registry.getChain(chainName);
         const oracle = createOracleFromLending2(protos[0], chain.effectiveRpcUrl());
-        const price = await oracle.getPrice(WHYPE2);
-        whypePriceUsd = price.price_f64;
+        const price = await oracle.getPrice(WRAPPED_NATIVE);
+        nativePriceUsd = price.price_f64;
       }
     } catch {
     }
-    if (whypePriceUsd === 0) return;
+    if (nativePriceUsd === 0) {
+      const tokens = registry.tokens.get(chainName);
+      const stablecoin = tokens?.find((t) => t.tags?.includes("stablecoin") && (t.symbol === "USDC" || t.symbol === "USDT"));
+      if (stablecoin) {
+        const nativeStablePool = pools.find((p) => {
+          const pair = p.pair?.toUpperCase() ?? "";
+          const nativeSym = chain.native_token?.toUpperCase() ?? "";
+          const wrappedSym = "W" + nativeSym;
+          return (pair.includes(nativeSym) || pair.includes(wrappedSym)) && (pair.includes("USDC") || pair.includes("USDT"));
+        });
+        if (nativeStablePool?.pool) {
+          try {
+            const [resRaw] = await multicallRead(rpcUrl, [
+              [nativeStablePool.pool, encodeFunctionData27({ abi: V2_PAIR_ABI, functionName: "getReserves" })]
+            ]);
+            if (resRaw) {
+              const _resAbi = parseAbi30(["function f() view returns (uint112, uint112, uint32)"]);
+              const [r0, r1] = decodeFunctionResult8({ abi: _resAbi, functionName: "f", data: resRaw });
+              const stableDecimals = stablecoin.decimals ?? 6;
+              const nativeIsToken0 = WRAPPED_NATIVE.toLowerCase() < stablecoin.address.toLowerCase();
+              const reserveNative = Number(nativeIsToken0 ? r0 : r1) / 1e18;
+              const reserveStable = Number(nativeIsToken0 ? r1 : r0) / 10 ** stableDecimals;
+              if (reserveNative > 0) nativePriceUsd = reserveStable / reserveNative;
+            }
+          } catch {
+          }
+        }
+      }
+    }
+    if (nativePriceUsd === 0) return;
     for (const p of active) {
       const rewardRate = BigInt(p.rewardRate);
       const totalStaked = BigInt(p.totalStaked || "0");
@@ -7326,13 +7355,14 @@ async function _enrichGaugeAprs(pools, rpcUrl, registry, chainName) {
       let rewardTokenPriceUsd = 0;
       const rewardToken = p.rewardToken;
       if (rewardToken) {
-        if (rewardToken.toLowerCase() === WHYPE2.toLowerCase()) {
-          rewardTokenPriceUsd = whypePriceUsd;
+        if (rewardToken.toLowerCase() === WRAPPED_NATIVE.toLowerCase()) {
+          rewardTokenPriceUsd = nativePriceUsd;
         } else {
           const pair = p.pair ?? "";
-          const isRewardWhypePair = pair.includes("WHYPE") || pair.includes("HYPE");
+          const nativeSym = chain.native_token ?? "ETH";
+          const isRewardWhypePair = pair.toUpperCase().includes("W" + nativeSym.toUpperCase()) || pair.toUpperCase().includes(nativeSym.toUpperCase());
           const tokenPoolAddr = isRewardWhypePair ? p.pool : pools.find(
-            (q) => q.source === "gauge" && q.pool.startsWith("0x") && q.pair && q.pair.includes("WHYPE") && q.rewardToken?.toLowerCase() === rewardToken.toLowerCase()
+            (q) => q.source === "gauge" && q.pool.startsWith("0x") && q.pair && (q.pair.toUpperCase().includes("W" + nativeSym.toUpperCase()) || q.pair.toUpperCase().includes(nativeSym.toUpperCase())) && q.rewardToken?.toLowerCase() === rewardToken.toLowerCase()
           )?.pool;
           if (tokenPoolAddr) {
             try {
@@ -7342,11 +7372,11 @@ async function _enrichGaugeAprs(pools, rpcUrl, registry, chainName) {
               if (resRaw) {
                 const _resAbi = parseAbi30(["function f() view returns (uint112, uint112, uint32)"]);
                 const [r0, r1] = decodeFunctionResult8({ abi: _resAbi, functionName: "f", data: resRaw });
-                const rewardIsToken0 = rewardToken.toLowerCase() < WHYPE2.toLowerCase();
+                const rewardIsToken0 = rewardToken.toLowerCase() < WRAPPED_NATIVE.toLowerCase();
                 const reserveReward = Number(rewardIsToken0 ? r0 : r1) / 1e18;
                 const reserveWhype = Number(rewardIsToken0 ? r1 : r0) / 1e18;
                 if (reserveReward > 0) {
-                  rewardTokenPriceUsd = reserveWhype / reserveReward * whypePriceUsd;
+                  rewardTokenPriceUsd = reserveWhype / reserveReward * nativePriceUsd;
                 }
               }
             } catch {
@@ -7357,8 +7387,8 @@ async function _enrichGaugeAprs(pools, rpcUrl, registry, chainName) {
               const protos = registry.getProtocolsForChain(chainName).filter((pr) => pr.category === ProtocolCategory.Lending);
               if (protos.length > 0) {
                 const { createOracleFromLending: createOracleFromLending2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
-                const chain = registry.getChain(chainName);
-                const oracle = createOracleFromLending2(protos[0], chain.effectiveRpcUrl());
+                const chain2 = registry.getChain(chainName);
+                const oracle = createOracleFromLending2(protos[0], chain2.effectiveRpcUrl());
                 const price = await oracle.getPrice(rewardToken);
                 rewardTokenPriceUsd = price.price_f64;
               }
@@ -7386,11 +7416,11 @@ async function _enrichGaugeAprs(pools, rpcUrl, registry, chainName) {
           const r0F = Number(r0) / 1e18;
           const r1F = Number(r1) / 1e18;
           if (tokens[0] === "WHYPE" || tokens[0] === "HYPE") {
-            poolTvlUsd = r0F * whypePriceUsd * 2;
+            poolTvlUsd = r0F * nativePriceUsd * 2;
           } else if (tokens[1] === "WHYPE" || tokens[1] === "HYPE") {
-            poolTvlUsd = r1F * whypePriceUsd * 2;
+            poolTvlUsd = r1F * nativePriceUsd * 2;
           } else {
-            poolTvlUsd = r0F * rewardTokenPriceUsd + r1F * whypePriceUsd;
+            poolTvlUsd = r0F * rewardTokenPriceUsd + r1F * nativePriceUsd;
           }
           p.poolTvlUsd = poolTvlUsd;
           const stakedRatio = totalSupply > 0n ? Number(totalStaked) / Number(totalSupply) : 0;

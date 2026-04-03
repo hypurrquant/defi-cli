@@ -79,23 +79,55 @@ async function _enrichGaugeAprs(
   const active = pools.filter(p => p.source === "gauge" && p.rewardRate && BigInt(p.rewardRate) > 0n);
   if (active.length === 0) return;
 
-  const WHYPE = "0x5555555555555555555555555555555555555555" as Address;
+  // Use chain's wrapped native token instead of hardcoded WHYPE
+  const chain = registry.getChain(chainName);
+  const WRAPPED_NATIVE = (chain.wrapped_native ?? "0x0000000000000000000000000000000000000000") as Address;
 
   try {
-    // Step 1: Get WHYPE price via lending oracle (most reliable on HyperEVM)
-    let whypePriceUsd = 0;
+    // Step 1: Get wrapped native token price via lending oracle
+    let nativePriceUsd = 0;
     try {
       const protos = registry.getProtocolsForChain(chainName).filter(p => p.category === ProtocolCategory.Lending && p.interface === "aave_v3");
       if (protos.length > 0) {
         const { createOracleFromLending } = await import("@hypurrquant/defi-protocols");
-        const chain = registry.getChain(chainName);
         const oracle = createOracleFromLending(protos[0]!, chain.effectiveRpcUrl());
-        const price = await oracle.getPrice(WHYPE);
-        whypePriceUsd = price.price_f64;
+        const price = await oracle.getPrice(WRAPPED_NATIVE);
+        nativePriceUsd = price.price_f64;
       }
     } catch { /* skip */ }
 
-    if (whypePriceUsd === 0) return;
+    // Fallback: try stablecoin price (USDC = $1) if no Aave oracle
+    if (nativePriceUsd === 0) {
+      const tokens = registry.tokens.get(chainName);
+      const stablecoin = tokens?.find(t => t.tags?.includes("stablecoin") && (t.symbol === "USDC" || t.symbol === "USDT"));
+      if (stablecoin) {
+        // Try to get native price from a native/stablecoin pool in the discovered set
+        const nativeStablePool = pools.find(p => {
+          const pair = p.pair?.toUpperCase() ?? "";
+          const nativeSym = chain.native_token?.toUpperCase() ?? "";
+          const wrappedSym = "W" + nativeSym;
+          return (pair.includes(nativeSym) || pair.includes(wrappedSym)) && (pair.includes("USDC") || pair.includes("USDT"));
+        });
+        if (nativeStablePool?.pool) {
+          try {
+            const [resRaw] = await multicallRead(rpcUrl, [
+              [nativeStablePool.pool as Address, encodeFunctionData({ abi: V2_PAIR_ABI, functionName: "getReserves" })],
+            ]);
+            if (resRaw) {
+              const _resAbi = parseAbi(["function f() view returns (uint112, uint112, uint32)"]);
+              const [r0, r1] = decodeFunctionResult({ abi: _resAbi, functionName: "f", data: resRaw }) as unknown as [bigint, bigint, bigint];
+              const stableDecimals = stablecoin.decimals ?? 6;
+              const nativeIsToken0 = WRAPPED_NATIVE.toLowerCase() < stablecoin.address.toLowerCase();
+              const reserveNative = Number(nativeIsToken0 ? r0 : r1) / 1e18;
+              const reserveStable = Number(nativeIsToken0 ? r1 : r0) / (10 ** stableDecimals);
+              if (reserveNative > 0) nativePriceUsd = reserveStable / reserveNative;
+            }
+          } catch { /* skip */ }
+        }
+      }
+    }
+
+    if (nativePriceUsd === 0) return;
 
     // Step 2: For each active gauge pool, compute APR
     for (const p of active) {
@@ -113,17 +145,18 @@ async function _enrichGaugeAprs(
       const rewardToken = p.rewardToken as Address | undefined;
 
       if (rewardToken) {
-        if (rewardToken.toLowerCase() === WHYPE.toLowerCase()) {
-          rewardTokenPriceUsd = whypePriceUsd;
+        if (rewardToken.toLowerCase() === WRAPPED_NATIVE.toLowerCase()) {
+          rewardTokenPriceUsd = nativePriceUsd;
         } else {
           // Find the reward token's pool paired with WHYPE
           // Use the pool from this gauge itself if it contains the reward token + WHYPE
           // Otherwise search all discovered pools
           const pair = p.pair ?? "";
-          const isRewardWhypePair = pair.includes("WHYPE") || pair.includes("HYPE");
+          const nativeSym = chain.native_token ?? "ETH";
+          const isRewardWhypePair = pair.toUpperCase().includes("W" + nativeSym.toUpperCase()) || pair.toUpperCase().includes(nativeSym.toUpperCase());
           const tokenPoolAddr = isRewardWhypePair ? p.pool : pools.find(q =>
             q.source === "gauge" && q.pool.startsWith("0x") && q.pair &&
-            q.pair.includes("WHYPE") && q.rewardToken?.toLowerCase() === rewardToken.toLowerCase()
+            (q.pair.toUpperCase().includes("W" + nativeSym.toUpperCase()) || q.pair.toUpperCase().includes(nativeSym.toUpperCase())) && q.rewardToken?.toLowerCase() === rewardToken.toLowerCase()
           )?.pool;
 
           if (tokenPoolAddr) {
@@ -134,11 +167,11 @@ async function _enrichGaugeAprs(
               if (resRaw) {
                 const _resAbi = parseAbi(["function f() view returns (uint112, uint112, uint32)"]);
                 const [r0, r1] = decodeFunctionResult({ abi: _resAbi, functionName: "f", data: resRaw }) as unknown as [bigint, bigint, bigint];
-                const rewardIsToken0 = rewardToken.toLowerCase() < WHYPE.toLowerCase();
+                const rewardIsToken0 = rewardToken.toLowerCase() < WRAPPED_NATIVE.toLowerCase();
                 const reserveReward = Number(rewardIsToken0 ? r0 : r1) / 1e18;
                 const reserveWhype = Number(rewardIsToken0 ? r1 : r0) / 1e18;
                 if (reserveReward > 0) {
-                  rewardTokenPriceUsd = (reserveWhype / reserveReward) * whypePriceUsd;
+                  rewardTokenPriceUsd = (reserveWhype / reserveReward) * nativePriceUsd;
                 }
               }
             } catch { /* skip - might be CL pool */ }
@@ -191,12 +224,12 @@ async function _enrichGaugeAprs(
 
           // If one side is WHYPE, double it for total TVL
           if (tokens[0] === "WHYPE" || tokens[0] === "HYPE") {
-            poolTvlUsd = r0F * whypePriceUsd * 2;
+            poolTvlUsd = r0F * nativePriceUsd * 2;
           } else if (tokens[1] === "WHYPE" || tokens[1] === "HYPE") {
-            poolTvlUsd = r1F * whypePriceUsd * 2;
+            poolTvlUsd = r1F * nativePriceUsd * 2;
           } else {
             // Try both reserves with known prices
-            poolTvlUsd = r0F * rewardTokenPriceUsd + r1F * whypePriceUsd;
+            poolTvlUsd = r0F * rewardTokenPriceUsd + r1F * nativePriceUsd;
           }
 
           p.poolTvlUsd = poolTvlUsd;
