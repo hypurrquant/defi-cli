@@ -4786,7 +4786,7 @@ var MorphoBlueAdapter = class {
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError20.rpcError("No RPC URL configured");
     if (!this.defaultVault) {
-      throw DefiError20.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
+      return { protocol: this.protocolName, asset, supply_apy: 0, borrow_variable_apy: 0, borrow_stable_apy: 0, utilization: 0, total_supply: 0n, total_borrow: 0n };
     }
     const [queueLenRaw] = await multicallRead7(this.rpcUrl, [
       [this.defaultVault, encodeFunctionData19({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })]

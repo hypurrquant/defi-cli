@@ -169,7 +169,7 @@ export class MorphoBlueAdapter implements ILending {
   async getRates(asset: Address): Promise<LendingRates> {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
     if (!this.defaultVault) {
-      throw DefiError.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
+      return { protocol: this.protocolName, asset, supply_apy: 0, borrow_variable_apy: 0, borrow_stable_apy: 0, utilization: 0, total_supply: 0n, total_borrow: 0n };
     }
 
     // Batch 1: supplyQueueLength (gate check)

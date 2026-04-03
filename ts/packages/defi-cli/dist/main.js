@@ -5336,7 +5336,7 @@ var init_dist2 = __esm({
       async getRates(asset) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
         if (!this.defaultVault) {
-          throw DefiError.contractError(`[${this.protocolName}] No MetaMorpho vault configured for rate query`);
+          return { protocol: this.protocolName, asset, supply_apy: 0, borrow_variable_apy: 0, borrow_stable_apy: 0, utilization: 0, total_supply: 0n, total_borrow: 0n };
         }
         const [queueLenRaw] = await multicallRead(this.rpcUrl, [
           [this.defaultVault, encodeFunctionData19({ abi: META_MORPHO_ABI, functionName: "supplyQueueLength" })]
