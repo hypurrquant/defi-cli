@@ -8497,10 +8497,10 @@ function registerYield(parent, getOpts, makeExecutor2) {
       process.exit(1);
     }
   });
-  yieldCmd.command("scan").description("Scan all chains for best yield opportunities (parallel)").requiredOption("--asset <token>", "Token symbol (e.g. USDC, WETH)").action(async (opts) => {
+  yieldCmd.command("scan").description("Scan all chains for best yield opportunities (parallel)").option("--asset <token>", "Token symbol (e.g. USDC, WETH)", "USDC").action(async (opts) => {
     try {
       const registry = Registry.loadEmbedded();
-      await runYieldScan(registry, opts.asset, getOpts());
+      await runYieldScan(registry, opts.asset ?? "USDC", getOpts());
     } catch (err) {
       printOutput({ error: String(err) }, getOpts());
       process.exit(1);

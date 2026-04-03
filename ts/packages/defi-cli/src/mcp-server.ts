@@ -1121,6 +1121,61 @@ server.tool(
   },
 );
 
+// ============================================================
+// defi_yield_scan — cross-chain yield comparison
+// ============================================================
+
+server.tool(
+  "defi_yield_scan",
+  "Scan all configured chains for the best lending yield opportunities for a given asset. Compares supply APY across Aave V3, Compound, Venus, Morpho, etc. Returns ranked results with chain, protocol, supply_apy, borrow_apy, utilization.",
+  {
+    asset: z.string().optional().describe("Token symbol to scan (default: USDC)"),
+  },
+  async ({ asset }) => {
+    const registry = Registry.loadEmbedded();
+    const symbol = asset ?? "USDC";
+    const results: Array<Record<string, unknown>> = [];
+
+    const chains = Array.from(registry.chains.keys());
+    await Promise.allSettled(
+      chains.map(async (chainName) => {
+        const chain = registry.getChain(chainName);
+        const rpcUrl = chain.effectiveRpcUrl();
+        const lendingProtos = registry.getProtocolsForChain(chainName)
+          .filter(p => p.category === "lending");
+
+        for (const proto of lendingProtos) {
+          try {
+            const adapter = createLending(proto, rpcUrl);
+            const tokens = registry.tokens.get(chainName);
+            const token = tokens?.find(t => t.symbol.toUpperCase() === symbol.toUpperCase());
+            if (!token) continue;
+            const rates = await adapter.getRates(token.address as Address);
+            results.push({
+              chain: chainName,
+              protocol: proto.name,
+              slug: proto.slug,
+              asset: token.symbol,
+              asset_address: token.address,
+              supply_apy: rates.supply_apy,
+              borrow_variable_apy: rates.borrow_variable_apy,
+              utilization: rates.utilization,
+              total_supply: rates.total_supply?.toString(),
+              total_borrow: rates.total_borrow?.toString(),
+            });
+          } catch { /* skip failing protocols */ }
+        }
+      }),
+    );
+
+    results.sort((a, b) => (b.supply_apy as number) - (a.supply_apy as number));
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }],
+    };
+  },
+);
+
 // ── Start server ──
 
 const transport = new StdioServerTransport();

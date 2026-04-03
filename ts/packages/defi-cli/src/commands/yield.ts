@@ -385,11 +385,11 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
   yieldCmd
     .command("scan")
     .description("Scan all chains for best yield opportunities (parallel)")
-    .requiredOption("--asset <token>", "Token symbol (e.g. USDC, WETH)")
+    .option("--asset <token>", "Token symbol (e.g. USDC, WETH)", "USDC")
     .action(async (opts) => {
       try {
         const registry = Registry.loadEmbedded();
-        await runYieldScan(registry, opts.asset as string, getOpts());
+        await runYieldScan(registry, (opts.asset ?? "USDC") as string, getOpts());
       } catch (err) {
         printOutput({ error: String(err) }, getOpts());
         process.exit(1);
