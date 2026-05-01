@@ -28,7 +28,10 @@ function buildBanner(): string {
   try {
     const reg = Registry.loadEmbedded();
     chainCount = reg.chains.size;
-    protocolCount = reg.protocols.length;
+    // Match getProtocolsForChain's filter: only active + verified protocols.
+    protocolCount = reg.protocols.filter(
+      (p) => p.verified !== false && p.is_active !== false,
+    ).length;
   } catch {
     // registry load failure shouldn't break --help; fall back silently
   }

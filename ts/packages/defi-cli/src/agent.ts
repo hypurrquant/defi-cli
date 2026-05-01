@@ -205,7 +205,7 @@ export function handleSchema(params: Record<string, unknown>): unknown {
           from: { type: "string", required: true, description: "Input token symbol or address" },
           to: { type: "string", required: true, description: "Output token symbol or address" },
           amount: { type: "string", required: true, description: "Amount in wei" },
-          provider: { type: "string", required: false, default: "kyber", description: "Aggregator: kyber, openocean, liquid" },
+          provider: { type: "string", required: false, default: "kyber", description: "Aggregator: kyber, openocean, liquid, lifi, relay" },
           slippage: { type: "string", required: false, default: "50", description: "Slippage in bps" },
         },
         cli: "defi --chain hyperevm swap --from USDC --to WHYPE --amount 1000000",

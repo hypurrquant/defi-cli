@@ -390,11 +390,13 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
           // Manual chain override — skip scan
           targetChainName = (opts.targetChain as string).toLowerCase();
         } else {
-          // Run cross-chain scan to find best supply opportunity
-          process.stderr.write(`Scanning all chains for best ${asset} yield...\n`);
+          // Run cross-chain scan to find best supply opportunity.
+          // Suppress human-readable progress when caller is in machine-output mode.
+          const quiet = getOpts().json;
+          if (!quiet) process.stderr.write(`Scanning all chains for best ${asset} yield...\n`);
           const t0 = Date.now();
           const allRates = await scanRatesForExecute(registry, asset);
-          process.stderr.write(`Scan done in ${Date.now() - t0}ms — ${allRates.length} rates found\n`);
+          if (!quiet) process.stderr.write(`Scan done in ${Date.now() - t0}ms — ${allRates.length} rates found\n`);
 
           if (allRates.length === 0) {
             printOutput({ error: `No yield opportunities found for ${asset}` }, getOpts());

@@ -7960,7 +7960,7 @@ function handleSchema(params) {
           from: { type: "string", required: true, description: "Input token symbol or address" },
           to: { type: "string", required: true, description: "Output token symbol or address" },
           amount: { type: "string", required: true, description: "Amount in wei" },
-          provider: { type: "string", required: false, default: "kyber", description: "Aggregator: kyber, openocean, liquid" },
+          provider: { type: "string", required: false, default: "kyber", description: "Aggregator: kyber, openocean, liquid, lifi, relay" },
           slippage: { type: "string", required: false, default: "50", description: "Slippage in bps" }
         },
         cli: "defi --chain hyperevm swap --from USDC --to WHYPE --amount 1000000"
@@ -9818,11 +9818,12 @@ function registerYield(parent, getOpts, makeExecutor2) {
       if (opts.targetChain) {
         targetChainName = opts.targetChain.toLowerCase();
       } else {
-        process.stderr.write(`Scanning all chains for best ${asset} yield...
+        const quiet = getOpts().json;
+        if (!quiet) process.stderr.write(`Scanning all chains for best ${asset} yield...
 `);
         const t0 = Date.now();
         const allRates = await scanRatesForExecute(registry, asset);
-        process.stderr.write(`Scan done in ${Date.now() - t0}ms \u2014 ${allRates.length} rates found
+        if (!quiet) process.stderr.write(`Scan done in ${Date.now() - t0}ms \u2014 ${allRates.length} rates found
 `);
         if (allRates.length === 0) {
           printOutput({ error: `No yield opportunities found for ${asset}` }, getOpts());
@@ -11746,7 +11747,9 @@ function buildBanner() {
   try {
     const reg = Registry.loadEmbedded();
     chainCount = reg.chains.size;
-    protocolCount = reg.protocols.length;
+    protocolCount = reg.protocols.filter(
+      (p) => p.verified !== false && p.is_active !== false
+    ).length;
   } catch {
   }
   const stats = chainCount && protocolCount ? `${chainCount} chains \xB7 ${protocolCount} protocols \xB7 by HypurrQuant` : `by HypurrQuant`;

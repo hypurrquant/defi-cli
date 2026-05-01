@@ -1,6 +1,6 @@
 {
   "name": "@hypurrquant/defi-cli-skill",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AI agent skill for defi-cli — multi-chain DeFi operations via CLI (7 chains, 48 protocols, 5 aggregators)",
   "keywords": [
     "ai-skill",
