@@ -478,11 +478,13 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
               }
             }
 
-            // Merchant Moe LB hooks
+            // Merchant Moe LB hooks (also TraderJoe LB on Monad — same Liquidity Book)
             if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
               const adapter = createMerchantMoeLB(protocol, rpcUrl);
-              const pools = await adapter.discoverRewardedPools();
-              for (const p of pools) {
+              const rewardedPools = await adapter.discoverRewardedPools();
+              const rewardedSet = new Set(rewardedPools.map((p) => p.pool.toLowerCase()));
+
+              for (const p of rewardedPools) {
                 if (!opts.emissionOnly || !p.stopped) {
                   results.push({
                     protocol: protocol.slug,
@@ -501,6 +503,23 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
                     maxBinId: p.maxBinId,
                     totalMoePerDay: p.totalMoePerDay,
                     moePriceUsd: p.moePriceUsd,
+                  });
+                }
+              }
+
+              // Fee-only LB pools (no rewarder) — surface them so users can find
+              // pools to deposit into for trading-fee yield even without emissions.
+              // Skipped when --emission-only filters them out.
+              if (!opts.emissionOnly) {
+                const allPools = await adapter.discoverAllPools().catch(() => []);
+                for (const p of allPools) {
+                  if (rewardedSet.has(p.pool.toLowerCase())) continue;
+                  results.push({
+                    protocol: protocol.slug,
+                    pool: p.pool,
+                    pair: `${p.symbolX}/${p.symbolY}`,
+                    type: "FEE",
+                    source: "lb_hooks",
                   });
                 }
               }
@@ -665,7 +684,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
 
       // Merchant Moe LB add: distinct path from V2 — uses LBRouter.addLiquidity with bin distribution
       if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
-        if (!poolAddr) throw new Error("--pool is required for Merchant Moe LB add");
+        if (!poolAddr) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book — pass --pool <addr>; use \`lp discover --protocol ${protocol.slug}\` to list active pools)`);
         const lbAdapter = createMerchantMoeLB(protocol, chain.effectiveRpcUrl());
         const [tokenX, tokenY, amountX, amountY] = tokenA.toLowerCase() < tokenB.toLowerCase()
           ? [tokenA, tokenB, BigInt(opts.amountA), BigInt(opts.amountB)]
@@ -981,7 +1000,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
 
       // Merchant Moe LB claim
       if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
-        if (!opts.pool) throw new Error("--pool is required for Merchant Moe LB claim");
+        if (!opts.pool) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book — pass --pool <addr>)`);
         const adapter = createMerchantMoeLB(protocol, rpcUrl);
         const binIds = opts.bins
           ? (opts.bins as string).split(",").map((s: string) => parseInt(s.trim()))
@@ -1112,7 +1131,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
 
       // Merchant Moe LB remove: distinct path — uses LBRouter.removeLiquidity with per-bin amounts + ERC1155 approveForAll
       if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
-        if (!opts.pool) throw new Error("--pool is required for Merchant Moe LB remove");
+        if (!opts.pool) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book — pass --pool <addr>)`);
         if (!opts.bins) throw new Error("--bins <id1,id2,...> is required for Merchant Moe LB remove");
         const lbAdapter = createMerchantMoeLB(protocol, rpcUrl);
         const tokenA = opts.tokenA.startsWith("0x")

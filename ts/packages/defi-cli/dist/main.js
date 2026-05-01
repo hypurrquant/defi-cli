@@ -4078,6 +4078,79 @@ var init_dist2 = __esm({
         };
       }
       /**
+       * List every LB pair from the factory with basic pair info (no rewarder /
+       * APR enrichment). Useful when the factory has pools but none have hooks
+       * deployed yet (e.g. early-stage Monad TraderJoe).
+       *
+       * Three multicall batches: pair addresses, token addresses, token symbols.
+       */
+      async discoverAllPools() {
+        const rpcUrl = this.requireRpc();
+        const client = createPublicClient8({ transport: http8(rpcUrl) });
+        const pairCount = await client.readContract({
+          address: this.lbFactory,
+          abi: lbFactoryAbi,
+          functionName: "getNumberOfLBPairs"
+        });
+        const count = Number(pairCount);
+        if (count === 0) return [];
+        const indexCalls = Array.from({ length: count }, (_, i) => [
+          this.lbFactory,
+          encodeFunctionData12({ abi: lbFactoryAbi, functionName: "getLBPairAtIndex", args: [BigInt(i)] })
+        ]);
+        const indexResults = await multicallRead(rpcUrl, indexCalls);
+        const pairs = indexResults.map((r) => decodeAddressResult(r)).filter((a) => a !== null);
+        if (pairs.length === 0) return [];
+        const tokenCalls = [];
+        for (const pool of pairs) {
+          tokenCalls.push([pool, encodeFunctionData12({ abi: lbPairAbi, functionName: "getTokenX" })]);
+          tokenCalls.push([pool, encodeFunctionData12({ abi: lbPairAbi, functionName: "getTokenY" })]);
+        }
+        const tokenResults = await multicallRead(rpcUrl, tokenCalls);
+        const tokensX = [];
+        const tokensY = [];
+        for (let i = 0; i < pairs.length; i++) {
+          tokensX.push(decodeAddressResult(tokenResults[i * 2] ?? null));
+          tokensY.push(decodeAddressResult(tokenResults[i * 2 + 1] ?? null));
+        }
+        const uniqueTokens = Array.from(
+          new Set([...tokensX, ...tokensY].filter((a) => a !== null))
+        );
+        const symbolCalls = uniqueTokens.map((t) => [
+          t,
+          encodeFunctionData12({ abi: erc20Abi2, functionName: "symbol" })
+        ]);
+        const symbolResults = await multicallRead(rpcUrl, symbolCalls);
+        const symbolMap = /* @__PURE__ */ new Map();
+        for (let i = 0; i < uniqueTokens.length; i++) {
+          const raw = symbolResults[i];
+          if (!raw) continue;
+          try {
+            const sym = decodeFunctionResult4({
+              abi: parseAbi12(["function f() external view returns (string)"]),
+              functionName: "f",
+              data: raw
+            });
+            symbolMap.set(uniqueTokens[i].toLowerCase(), sym);
+          } catch {
+          }
+        }
+        const out = [];
+        for (let i = 0; i < pairs.length; i++) {
+          const tx = tokensX[i];
+          const ty = tokensY[i];
+          if (!tx || !ty) continue;
+          out.push({
+            pool: pairs[i],
+            tokenX: tx,
+            tokenY: ty,
+            symbolX: symbolMap.get(tx.toLowerCase()) ?? "?",
+            symbolY: symbolMap.get(ty.toLowerCase()) ?? "?"
+          });
+        }
+        return out;
+      }
+      /**
        * Discover all active rewarded LB pools by iterating the factory.
        * Uses 7 multicall batches to minimise RPC round-trips and avoid 429s.
        *
@@ -5622,6 +5695,7 @@ var init_dist2 = __esm({
       "function borrowBalanceStored(address account) external view returns (uint256)",
       "function mint(uint256 mintAmount) external returns (uint256)",
       "function redeem(uint256 redeemTokens) external returns (uint256)",
+      "function redeemUnderlying(uint256 redeemAmount) external returns (uint256)",
       "function borrow(uint256 borrowAmount) external returns (uint256)",
       "function repayBorrow(uint256 repayAmount) external returns (uint256)"
     ]);
@@ -5664,57 +5738,55 @@ var init_dist2 = __esm({
       name() {
         return this.protocolName;
       }
+      // Resolve the vToken whose underlying() matches params.asset. Compound V2 has
+      // a separate vToken per asset, so all builders must dispatch on the request
+      // asset. Returns the resolved vToken or throws if no candidate matches.
+      async vtokenFor(asset) {
+        const v = await this.resolveVtoken(asset);
+        if (!v) throw DefiError.contractError(`[${this.protocolName}] no vToken for asset ${asset}`);
+        return v;
+      }
       async buildSupply(params) {
-        const data = encodeFunctionData16({
-          abi: CTOKEN_ABI,
-          functionName: "mint",
-          args: [params.amount]
-        });
+        const vtoken = await this.vtokenFor(params.asset);
+        const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "mint", args: [params.amount] });
         return {
-          description: `[${this.protocolName}] Supply ${params.amount} to Venus`,
-          to: this.defaultVtoken,
+          description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to Venus`,
+          to: vtoken,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: vtoken, amount: params.amount }]
         };
       }
       async buildBorrow(params) {
-        const data = encodeFunctionData16({
-          abi: CTOKEN_ABI,
-          functionName: "borrow",
-          args: [params.amount]
-        });
+        const vtoken = await this.vtokenFor(params.asset);
+        const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "borrow", args: [params.amount] });
         return {
-          description: `[${this.protocolName}] Borrow ${params.amount} from Venus`,
-          to: this.defaultVtoken,
+          description: `[${this.protocolName}] Borrow ${params.amount} of ${params.asset} from Venus`,
+          to: vtoken,
           data,
           value: 0n,
           gas_estimate: 35e4
         };
       }
       async buildRepay(params) {
-        const data = encodeFunctionData16({
-          abi: CTOKEN_ABI,
-          functionName: "repayBorrow",
-          args: [params.amount]
-        });
+        const vtoken = await this.vtokenFor(params.asset);
+        const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "repayBorrow", args: [params.amount] });
         return {
-          description: `[${this.protocolName}] Repay ${params.amount} to Venus`,
-          to: this.defaultVtoken,
+          description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to Venus`,
+          to: vtoken,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: vtoken, amount: params.amount }]
         };
       }
       async buildWithdraw(params) {
-        const data = encodeFunctionData16({
-          abi: CTOKEN_ABI,
-          functionName: "redeem",
-          args: [params.amount]
-        });
+        const vtoken = await this.vtokenFor(params.asset);
+        const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "redeemUnderlying", args: [params.amount] });
         return {
-          description: `[${this.protocolName}] Withdraw from Venus`,
-          to: this.defaultVtoken,
+          description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from Venus`,
+          to: vtoken,
           data,
           value: 0n,
           gas_estimate: 25e4
@@ -8538,8 +8610,9 @@ function registerLP(parent, getOpts, makeExecutor2) {
           }
           if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
             const adapter = createMerchantMoeLB(protocol, rpcUrl);
-            const pools = await adapter.discoverRewardedPools();
-            for (const p of pools) {
+            const rewardedPools = await adapter.discoverRewardedPools();
+            const rewardedSet = new Set(rewardedPools.map((p) => p.pool.toLowerCase()));
+            for (const p of rewardedPools) {
               if (!opts.emissionOnly || !p.stopped) {
                 results.push({
                   protocol: protocol.slug,
@@ -8558,6 +8631,19 @@ function registerLP(parent, getOpts, makeExecutor2) {
                   maxBinId: p.maxBinId,
                   totalMoePerDay: p.totalMoePerDay,
                   moePriceUsd: p.moePriceUsd
+                });
+              }
+            }
+            if (!opts.emissionOnly) {
+              const allPools = await adapter.discoverAllPools().catch(() => []);
+              for (const p of allPools) {
+                if (rewardedSet.has(p.pool.toLowerCase())) continue;
+                results.push({
+                  protocol: protocol.slug,
+                  pool: p.pool,
+                  pair: `${p.symbolX}/${p.symbolY}`,
+                  type: "FEE",
+                  source: "lb_hooks"
                 });
               }
             }
@@ -8692,7 +8778,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
     const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
     const poolAddr = opts.pool ? resolvePoolAddress(registry, opts.protocol, opts.pool) : void 0;
     if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
-      if (!poolAddr) throw new Error("--pool is required for Merchant Moe LB add");
+      if (!poolAddr) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book \u2014 pass --pool <addr>; use \`lp discover --protocol ${protocol.slug}\` to list active pools)`);
       const lbAdapter = createMerchantMoeLB(protocol, chain.effectiveRpcUrl());
       const [tokenX, tokenY, amountX, amountY] = tokenA.toLowerCase() < tokenB.toLowerCase() ? [tokenA, tokenB, BigInt(opts.amountA), BigInt(opts.amountB)] : [tokenB, tokenA, BigInt(opts.amountB), BigInt(opts.amountA)];
       const client = createPublicClient23({ transport: http23(chain.effectiveRpcUrl()) });
@@ -8935,7 +9021,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       return;
     }
     if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
-      if (!opts.pool) throw new Error("--pool is required for Merchant Moe LB claim");
+      if (!opts.pool) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book \u2014 pass --pool <addr>)`);
       const adapter = createMerchantMoeLB(protocol, rpcUrl);
       const binIds = opts.bins ? opts.bins.split(",").map((s) => parseInt(s.trim())) : void 0;
       const tx = await adapter.buildClaimRewards(account, opts.pool, binIds);
@@ -9011,7 +9097,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
     const iface = protocol.interface;
     const recipient = opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
     if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
-      if (!opts.pool) throw new Error("--pool is required for Merchant Moe LB remove");
+      if (!opts.pool) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book \u2014 pass --pool <addr>)`);
       if (!opts.bins) throw new Error("--bins <id1,id2,...> is required for Merchant Moe LB remove");
       const lbAdapter = createMerchantMoeLB(protocol, rpcUrl);
       const tokenA2 = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;

@@ -24,6 +24,7 @@ const CTOKEN_ABI = parseAbi([
   "function borrowBalanceStored(address account) external view returns (uint256)",
   "function mint(uint256 mintAmount) external returns (uint256)",
   "function redeem(uint256 redeemTokens) external returns (uint256)",
+  "function redeemUnderlying(uint256 redeemAmount) external returns (uint256)",
   "function borrow(uint256 borrowAmount) external returns (uint256)",
   "function repayBorrow(uint256 repayAmount) external returns (uint256)",
 ]);
@@ -81,30 +82,34 @@ export class CompoundV2Adapter implements ILending {
     return this.protocolName;
   }
 
+  // Resolve the vToken whose underlying() matches params.asset. Compound V2 has
+  // a separate vToken per asset, so all builders must dispatch on the request
+  // asset. Returns the resolved vToken or throws if no candidate matches.
+  private async vtokenFor(asset: Address): Promise<Address> {
+    const v = await this.resolveVtoken(asset);
+    if (!v) throw DefiError.contractError(`[${this.protocolName}] no vToken for asset ${asset}`);
+    return v;
+  }
+
   async buildSupply(params: SupplyParams): Promise<DeFiTx> {
-    const data = encodeFunctionData({
-      abi: CTOKEN_ABI,
-      functionName: "mint",
-      args: [params.amount],
-    });
+    const vtoken = await this.vtokenFor(params.asset);
+    const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "mint", args: [params.amount] });
     return {
-      description: `[${this.protocolName}] Supply ${params.amount} to Venus`,
-      to: this.defaultVtoken,
+      description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to Venus`,
+      to: vtoken,
       data,
       value: 0n,
       gas_estimate: 300_000,
+      approvals: [{ token: params.asset, spender: vtoken, amount: params.amount }],
     };
   }
 
   async buildBorrow(params: BorrowParams): Promise<DeFiTx> {
-    const data = encodeFunctionData({
-      abi: CTOKEN_ABI,
-      functionName: "borrow",
-      args: [params.amount],
-    });
+    const vtoken = await this.vtokenFor(params.asset);
+    const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "borrow", args: [params.amount] });
     return {
-      description: `[${this.protocolName}] Borrow ${params.amount} from Venus`,
-      to: this.defaultVtoken,
+      description: `[${this.protocolName}] Borrow ${params.amount} of ${params.asset} from Venus`,
+      to: vtoken,
       data,
       value: 0n,
       gas_estimate: 350_000,
@@ -112,29 +117,27 @@ export class CompoundV2Adapter implements ILending {
   }
 
   async buildRepay(params: RepayParams): Promise<DeFiTx> {
-    const data = encodeFunctionData({
-      abi: CTOKEN_ABI,
-      functionName: "repayBorrow",
-      args: [params.amount],
-    });
+    const vtoken = await this.vtokenFor(params.asset);
+    const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "repayBorrow", args: [params.amount] });
     return {
-      description: `[${this.protocolName}] Repay ${params.amount} to Venus`,
-      to: this.defaultVtoken,
+      description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to Venus`,
+      to: vtoken,
       data,
       value: 0n,
       gas_estimate: 300_000,
+      approvals: [{ token: params.asset, spender: vtoken, amount: params.amount }],
     };
   }
 
   async buildWithdraw(params: WithdrawParams): Promise<DeFiTx> {
-    const data = encodeFunctionData({
-      abi: CTOKEN_ABI,
-      functionName: "redeem",
-      args: [params.amount],
-    });
+    // redeemUnderlying takes the amount in underlying-asset units (matches the
+    // CLI's `--amount` semantics). redeem() takes vToken units which would
+    // require an extra exchangeRateStored conversion at the call site.
+    const vtoken = await this.vtokenFor(params.asset);
+    const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "redeemUnderlying", args: [params.amount] });
     return {
-      description: `[${this.protocolName}] Withdraw from Venus`,
-      to: this.defaultVtoken,
+      description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from Venus`,
+      to: vtoken,
       data,
       value: 0n,
       gas_estimate: 250_000,

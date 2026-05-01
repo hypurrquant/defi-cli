@@ -598,6 +598,90 @@ export class MerchantMoeLBAdapter {
   }
 
   /**
+   * List every LB pair from the factory with basic pair info (no rewarder /
+   * APR enrichment). Useful when the factory has pools but none have hooks
+   * deployed yet (e.g. early-stage Monad TraderJoe).
+   *
+   * Three multicall batches: pair addresses, token addresses, token symbols.
+   */
+  async discoverAllPools(): Promise<Array<{
+    pool: Address;
+    tokenX: Address;
+    tokenY: Address;
+    symbolX: string;
+    symbolY: string;
+  }>> {
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient({ transport: http(rpcUrl) });
+
+    const pairCount = await client.readContract({
+      address: this.lbFactory, abi: lbFactoryAbi, functionName: "getNumberOfLBPairs",
+    }) as bigint;
+    const count = Number(pairCount);
+    if (count === 0) return [];
+
+    const indexCalls: Array<[Address, Hex]> = Array.from({ length: count }, (_, i) => [
+      this.lbFactory,
+      encodeFunctionData({ abi: lbFactoryAbi, functionName: "getLBPairAtIndex", args: [BigInt(i)] }),
+    ]);
+    const indexResults = await multicallRead(rpcUrl, indexCalls);
+    const pairs: Address[] = indexResults
+      .map((r) => decodeAddressResult(r))
+      .filter((a): a is Address => a !== null);
+    if (pairs.length === 0) return [];
+
+    const tokenCalls: Array<[Address, Hex]> = [];
+    for (const pool of pairs) {
+      tokenCalls.push([pool, encodeFunctionData({ abi: lbPairAbi, functionName: "getTokenX" })]);
+      tokenCalls.push([pool, encodeFunctionData({ abi: lbPairAbi, functionName: "getTokenY" })]);
+    }
+    const tokenResults = await multicallRead(rpcUrl, tokenCalls);
+
+    const tokensX: Array<Address | null> = [];
+    const tokensY: Array<Address | null> = [];
+    for (let i = 0; i < pairs.length; i++) {
+      tokensX.push(decodeAddressResult(tokenResults[i * 2] ?? null));
+      tokensY.push(decodeAddressResult(tokenResults[i * 2 + 1] ?? null));
+    }
+    const uniqueTokens = Array.from(
+      new Set([...tokensX, ...tokensY].filter((a): a is Address => a !== null)),
+    );
+
+    const symbolCalls: Array<[Address, Hex]> = uniqueTokens.map((t) => [
+      t, encodeFunctionData({ abi: erc20Abi, functionName: "symbol" }),
+    ]);
+    const symbolResults = await multicallRead(rpcUrl, symbolCalls);
+    const symbolMap = new Map<string, string>();
+    for (let i = 0; i < uniqueTokens.length; i++) {
+      const raw = symbolResults[i];
+      if (!raw) continue;
+      try {
+        const sym = decodeFunctionResult({
+          abi: parseAbi(["function f() external view returns (string)"]),
+          functionName: "f",
+          data: raw,
+        }) as string;
+        symbolMap.set(uniqueTokens[i]!.toLowerCase(), sym);
+      } catch { /* skip */ }
+    }
+
+    const out: Array<{ pool: Address; tokenX: Address; tokenY: Address; symbolX: string; symbolY: string }> = [];
+    for (let i = 0; i < pairs.length; i++) {
+      const tx = tokensX[i];
+      const ty = tokensY[i];
+      if (!tx || !ty) continue;
+      out.push({
+        pool: pairs[i]!,
+        tokenX: tx,
+        tokenY: ty,
+        symbolX: symbolMap.get(tx.toLowerCase()) ?? "?",
+        symbolY: symbolMap.get(ty.toLowerCase()) ?? "?",
+      });
+    }
+    return out;
+  }
+
+  /**
    * Discover all active rewarded LB pools by iterating the factory.
    * Uses 7 multicall batches to minimise RPC round-trips and avoid 429s.
    *

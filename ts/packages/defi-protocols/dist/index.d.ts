@@ -250,6 +250,20 @@ declare class MerchantMoeLBAdapter {
      */
     buildClaimRewards(user: Address, pool: Address, binIds?: number[]): Promise<DeFiTx>;
     /**
+     * List every LB pair from the factory with basic pair info (no rewarder /
+     * APR enrichment). Useful when the factory has pools but none have hooks
+     * deployed yet (e.g. early-stage Monad TraderJoe).
+     *
+     * Three multicall batches: pair addresses, token addresses, token symbols.
+     */
+    discoverAllPools(): Promise<Array<{
+        pool: Address;
+        tokenX: Address;
+        tokenY: Address;
+        symbolX: string;
+        symbolY: string;
+    }>>;
+    /**
      * Discover all active rewarded LB pools by iterating the factory.
      * Uses 7 multicall batches to minimise RPC round-trips and avoid 429s.
      *
@@ -673,6 +687,7 @@ declare class CompoundV2Adapter implements ILending {
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     private resolveVtoken;
     name(): string;
+    private vtokenFor;
     buildSupply(params: SupplyParams): Promise<DeFiTx>;
     buildBorrow(params: BorrowParams): Promise<DeFiTx>;
     buildRepay(params: RepayParams): Promise<DeFiTx>;
