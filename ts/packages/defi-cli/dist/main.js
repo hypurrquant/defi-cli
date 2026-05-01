@@ -7443,7 +7443,7 @@ var Executor = class _Executor {
       try {
         const block = await client.getBlock({ blockTag: "latest" });
         if (block.baseFeePerGas !== null && block.baseFeePerGas !== void 0) {
-          const maxFee = block.baseFeePerGas * 2n + priorityFee;
+          const maxFee = block.baseFeePerGas * 125n / 100n + priorityFee;
           return [maxFee, priorityFee];
         }
       } catch {

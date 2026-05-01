@@ -158,11 +158,16 @@ export class Executor {
         priorityFee = await client.estimateMaxPriorityFeePerGas();
       } catch { /* fallback to default */ }
 
-      // Prefer block.baseFeePerGas for the canonical EIP-1559 formula.
+      // Prefer block.baseFeePerGas for an explicit EIP-1559 formula.
+      // We use baseFee * 1.25 + priorityFee — one block of head-room is enough
+      // for fast confirmation while keeping the budget reasonable on chains
+      // with elevated baseFee (e.g., Mantle ~50 gwei). The canonical
+      // baseFee * 2 doubled the budget for no practical benefit and broke
+      // multi-step tx flows when MNT balance was tight.
       try {
         const block = await client.getBlock({ blockTag: "latest" });
         if (block.baseFeePerGas !== null && block.baseFeePerGas !== undefined) {
-          const maxFee = block.baseFeePerGas * 2n + priorityFee;
+          const maxFee = (block.baseFeePerGas * 125n) / 100n + priorityFee;
           return [maxFee, priorityFee];
         }
       } catch { /* fall through to gas-price path */ }
