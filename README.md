@@ -8,10 +8,10 @@
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  40 chains · 344 protocols · 23 commands
+  7 chains · 48 protocols · 5 aggregators
 ```
 
-Multi-chain DeFi toolkit. Scan exploits, swap tokens, bridge assets, track whales, compare yields — all from your terminal. Built for humans and AI agents.
+Multi-chain DeFi toolkit with verified mainnet broadcast paths. Lending, LP farming, DEX swap, cross-chain bridge, yield comparison — all from your terminal. Built for humans and AI agents.
 
 ## Install
 
@@ -23,197 +23,258 @@ pnpm build
 
 # Run CLI
 node packages/defi-cli/dist/main.js
-# or link globally
+
+# Or link globally
 pnpm -C packages/defi-cli link --global
 ```
 
-Requires Node.js >= 18 and pnpm.
+Requires Node.js >= 20 and pnpm.
+
+## Supported Chains
+
+| Chain | ID | Status | Protocols | Native | Notes |
+|---|---|---|---|---|---|
+| **HyperEVM** | 999 | 🟢 production | 11 | HYPE | All protocols mainnet-verified incl. emission token receipt |
+| **Mantle** | 5000 | 🟢 production | 3 | MNT | Aave V3 + Uniswap V3 + Merchant Moe LB (MOE emission verified) |
+| **Base** | 8453 | 🟢 production | 5 | ETH | Aerodrome V2/CL (AERO emission) + Uniswap V3 + Aave V3 + Compound V3 |
+| **BNB** | 56 | 🟡 staged | 16 | BNB | Read-only verified, broadcast pending |
+| **Monad** | 143 | 🟡 staged | 4 | MON | TraderJoe LB pools active, broadcast pending |
+| **Arbitrum** | 42161 | 🟡 staged | 3 | ETH | Read-only + aggregator quotes verified |
+| **Ethereum** | 1 | 🟡 staged | 6 | ETH | Read-only + aggregator quotes verified |
+
+🟢 = full lifecycle broadcast (mint/supply → claim emission → withdraw/remove)
+🟡 = configs + read-only paths verified, awaiting funded broadcast
+
+## Supported Protocols
+
+### HyperEVM (11)
+
+| Slug | Category | Interface | Notes |
+|---|---|---|---|
+| `hyperlend` | Lending | aave_v3 | Aave V3 fork |
+| `hypurrfi` | Lending | aave_v3 | Aave V3 fork |
+| `felix-morpho` | Lending | morpho_blue | MetaMorpho ERC-4626 vault routing |
+| `project-x` | DEX | uniswap_v3 | V3 fee-only |
+| `hyperswap` | DEX | uniswap_v3 | V3 fee-only |
+| `curve-hyperevm` | DEX | curve_stableswap | StableswapNG |
+| `ramses-cl` | DEX | uniswap_v3 + cl_style="ramses" | x(3,3) auto-stake, NPM.getPeriodReward |
+| `ramses-hl` | DEX | solidly_v2 | ve(3,3) gauge, RAM emission |
+| `kittenswap` | DEX | algebra_v3 + farming_center | Eternal farming, KITTEN/WHYPE rewards |
+| `hybra` | DEX | hybra (V4 CL) | GaugeManager + 2-year veHYBR lock (default) |
+| `nest` | DEX | algebra_v3 | Off-chain ticket-based NEST claim |
+
+### Mantle (3)
+
+| Slug | Category | Interface | Notes |
+|---|---|---|---|
+| `aave-v3-mantle` | Lending | aave_v3 | |
+| `uniswap-v3-mantle` | DEX | uniswap_v3 | |
+| `merchantmoe-mantle` | DEX | uniswap_v2 + lb_factory + masterchef | LB hooks + MOE emission via veMOE-weighted MasterChef |
+
+### Base (5)
+
+| Slug | Category | Interface | Notes |
+|---|---|---|---|
+| `aave-v3-base` | Lending | aave_v3 | |
+| `compound-v3-base` | Lending | compound_v3 | Comet |
+| `uniswap-v3-base` | DEX | uniswap_v3 | V3 fee-only |
+| `aerodrome-base` | DEX | solidly_v2 | ve(3,3) gauge, AERO emission |
+| `aerodrome-cl` | DEX | uniswap_v3 + cl_style="slipstream" | Slipstream CL with NFT gauge, AERO emission |
+
+### BNB (16)
+
+| Category | Slugs |
+|---|---|
+| Lending | `aave-v3-bnb`, `kinza-bnb`, `venus-bnb`, `venus-flux-bnb` |
+| DEX | `pancakeswap-v3-bnb` (+ MasterChef CAKE), `pancakeswap-v2-bnb`, `uniswap-v3-bnb`, `thena-v1` (Solidly), `thena-fusion` (Algebra), `biswap-bnb`, `apeswap-bnb`, `bakeryswap-bnb`, `bscswap-bnb`, `babydogeswap-bnb`, `fstswap-bnb` |
+| Vault | `beefy-bnb` |
+
+### Monad (4)
+
+| Slug | Category | Interface |
+|---|---|---|
+| `uniswap-v2-monad` | DEX | uniswap_v2 |
+| `uniswap-v3-monad` | DEX | uniswap_v3 |
+| `traderjoe-monad` | DEX | uniswap_v2 + lb_factory |
+| `morpho-blue-monad` | Lending | morpho_blue |
+
+### Ethereum (6)
+
+| Slug | Category | Interface |
+|---|---|---|
+| `aave-v2-ethereum` | Lending | aave_v2 |
+| `aave-v3-ethereum` | Lending | aave_v3 |
+| `compound-v3-ethereum` | Lending | compound_v3 |
+| `morpho-blue-ethereum` | Lending | morpho_blue |
+| `uniswap-v2-ethereum` | DEX | uniswap_v2 |
+| `uniswap-v3-ethereum` | DEX | uniswap_v3 |
+
+### Arbitrum (3)
+
+| Slug | Category | Interface |
+|---|---|---|
+| `aave-v3-arbitrum` | Lending | aave_v3 |
+| `compound-v3-arbitrum` | Lending | compound_v3 |
+| `uniswap-v3-arbitrum` | DEX | uniswap_v3 |
+
+## DEX Aggregators (Live-verified)
+
+| Aggregator | HyperEVM | Mantle | Base | BNB | Ethereum | Arbitrum |
+|---|---|---|---|---|---|---|
+| KyberSwap | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| OpenOcean | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| LiquidSwap | ✅ | — | — | — | — | — |
+| LI.FI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Relay | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+Slug mapping per chain lives in `chains.toml` `[chain.X.aggregators]`. LI.FI/Relay route by numeric `chain_id` (slug `"auto"`).
 
 ## What Can It Do?
 
-### Scan All Chains for Exploits (1 second)
+### Yield comparison across chains
 
-```
-$ defi scan --all-chains --once
-
-  All-chain scan: 11 chains, 8 alerts, 1150ms
-
-┌───────────┬────────┬────────┬──────────────────┐
-│ Chain     ┆ Alerts ┆ Time   ┆ Details          │
-├───────────┼────────┼────────┼──────────────────┤
-│ BNB       ┆ 2      ┆ 174ms  ┆ BTCB, BTCB       │
-│ Mantle    ┆ 2      ┆ 122ms  ┆ USDe, USDe       │
-│ Arbitrum  ┆ 1      ┆ 670ms  ┆ WETH             │
-│ HyperEVM  ┆ 0      ┆ 161ms  ┆ clean            │
-│ Ethereum  ┆ 0      ┆ 1149ms ┆ clean            │
-└───────────┴────────┴────────┴──────────────────┘
-```
-
-### Find Best Yield Across All Chains (1.4 seconds)
-
-```
+```bash
 $ defi yield scan --asset USDC
 
-  USDC Yield Scan (1383ms) — Best: HypurrFi Pooled on HyperEVM
-
-┌───────────┬────────────────────┬────────────┬────────────┐
-│ Chain     ┆ Protocol           ┆ Supply APY ┆ Borrow APY │
-├───────────┼────────────────────┼────────────┼────────────┤
-│ HyperEVM  ┆ HypurrFi Pooled    ┆ 4.66%      ┆ 7.21%      │
-│ Ethereum  ┆ SparkLend          ┆ 4.14%      ┆ 4.66%      │
-│ Base      ┆ Aave V3 Base       ┆ 2.50%      ┆ 3.72%      │
-│ Mantle    ┆ Aave V3 Mantle     ┆ 0.90%      ┆ 2.10%      │
-└───────────┴────────────────────┴────────────┴────────────┘
-
-  Arb Opportunities
-┌────────┬───────────────────────────────┬────────────────────────┬─────────────┐
-│ Spread ┆ Supply @                      ┆ Borrow @               ┆ Type        │
-├────────┼───────────────────────────────┼────────────────────────┼─────────────┤
-│ +2.56% ┆ HypurrFi Pooled (HyperEVM)    ┆ Aave V3 Mantle         ┆ cross-chain │
-│ +2.39% ┆ HypurrFi Pooled (HyperEVM)    ┆ Aave V3 BNB            ┆ cross-chain │
-└────────┴───────────────────────────────┴────────────────────────┴─────────────┘
+ USDC Yield Scan — Best: HypurrFi Pooled on HyperEVM
+┌──────────┬───────────────────┬────────────┬────────────┐
+│ Chain    │ Protocol          │ Supply APY │ Borrow APY │
+├──────────┼───────────────────┼────────────┼────────────┤
+│ HyperEVM │ HypurrFi Pooled   │ 4.66%      │ 7.21%      │
+│ Base     │ Aave V3 Base      │ 2.50%      │ 3.72%      │
+│ Mantle   │ Aave V3 Mantle    │ 0.90%      │ 2.10%      │
+└──────────┴───────────────────┴────────────┴────────────┘
 ```
 
-### Swap at Best Price (ODOS Aggregator)
+### Discover emission pools (sorted by APR)
 
-```
-$ defi swap --chain mantle --from USDC --to WMNT --amount 1000
+```bash
+$ defi --chain mantle lp discover --protocol merchantmoe-mantle --emission-only
 
-  Swap on Mantle via ODOS
-
-  1000 USDC -> 1188.82 WMNT
-  Price impact: 0.0548%
+# returns Merchant Moe LB pools where moePerDay > 0, sorted by APR descending
+# top: COOK/WMNT 3433% · WMNT/WETH 1534% · WETH/USDT0 767% · WMNT/USDT0 294% · …
 ```
 
-### Bridge Across Chains (LI.FI)
+### LB liquidity + auto-claim MOE
 
-```
-$ defi bridge --from-chain mantle --to-chain ethereum --token USDC --amount 1000
+```bash
+# Add LB liquidity centred ±3 bins around active
+defi --chain mantle lp add --protocol merchantmoe-mantle \
+  --token-a WMNT --token-b USDT0 --amount-a 1000000000000000000 --amount-b 600000 \
+  --pool 0x03BeafC0d25BB553fCa274301832419C05269987 --num-bins 3 --broadcast
 
-  Bridge Mantle -> Ethereum via Relay
+# Auto-scan all my LB positions + show pending MOE per bin
+defi --chain mantle lp positions --protocol merchantmoe-mantle
 
-  1000 USDC -> 987.37 USDC
-  Cost: $12.60 | Time: 7s
-```
-
-### Track Whales
-
-```
-$ defi whales --chain mantle --token WETH --top 5
-
-  Mantle WETH Top Holders
-
-┌───┬─────────────────────┬──────────────┐
-│ # ┆ Address             ┆ WETH Balance │
-├───┼─────────────────────┼──────────────┤
-│ 1 ┆ 0xd374a62a...bc840b ┆ 50000.01     │
-│ 2 ┆ 0x59800fc6...3cac1d ┆ 32000.02     │
-│ 3 ┆ 0xeac30ed8...426d2c ┆ 10573.23     │
-└───┴─────────────────────┴──────────────┘
+# Claim — auto-detects user's actual bins (active±50 scan), not just rewarder.getRewardedRange
+defi --chain mantle lp claim --protocol merchantmoe-mantle \
+  --pool 0x03BeafC0d25BB553fCa274301832419C05269987 --broadcast
 ```
 
-### Scan Any Wallet Across All Chains (1.5 seconds)
+### Aerodrome Slipstream CL with AERO emission
 
-```
-$ defi positions --address 0xd374a62aa68d01cdb420e17b9840706e86bc840b
+```bash
+# Mint + auto-stake into CL gauge in one command
+defi --chain base lp farm --protocol aerodrome-cl \
+  --token-a WETH --token-b USDC --amount-a 50000000000000 --amount-b 110000 \
+  --range 5 --pool 0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59 --broadcast
 
-  Positions for 0xd374a6...840B (1515ms, 11 chains)
-  Total: $152,750,024
-
-  Mantle ($152,750,024)
-┌────────┬────────────────┬───────────────┐
-│ Type   ┆ Asset/Protocol ┆ Value         │
-├────────┼────────────────┼───────────────┤
-│ wallet ┆ WETH           ┆ $117,500,024  │
-│ wallet ┆ mETH           ┆ $35,250,000   │
-└────────┴────────────────┴───────────────┘
+# Claim AERO; gauge.withdraw(tokenId) auto-claims pending on unstake too
+defi --chain base lp claim --protocol aerodrome-cl \
+  --gauge 0xF33a96b5932D9E9B9A0eDA447AbD8C9d48d2e0c8 --token-id <id> --broadcast
 ```
 
-## All Commands
+### DEX aggregator swap (5 providers)
+
+```bash
+# Provider auto-detect via chains.toml aggregator slugs
+defi --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei> --broadcast
+defi --chain base swap --provider kyber --from WETH --to USDC --amount <wei> --broadcast
+defi --chain ethereum swap --provider relay --from WETH --to USDC --amount <wei> --broadcast
+```
+
+### Cross-chain bridge
+
+```bash
+defi --chain ethereum bridge --token USDC --amount 100000000 --to-chain base --provider lifi --broadcast
+```
+
+## Command Reference
 
 | Command | Description |
-|---------|-------------|
-| **Monitoring** | |
-| `scan` | Exploit detection: oracle divergence, depeg, exchange rate anomalies |
-| `scan --all-chains` | Scan all 40 chains in parallel |
-| `alert` | Single-asset oracle vs DEX price deviation monitor |
-| `monitor` | Health factor monitoring with alerts |
-| **Trading** | |
-| `swap` | Best-price swap via ODOS aggregator |
-| `bridge` | Cross-chain transfer via LI.FI |
-| `dex` | Direct DEX swap, quote, compare |
-| `token` | Approve, allowance, transfer |
-| **Lending** | |
-| `lending` | Supply, borrow, repay, withdraw, rates, position |
-| `yield compare` | Compare rates across protocols on one chain |
-| `yield scan` | Compare rates across ALL chains with arb detection |
-| **Research** | |
-| `whales` | Top token holders + lending positions |
-| `positions` | Cross-chain wallet scanner |
-| `portfolio` | Single-chain portfolio overview |
-| `price` | Oracle price queries |
-| `status` | Chain and protocol info |
-| **DeFi Ops** | |
-| `cdp` | CDP open, adjust, close, info |
-| `staking` | Liquid staking: stake, unstake, info |
-| `vault` | ERC-4626 vault deposit, withdraw, info |
-| `gauge` | ve(3,3) gauge deposit, withdraw, claim, lock, vote |
-| `nft` | NFT operations |
-| **Agent** | |
-| `schema` | JSON schema for any command |
+|---|---|
+| `lp discover` | Scan emission pools (gauge / LB hooks / MasterChef / Curve factory). `--emission-only` filters to active pools, sorted by APR desc. |
+| `lp add` | Add liquidity. Routes to V3 NPM, Slipstream CL, or LB router based on protocol interface |
+| `lp farm` | Add liquidity + auto-stake into gauge / LB hooks |
+| `lp claim` | Claim emission/fees. Auto-detects user's actual bins for LB |
+| `lp remove` | Auto-unstake (if staked) + remove liquidity. LB supports `--bins`/`--amounts` |
+| `lp compound` | Auto-compound for V3 fee-only positions (collect → increaseLiquidity multicall) |
+| `lp positions` | Show all active LP positions across protocols + pending rewards |
+| `lp pipeline` | Print mint→stake→claim CLI sequence for a protocol's reward_strategy |
+| `lp autopilot` | Whitelist-based budget allocation (`~/.defi/pools.toml`) |
+| `lending` | rates / position / supply / borrow / repay / withdraw |
+| `yield` | compare / scan (cross-chain) / optimize / execute |
+| `swap` | DEX aggregator swap (kyber, openocean, liquid, lifi, relay) |
+| `bridge` | Cross-chain transfer (lifi, debridge, cctp) |
+| `portfolio` | show / snapshot / pnl / history |
+| `price` | Oracle + DEX prices |
+| `wallet` | Address management |
+| `token` | balance / approve / allowance / transfer |
+| `ows` | Encrypted vault wallet (multi-chain HD derivation) |
+| `setup` | Interactive RPC + wallet wizard |
+| `status` | Chain + protocol overview |
+| `schema` | JSON schema for agent introspection |
 
 ## Architecture
 
 ```
 defi-cli/
-├── ts/                         # TypeScript monorepo (pnpm)
+├── ts/                              # TypeScript pnpm monorepo
 │   ├── packages/
-│   │   ├── defi-core/          # Registry, multicall, types, traits
-│   │   ├── defi-protocols/     # Protocol adapters (Aave, Uniswap, Compound, etc.)
-│   │   └── defi-cli/           # Multi-chain CLI (23 commands)
-│   ├── test/                   # E2E and snapshot tests
-│   └── vitest.config.ts
-├── config/
-│   ├── chains.toml             # 40 chain configs
-│   ├── tokens/                 # Per-chain token registries (40 chains)
-│   └── protocols/              # 344 protocol configs (TOML)
-│       ├── dex/                # DEX protocols
-│       ├── lending/            # Lending protocols
-│       ├── vault/              # Vault/yield protocols
-│       ├── bridge/             # Bridge protocols
-│       ├── cdp/                # CDP protocols
-│       └── nft/                # NFT protocols
-├── skills/
-│   └── defi-cli/               # Claude Code skill
-├── npm/                        # npm wrapper package
-└── docs/                       # DeFi category taxonomy
+│   │   ├── defi-core/               # Registry, multicall, traits (13 trait interfaces)
+│   │   ├── defi-protocols/          # Protocol adapters (Aave, Uniswap, Solidly, LB, …)
+│   │   └── defi-cli/                # CLI commands (~20)
+│   └── test/
+└── ts/config/
+    ├── chains.toml                  # 7 chain configs + per-chain aggregator slug map
+    ├── tokens/<chain>.toml          # Per-chain token registries
+    └── protocols/<category>/*.toml  # 48 protocol configs
+```
+
+### Adapter abstraction (4-layer)
+
+```
+CLI (defi-cli)  →  Factory (createDex/createLending/createGauge/…)
+  →  Trait interface (IDex / ILending / IGauge / IGaugeSystem / IVault / …)
+  →  Adapter implementation (UniswapV3Adapter, AaveV3Adapter, SolidlyGaugeAdapter, …)
+  ←  Registry (loads TOML configs at startup, dispatches by entry.interface)
 ```
 
 **Key design decisions:**
-- **Single multicall per scan** — all oracle + DEX + stablecoin queries in one RPC call (~200ms)
-- **Parallel chain scanning** — 40 chains in parallel via Promise.all
-- **Config-driven** — all protocol/chain/token data in TOML
-- **Agent-first** — every command supports `--json`, designed for AI agent integration
-- **Dry-run by default** — all transactions simulated unless `--broadcast` is set
+- **Config-driven** — adding a new chain = `chains.toml` row + `tokens/<chain>.toml`. Adding a new protocol = TOML drop (no code if the interface is supported)
+- **Adapter polymorphism** — `UniswapV3Adapter` handles standard V3 + Slipstream + Ramses CL via `cl_style` flag; `SolidlyGaugeAdapter` handles V2 + CL gauges via `clNftMode`
+- **Aggregator chain mapping** — `chains.toml [chain.X.aggregators]` declares which aggregators support each chain (slug per provider). Add a chain → add an aggregator entry, no code change
+- **Dry-run by default** — all transactions simulated unless `--broadcast` is set; auto-approve flow checks allowance and prepends approve tx
+- **Agent-first** — every command has `--json` / `--ndjson` / `--fields`, schema introspection via `defi schema`
 
 ## Global Options
 
 | Flag | Description |
-|------|-------------|
-| `--chain <name>` | Target chain (default: hyperevm) |
-| `--json` | JSON output |
+|---|---|
+| `--chain <name>` | Target chain (hyperevm, mantle, base, bnb, monad, arbitrum, ethereum) |
+| `--json` | Structured JSON output |
 | `--ndjson` | Newline-delimited JSON (streaming) |
-| `--fields` | Select specific output fields |
-| `--broadcast` | Actually send transactions (default: dry-run) |
+| `--fields <a,b>` | Filter output to selected fields |
+| `--dry-run` | Default — simulate only |
+| `--broadcast` | Actually send the transaction |
 
 ## Environment Variables
 
 | Variable | Description |
-|----------|-------------|
-| `{CHAIN}_RPC_URL` | Override RPC URL (e.g., `MANTLE_RPC_URL`) |
-| `DEFI_PRIVATE_KEY` | Private key for `--broadcast` mode |
-| `DEFI_WALLET_ADDRESS` | Default wallet address |
-| `ETHERSCAN_API_KEY` | For whale tracking |
+|---|---|
+| `{CHAIN}_RPC_URL` | Override RPC URL (e.g., `MANTLE_RPC_URL`, `BASE_RPC_URL`) |
+| `DEFI_PRIVATE_KEY` | Private key for `--broadcast` |
+| `DEFI_WALLET_ADDRESS` | Default wallet address (also accepts `ows:<name>` for OWS vault wallets) |
 
 ## License
 
