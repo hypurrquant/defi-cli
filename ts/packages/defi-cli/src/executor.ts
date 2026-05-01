@@ -39,6 +39,20 @@ export class Executor {
    * Check allowance for a single token/spender pair and send an approve tx if needed.
    * Only called in broadcast mode (not dry-run).
    */
+  /**
+   * Recognize the standard native-token sentinels:
+   * - 0x0000…0000 — defi-cli's internal marker for native gas tokens
+   * - 0xeeee…eeee — 1inch / KyberSwap / OpenOcean canonical sentinel
+   * Any address normalised to lowercase matches case-insensitively.
+   */
+  private static isNativeSentinel(token: Address | string): boolean {
+    const t = token.toLowerCase();
+    return (
+      t === "0x0000000000000000000000000000000000000000" ||
+      t === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    );
+  }
+
   private async checkAndApprove(
     token: Address,
     spender: Address,
@@ -47,6 +61,11 @@ export class Executor {
     publicClient: ReturnType<typeof createPublicClient>,
     walletClient: ReturnType<typeof createWalletClient>,
   ): Promise<void> {
+    // Native gas tokens have no ERC20 interface — querying allowance() on the
+    // zero address (or 1inch's 0xeeee… sentinel) reverts. Skip the auto-approve
+    // path entirely; aggregators already include the value in the swap tx.
+    if (Executor.isNativeSentinel(token)) return;
+
     const allowance = await publicClient.readContract({
       address: token,
       abi: ERC20_ABI,
@@ -140,9 +159,12 @@ export class Executor {
   /**
    * Fetch EIP-1559 fee params. Returns [maxFeePerGas, maxPriorityFeePerGas].
    *
-   * Strategy: read the latest block's `baseFeePerGas` and use the canonical
-   * EIP-1559 formula `maxFee = baseFee * 2 + priorityFee` (1 block of head-room
-   * after a 12.5% bump). Falls back to `getGasPrice() + priorityFee` only when
+   * Strategy: read the latest block's `baseFeePerGas` and apply the conservative
+   * formula `maxFee = baseFee * 1.25 + priorityFee` (one block of head-room — the
+   * 12.5% per-block max bump). The canonical 2× wastes budget on chains where
+   * baseFee is already elevated (e.g., Mantle ~50 gwei → 100 gwei doubled the
+   * MNT requirement and broke multi-step flows). Falls back to
+   * `getGasPrice() + priorityFee` only when
    * the chain doesn't expose `baseFeePerGas` (pre-1559).
    *
    * Why not gasPrice * 2: `getGasPrice()` returns `baseFee + priorityFee`, so
@@ -225,6 +247,8 @@ export class Executor {
     if (tx.approvals && tx.approvals.length > 0) {
       const pendingApprovals: Array<{ token: string; spender: string; needed: string; current: string }> = [];
       for (const approval of tx.approvals) {
+        // Native gas tokens have no allowance — skip silently.
+        if (Executor.isNativeSentinel(approval.token)) continue;
         try {
           const allowance = await client.readContract({
             address: approval.token,

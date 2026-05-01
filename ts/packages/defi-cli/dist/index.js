@@ -7337,7 +7337,18 @@ var Executor = class _Executor {
    * Check allowance for a single token/spender pair and send an approve tx if needed.
    * Only called in broadcast mode (not dry-run).
    */
+  /**
+   * Recognize the standard native-token sentinels:
+   * - 0x0000…0000 — defi-cli's internal marker for native gas tokens
+   * - 0xeeee…eeee — 1inch / KyberSwap / OpenOcean canonical sentinel
+   * Any address normalised to lowercase matches case-insensitively.
+   */
+  static isNativeSentinel(token) {
+    const t = token.toLowerCase();
+    return t === "0x0000000000000000000000000000000000000000" || t === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+  }
   async checkAndApprove(token, spender, amount, owner, publicClient, walletClient) {
+    if (_Executor.isNativeSentinel(token)) return;
     const allowance = await publicClient.readContract({
       address: token,
       abi: ERC20_ABI,
@@ -7418,9 +7429,12 @@ var Executor = class _Executor {
   /**
    * Fetch EIP-1559 fee params. Returns [maxFeePerGas, maxPriorityFeePerGas].
    *
-   * Strategy: read the latest block's `baseFeePerGas` and use the canonical
-   * EIP-1559 formula `maxFee = baseFee * 2 + priorityFee` (1 block of head-room
-   * after a 12.5% bump). Falls back to `getGasPrice() + priorityFee` only when
+   * Strategy: read the latest block's `baseFeePerGas` and apply the conservative
+   * formula `maxFee = baseFee * 1.25 + priorityFee` (one block of head-room — the
+   * 12.5% per-block max bump). The canonical 2× wastes budget on chains where
+   * baseFee is already elevated (e.g., Mantle ~50 gwei → 100 gwei doubled the
+   * MNT requirement and broke multi-step flows). Falls back to
+   * `getGasPrice() + priorityFee` only when
    * the chain doesn't expose `baseFeePerGas` (pre-1559).
    *
    * Why not gasPrice * 2: `getGasPrice()` returns `baseFee + priorityFee`, so
@@ -7483,6 +7497,7 @@ var Executor = class _Executor {
     if (tx.approvals && tx.approvals.length > 0) {
       const pendingApprovals = [];
       for (const approval of tx.approvals) {
+        if (_Executor.isNativeSentinel(approval.token)) continue;
         try {
           const allowance = await client.readContract({
             address: approval.token,
