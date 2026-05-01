@@ -4422,6 +4422,7 @@ var POOL_ABI = parseAbi14([
   "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
   "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
+  "function getReservesList() external view returns (address[])",
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)"
 ]);
 var ERC20_ABI = parseAbi14([
@@ -4553,13 +4554,37 @@ var AaveV3Adapter = class {
     };
   }
   async buildWithdraw(params) {
+    let withdrawAmount = params.amount;
+    if (this.rpcUrl) {
+      try {
+        const client = createPublicClient10({ transport: http10(this.rpcUrl) });
+        const reserveData = await client.readContract({
+          address: this.pool,
+          abi: POOL_ABI,
+          functionName: "getReserveData",
+          args: [params.asset]
+        });
+        const aToken = reserveData[8];
+        const aBal = await client.readContract({
+          address: aToken,
+          abi: parseAbi14(["function balanceOf(address) view returns (uint256)"]),
+          functionName: "balanceOf",
+          args: [params.to]
+        });
+        if (aBal > 0n && params.amount >= aBal) {
+          withdrawAmount = (1n << 256n) - 1n;
+        }
+      } catch {
+      }
+    }
     const data = encodeFunctionData14({
       abi: POOL_ABI,
       functionName: "withdraw",
-      args: [params.asset, params.amount, params.to]
+      args: [params.asset, withdrawAmount, params.to]
     });
+    const isMax = withdrawAmount === (1n << 256n) - 1n;
     return {
-      description: `[${this.protocolName}] Withdraw ${params.amount} from pool`,
+      description: `[${this.protocolName}] Withdraw ${isMax ? "all (auto-max)" : withdrawAmount} from pool`,
       to: this.pool,
       data,
       value: 0n,
@@ -4753,7 +4778,7 @@ var AaveV3Adapter = class {
   async getUserPosition(user) {
     if (!this.rpcUrl) throw DefiError15.rpcError("No RPC URL configured");
     const client = createPublicClient10({ transport: http10(this.rpcUrl) });
-    const result = await client.readContract({
+    const accountData = await client.readContract({
       address: this.pool,
       abi: POOL_ABI,
       functionName: "getUserAccountData",
@@ -4761,21 +4786,63 @@ var AaveV3Adapter = class {
     }).catch((e) => {
       throw DefiError15.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
     });
-    const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = result;
+    const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = accountData;
     const MAX_UINT2562 = 2n ** 256n - 1n;
-    const hf = healthFactor >= MAX_UINT2562 ? Infinity : Number(healthFactor) / 1e18;
+    const hf = healthFactor >= MAX_UINT2562 ? null : Number(healthFactor) / 1e18;
     const collateralUsd = u256ToF64(totalCollateralBase) / 1e8;
     const debtUsd = u256ToF64(totalDebtBase) / 1e8;
-    const ltvBps = u256ToF64(ltv);
-    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-    const borrows = debtUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+    const ltvPct = u256ToF64(ltv) / 100;
+    const supplies = [];
+    const borrows = [];
+    try {
+      const reserves = await client.readContract({
+        address: this.pool,
+        abi: POOL_ABI,
+        functionName: "getReservesList"
+      });
+      const reserveData = await Promise.allSettled(reserves.map(async (asset) => {
+        const data = await client.readContract({
+          address: this.pool,
+          abi: POOL_ABI,
+          functionName: "getReserveData",
+          args: [asset]
+        });
+        const aToken = data[8];
+        const debtToken = data[10];
+        return { asset, aToken, debtToken };
+      }));
+      const ERC20_ABI4 = parseAbi14([
+        "function balanceOf(address) view returns (uint256)",
+        "function symbol() view returns (string)"
+      ]);
+      const positions = await Promise.allSettled(reserveData.map(async (r) => {
+        if (r.status !== "fulfilled") return null;
+        const { asset, aToken, debtToken } = r.value;
+        const [aBal, dBal, sym] = await Promise.all([
+          client.readContract({ address: aToken, abi: ERC20_ABI4, functionName: "balanceOf", args: [user] }),
+          client.readContract({ address: debtToken, abi: ERC20_ABI4, functionName: "balanceOf", args: [user] }),
+          client.readContract({ address: asset, abi: ERC20_ABI4, functionName: "symbol" }).catch(() => "?")
+        ]);
+        return { asset, symbol: sym, supply: aBal, borrow: dBal };
+      }));
+      for (const p of positions) {
+        if (p.status !== "fulfilled" || !p.value) continue;
+        if (p.value.supply > 0n) supplies.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.supply });
+        if (p.value.borrow > 0n) borrows.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.borrow });
+      }
+    } catch {
+      if (collateralUsd > 0) supplies.push({ asset: zeroAddress8, symbol: "Total Collateral (per-asset breakdown unavailable)", amount: totalCollateralBase });
+      if (debtUsd > 0) borrows.push({ asset: zeroAddress8, symbol: "Total Debt (per-asset breakdown unavailable)", amount: totalDebtBase });
+    }
     return {
       protocol: this.protocolName,
       user,
       supplies,
       borrows,
       health_factor: hf,
-      net_apy: ltvBps / 100
+      ltv_pct: ltvPct,
+      total_collateral_usd: collateralUsd,
+      total_debt_usd: debtUsd
     };
   }
 };

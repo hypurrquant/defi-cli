@@ -99,25 +99,77 @@ export class Executor {
     process.stderr.write(`  Approve tx: ${approveTxHash}\n`);
     if (approveTxUrl) process.stderr.write(`  Explorer: ${approveTxUrl}\n`);
 
-    await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+    const approveReceipt = await Executor.waitForReceiptWithRetry(publicClient, approveTxHash);
+    if (approveReceipt.status !== "success") {
+      throw new Error(`Approve tx ${approveTxHash} reverted on-chain (status=${approveReceipt.status}). Aborting downstream tx.`);
+    }
     process.stderr.write(
       `  Approved ${amount} of ${token} for ${spender}\n`,
     );
   }
 
-  /** Fetch EIP-1559 fee params from the network. Returns [maxFeePerGas, maxPriorityFeePerGas]. */
+  /**
+   * Wait for a tx receipt with bounded retries. Some L2 RPCs (notably Mantle)
+   * occasionally fail to surface a receipt even after the tx is mined; viem's
+   * default `waitForTransactionReceipt` errors out instead of polling longer.
+   * We retry up to `attempts` times with exponential backoff before giving up.
+   */
+  private static async waitForReceiptWithRetry(
+    client: ReturnType<typeof createPublicClient>,
+    hash: `0x${string}`,
+    attempts = 6,
+  ): Promise<Awaited<ReturnType<ReturnType<typeof createPublicClient>["waitForTransactionReceipt"]>>> {
+    let lastErr: unknown;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await client.waitForTransactionReceipt({
+          hash,
+          timeout: 60_000,
+          retryCount: 8,
+        });
+      } catch (e) {
+        lastErr = e;
+        // Wait progressively longer before re-polling: 2s, 4s, 8s, 16s, 32s, 60s.
+        const backoffMs = Math.min(2_000 * Math.pow(2, i), 60_000);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+    throw new Error(`waitForReceiptWithRetry: gave up after ${attempts} attempts. Last error: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
+  }
+
+  /**
+   * Fetch EIP-1559 fee params. Returns [maxFeePerGas, maxPriorityFeePerGas].
+   *
+   * Strategy: read the latest block's `baseFeePerGas` and use the canonical
+   * EIP-1559 formula `maxFee = baseFee * 2 + priorityFee` (1 block of head-room
+   * after a 12.5% bump). Falls back to `getGasPrice() + priorityFee` only when
+   * the chain doesn't expose `baseFeePerGas` (pre-1559).
+   *
+   * Why not gasPrice * 2: `getGasPrice()` returns `baseFee + priorityFee`, so
+   * doubling double-counts the priority component and produces nonsense on
+   * chains where baseFee is already high (e.g., Mantle 50 gwei → 100 gwei,
+   * which can drain MNT before the actual tx settles).
+   */
   private async fetchEip1559Fees(rpcUrl: string): Promise<[bigint, bigint]> {
     try {
       const client = createPublicClient({ transport: http(rpcUrl) });
-      const gasPrice = await client.getGasPrice();
       let priorityFee = DEFAULT_PRIORITY_FEE_WEI;
       try {
         priorityFee = await client.estimateMaxPriorityFeePerGas();
-      } catch {
-        // fallback to default
-      }
-      const maxFee = gasPrice * 2n + priorityFee;
-      return [maxFee, priorityFee];
+      } catch { /* fallback to default */ }
+
+      // Prefer block.baseFeePerGas for the canonical EIP-1559 formula.
+      try {
+        const block = await client.getBlock({ blockTag: "latest" });
+        if (block.baseFeePerGas !== null && block.baseFeePerGas !== undefined) {
+          const maxFee = block.baseFeePerGas * 2n + priorityFee;
+          return [maxFee, priorityFee];
+        }
+      } catch { /* fall through to gas-price path */ }
+
+      // Pre-1559 chains: gasPrice already encodes everything.
+      const gasPrice = await client.getGasPrice();
+      return [gasPrice + priorityFee, priorityFee];
     } catch {
       return [0n, 0n];
     }
@@ -303,8 +355,8 @@ export class Executor {
         const preTxUrl = this.explorerUrl ? `${this.explorerUrl}/tx/${preTxHash}` : undefined;
         process.stderr.write(`  Pre-tx sent: ${preTxHash}\n`);
         if (preTxUrl) process.stderr.write(`  Explorer: ${preTxUrl}\n`);
-        const preReceipt = await publicClient.waitForTransactionReceipt({ hash: preTxHash });
-        if (preReceipt.status !== "success") {
+        const preReceiptResult = await Executor.waitForReceiptWithRetry(publicClient, preTxHash);
+        if (preReceiptResult.status !== "success") {
           throw new DefiError("TX_FAILED", `Pre-transaction failed: ${preTx.description}`);
         }
         process.stderr.write(`  Pre-tx confirmed\n`);
@@ -351,7 +403,7 @@ export class Executor {
     if (txUrl) process.stderr.write(`Explorer: ${txUrl}\n`);
     process.stderr.write("Waiting for confirmation...\n");
 
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await Executor.waitForReceiptWithRetry(publicClient, txHash);
 
     const status = receipt.status === "success" ? TxStatus.Confirmed : TxStatus.Failed;
 

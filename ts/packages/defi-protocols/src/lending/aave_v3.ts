@@ -22,6 +22,7 @@ const POOL_ABI = parseAbi([
   "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
   "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
+  "function getReservesList() external view returns (address[])",
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)",
 ]);
 
@@ -173,13 +174,39 @@ export class AaveV3Adapter implements ILending {
   }
 
   async buildWithdraw(params: WithdrawParams): Promise<DeFiTx> {
+    // Aave V3 reverts if the requested amount exceeds the user's aToken
+    // balance (which can drift below the original supply amount due to scaled
+    // index rounding). When the request matches or exceeds the live balance,
+    // pass uint256.max — Aave interprets that as "withdraw all" and handles
+    // the exact balance internally.
+    let withdrawAmount = params.amount;
+    if (this.rpcUrl) {
+      try {
+        const client = createPublicClient({ transport: http(this.rpcUrl) });
+        const reserveData = await client.readContract({
+          address: this.pool, abi: POOL_ABI, functionName: "getReserveData", args: [params.asset],
+        }) as readonly [bigint, bigint, bigint, bigint, bigint, bigint, number, number, Address, Address, Address, Address, bigint, bigint, bigint];
+        const aToken = reserveData[8];
+        const aBal = await client.readContract({
+          address: aToken,
+          abi: parseAbi(["function balanceOf(address) view returns (uint256)"]),
+          functionName: "balanceOf",
+          args: [params.to],
+        }) as bigint;
+        if (aBal > 0n && params.amount >= aBal) {
+          withdrawAmount = (1n << 256n) - 1n;
+        }
+      } catch { /* fall back to caller-supplied amount */ }
+    }
+
     const data = encodeFunctionData({
       abi: POOL_ABI,
       functionName: "withdraw",
-      args: [params.asset, params.amount, params.to],
+      args: [params.asset, withdrawAmount, params.to],
     });
+    const isMax = withdrawAmount === (1n << 256n) - 1n;
     return {
-      description: `[${this.protocolName}] Withdraw ${params.amount} from pool`,
+      description: `[${this.protocolName}] Withdraw ${isMax ? "all (auto-max)" : withdrawAmount} from pool`,
       to: this.pool,
       data,
       value: 0n,
@@ -427,28 +454,67 @@ export class AaveV3Adapter implements ILending {
   async getUserPosition(user: Address): Promise<UserPosition> {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
     const client = createPublicClient({ transport: http(this.rpcUrl) });
-    const result = await client.readContract({
-      address: this.pool,
-      abi: POOL_ABI,
-      functionName: "getUserAccountData",
-      args: [user],
-    }).catch((e: unknown) => {
-      throw DefiError.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
-    });
 
-    const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = result;
+    // 1) Aggregate health: getUserAccountData (USD-base values)
+    const accountData = await client.readContract({
+      address: this.pool, abi: POOL_ABI, functionName: "getUserAccountData", args: [user],
+    }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`); });
+    const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = accountData;
     const MAX_UINT256 = 2n ** 256n - 1n;
-    const hf = healthFactor >= MAX_UINT256 ? Infinity : Number(healthFactor) / 1e18;
+    // Aave returns max-uint when there's no debt (infinite HF). Surface as null
+    // so consumers don't have to special-case Infinity / NaN in JSON.
+    const hf = healthFactor >= MAX_UINT256 ? null : Number(healthFactor) / 1e18;
     const collateralUsd = u256ToF64(totalCollateralBase) / 1e8;
     const debtUsd = u256ToF64(totalDebtBase) / 1e8;
-    const ltvBps = u256ToF64(ltv);
+    const ltvPct = u256ToF64(ltv) / 100;  // Aave returns LTV in bps (10000 = 100%)
 
-    const supplies = collateralUsd > 0
-      ? [{ asset: zeroAddress as Address, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }]
-      : [];
-    const borrows = debtUsd > 0
-      ? [{ asset: zeroAddress as Address, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }]
-      : [];
+    // 2) Per-asset breakdown. Always scan because `getUserAccountData`
+    // counts only collateral-eligible reserves; some Aave V3 fork assets
+    // (e.g., supply-only listings) hold an aToken balance that the
+    // aggregate metrics ignore.
+    const supplies: { asset: Address; symbol: string; amount: bigint }[] = [];
+    const borrows: { asset: Address; symbol: string; amount: bigint }[] = [];
+    try {
+      const reserves = await client.readContract({
+        address: this.pool, abi: POOL_ABI, functionName: "getReservesList",
+      }) as readonly Address[];
+
+      const reserveData = await Promise.allSettled(reserves.map(async (asset) => {
+        const data = await client.readContract({
+          address: this.pool, abi: POOL_ABI, functionName: "getReserveData", args: [asset],
+        }) as readonly [bigint, bigint, bigint, bigint, bigint, bigint, number, number, Address, Address, Address, Address, bigint, bigint, bigint];
+        const aToken = data[8];
+        const debtToken = data[10];
+        return { asset, aToken, debtToken };
+      }));
+
+      const ERC20_ABI = parseAbi([
+        "function balanceOf(address) view returns (uint256)",
+        "function symbol() view returns (string)",
+      ]);
+      const positions = await Promise.allSettled(reserveData.map(async (r) => {
+        if (r.status !== "fulfilled") return null;
+        const { asset, aToken, debtToken } = r.value;
+        const [aBal, dBal, sym] = await Promise.all([
+          client.readContract({ address: aToken, abi: ERC20_ABI, functionName: "balanceOf", args: [user] }) as Promise<bigint>,
+          client.readContract({ address: debtToken, abi: ERC20_ABI, functionName: "balanceOf", args: [user] }) as Promise<bigint>,
+          client.readContract({ address: asset, abi: ERC20_ABI, functionName: "symbol" }).catch(() => "?") as Promise<string>,
+        ]);
+        return { asset, symbol: sym, supply: aBal, borrow: dBal };
+      }));
+
+      for (const p of positions) {
+        if (p.status !== "fulfilled" || !p.value) continue;
+        if (p.value.supply > 0n) supplies.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.supply });
+        if (p.value.borrow > 0n) borrows.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.borrow });
+      }
+    } catch {
+      // Per-asset breakdown failed; fall back to aggregate sentinel only when
+      // getUserAccountData reported a non-zero position so the caller still
+      // sees that something is held.
+      if (collateralUsd > 0) supplies.push({ asset: zeroAddress as Address, symbol: "Total Collateral (per-asset breakdown unavailable)", amount: totalCollateralBase });
+      if (debtUsd > 0) borrows.push({ asset: zeroAddress as Address, symbol: "Total Debt (per-asset breakdown unavailable)", amount: totalDebtBase });
+    }
 
     return {
       protocol: this.protocolName,
@@ -456,7 +522,9 @@ export class AaveV3Adapter implements ILending {
       supplies,
       borrows,
       health_factor: hf,
-      net_apy: ltvBps / 100,
-    };
+      ltv_pct: ltvPct,
+      total_collateral_usd: collateralUsd,
+      total_debt_usd: debtUsd,
+    } as UserPosition;
   }
 }

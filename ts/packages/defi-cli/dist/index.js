@@ -5130,6 +5130,7 @@ var init_dist2 = __esm({
       "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
       "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
       "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
+      "function getReservesList() external view returns (address[])",
       "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)"
     ]);
     ERC20_ABI2 = parseAbi14([
@@ -5216,13 +5217,37 @@ var init_dist2 = __esm({
         };
       }
       async buildWithdraw(params) {
+        let withdrawAmount = params.amount;
+        if (this.rpcUrl) {
+          try {
+            const client = createPublicClient10({ transport: http10(this.rpcUrl) });
+            const reserveData = await client.readContract({
+              address: this.pool,
+              abi: POOL_ABI,
+              functionName: "getReserveData",
+              args: [params.asset]
+            });
+            const aToken = reserveData[8];
+            const aBal = await client.readContract({
+              address: aToken,
+              abi: parseAbi14(["function balanceOf(address) view returns (uint256)"]),
+              functionName: "balanceOf",
+              args: [params.to]
+            });
+            if (aBal > 0n && params.amount >= aBal) {
+              withdrawAmount = (1n << 256n) - 1n;
+            }
+          } catch {
+          }
+        }
         const data = encodeFunctionData14({
           abi: POOL_ABI,
           functionName: "withdraw",
-          args: [params.asset, params.amount, params.to]
+          args: [params.asset, withdrawAmount, params.to]
         });
+        const isMax = withdrawAmount === (1n << 256n) - 1n;
         return {
-          description: `[${this.protocolName}] Withdraw ${params.amount} from pool`,
+          description: `[${this.protocolName}] Withdraw ${isMax ? "all (auto-max)" : withdrawAmount} from pool`,
           to: this.pool,
           data,
           value: 0n,
@@ -5416,7 +5441,7 @@ var init_dist2 = __esm({
       async getUserPosition(user) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
         const client = createPublicClient10({ transport: http10(this.rpcUrl) });
-        const result = await client.readContract({
+        const accountData = await client.readContract({
           address: this.pool,
           abi: POOL_ABI,
           functionName: "getUserAccountData",
@@ -5424,21 +5449,63 @@ var init_dist2 = __esm({
         }).catch((e) => {
           throw DefiError.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
         });
-        const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = result;
+        const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = accountData;
         const MAX_UINT2562 = 2n ** 256n - 1n;
-        const hf = healthFactor >= MAX_UINT2562 ? Infinity : Number(healthFactor) / 1e18;
+        const hf = healthFactor >= MAX_UINT2562 ? null : Number(healthFactor) / 1e18;
         const collateralUsd = u256ToF64(totalCollateralBase) / 1e8;
         const debtUsd = u256ToF64(totalDebtBase) / 1e8;
-        const ltvBps = u256ToF64(ltv);
-        const supplies = collateralUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-        const borrows = debtUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+        const ltvPct = u256ToF64(ltv) / 100;
+        const supplies = [];
+        const borrows = [];
+        try {
+          const reserves = await client.readContract({
+            address: this.pool,
+            abi: POOL_ABI,
+            functionName: "getReservesList"
+          });
+          const reserveData = await Promise.allSettled(reserves.map(async (asset) => {
+            const data = await client.readContract({
+              address: this.pool,
+              abi: POOL_ABI,
+              functionName: "getReserveData",
+              args: [asset]
+            });
+            const aToken = data[8];
+            const debtToken = data[10];
+            return { asset, aToken, debtToken };
+          }));
+          const ERC20_ABI42 = parseAbi14([
+            "function balanceOf(address) view returns (uint256)",
+            "function symbol() view returns (string)"
+          ]);
+          const positions = await Promise.allSettled(reserveData.map(async (r) => {
+            if (r.status !== "fulfilled") return null;
+            const { asset, aToken, debtToken } = r.value;
+            const [aBal, dBal, sym] = await Promise.all([
+              client.readContract({ address: aToken, abi: ERC20_ABI42, functionName: "balanceOf", args: [user] }),
+              client.readContract({ address: debtToken, abi: ERC20_ABI42, functionName: "balanceOf", args: [user] }),
+              client.readContract({ address: asset, abi: ERC20_ABI42, functionName: "symbol" }).catch(() => "?")
+            ]);
+            return { asset, symbol: sym, supply: aBal, borrow: dBal };
+          }));
+          for (const p of positions) {
+            if (p.status !== "fulfilled" || !p.value) continue;
+            if (p.value.supply > 0n) supplies.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.supply });
+            if (p.value.borrow > 0n) borrows.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.borrow });
+          }
+        } catch {
+          if (collateralUsd > 0) supplies.push({ asset: zeroAddress8, symbol: "Total Collateral (per-asset breakdown unavailable)", amount: totalCollateralBase });
+          if (debtUsd > 0) borrows.push({ asset: zeroAddress8, symbol: "Total Debt (per-asset breakdown unavailable)", amount: totalDebtBase });
+        }
         return {
           protocol: this.protocolName,
           user,
           supplies,
           borrows,
           health_factor: hf,
-          net_apy: ltvBps / 100
+          ltv_pct: ltvPct,
+          total_collateral_usd: collateralUsd,
+          total_debt_usd: debtUsd
         };
       }
     };
@@ -7316,24 +7383,69 @@ var Executor = class _Executor {
 `);
     if (approveTxUrl) process.stderr.write(`  Explorer: ${approveTxUrl}
 `);
-    await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+    const approveReceipt = await _Executor.waitForReceiptWithRetry(publicClient, approveTxHash);
+    if (approveReceipt.status !== "success") {
+      throw new Error(`Approve tx ${approveTxHash} reverted on-chain (status=${approveReceipt.status}). Aborting downstream tx.`);
+    }
     process.stderr.write(
       `  Approved ${amount} of ${token} for ${spender}
 `
     );
   }
-  /** Fetch EIP-1559 fee params from the network. Returns [maxFeePerGas, maxPriorityFeePerGas]. */
+  /**
+   * Wait for a tx receipt with bounded retries. Some L2 RPCs (notably Mantle)
+   * occasionally fail to surface a receipt even after the tx is mined; viem's
+   * default `waitForTransactionReceipt` errors out instead of polling longer.
+   * We retry up to `attempts` times with exponential backoff before giving up.
+   */
+  static async waitForReceiptWithRetry(client, hash, attempts = 6) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await client.waitForTransactionReceipt({
+          hash,
+          timeout: 6e4,
+          retryCount: 8
+        });
+      } catch (e) {
+        lastErr = e;
+        const backoffMs = Math.min(2e3 * Math.pow(2, i), 6e4);
+        await new Promise((resolve5) => setTimeout(resolve5, backoffMs));
+      }
+    }
+    throw new Error(`waitForReceiptWithRetry: gave up after ${attempts} attempts. Last error: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
+  }
+  /**
+   * Fetch EIP-1559 fee params. Returns [maxFeePerGas, maxPriorityFeePerGas].
+   *
+   * Strategy: read the latest block's `baseFeePerGas` and use the canonical
+   * EIP-1559 formula `maxFee = baseFee * 2 + priorityFee` (1 block of head-room
+   * after a 12.5% bump). Falls back to `getGasPrice() + priorityFee` only when
+   * the chain doesn't expose `baseFeePerGas` (pre-1559).
+   *
+   * Why not gasPrice * 2: `getGasPrice()` returns `baseFee + priorityFee`, so
+   * doubling double-counts the priority component and produces nonsense on
+   * chains where baseFee is already high (e.g., Mantle 50 gwei → 100 gwei,
+   * which can drain MNT before the actual tx settles).
+   */
   async fetchEip1559Fees(rpcUrl) {
     try {
       const client = createPublicClient2({ transport: http2(rpcUrl) });
-      const gasPrice = await client.getGasPrice();
       let priorityFee = DEFAULT_PRIORITY_FEE_WEI;
       try {
         priorityFee = await client.estimateMaxPriorityFeePerGas();
       } catch {
       }
-      const maxFee = gasPrice * 2n + priorityFee;
-      return [maxFee, priorityFee];
+      try {
+        const block = await client.getBlock({ blockTag: "latest" });
+        if (block.baseFeePerGas !== null && block.baseFeePerGas !== void 0) {
+          const maxFee = block.baseFeePerGas * 2n + priorityFee;
+          return [maxFee, priorityFee];
+        }
+      } catch {
+      }
+      const gasPrice = await client.getGasPrice();
+      return [gasPrice + priorityFee, priorityFee];
     } catch {
       return [0n, 0n];
     }
@@ -7497,8 +7609,8 @@ var Executor = class _Executor {
 `);
         if (preTxUrl) process.stderr.write(`  Explorer: ${preTxUrl}
 `);
-        const preReceipt = await publicClient.waitForTransactionReceipt({ hash: preTxHash });
-        if (preReceipt.status !== "success") {
+        const preReceiptResult = await _Executor.waitForReceiptWithRetry(publicClient, preTxHash);
+        if (preReceiptResult.status !== "success") {
           throw new DefiError("TX_FAILED", `Pre-transaction failed: ${preTx.description}`);
         }
         process.stderr.write(`  Pre-tx confirmed
@@ -7540,7 +7652,7 @@ var Executor = class _Executor {
     if (txUrl) process.stderr.write(`Explorer: ${txUrl}
 `);
     process.stderr.write("Waiting for confirmation...\n");
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await _Executor.waitForReceiptWithRetry(publicClient, txHash);
     const status = receipt.status === "success" ? TxStatus.Confirmed : TxStatus.Failed;
     let mintedTokenId;
     if (receipt.status === "success" && receipt.logs) {
