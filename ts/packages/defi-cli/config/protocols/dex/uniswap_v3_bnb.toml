@@ -1,0 +1,13 @@
+[protocol]
+name = "Uniswap V3 BNB"
+slug = "uniswap-v3-bnb"
+category = "dex"
+interface = "uniswap_v3"
+chain = "bnb"
+native = false
+description = "Uniswap V3 on BNB Chain ($100M TVL)"
+
+[protocol.contracts]
+router = "0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2"
+factory = "0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7"
+quoter = "0x78D78E420Da98ad378D7799bE8f4AF69033EB077"

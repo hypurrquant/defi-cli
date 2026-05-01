@@ -5,7 +5,10 @@ category = "dex"
 interface = "solidly_v2"
 chain = "hyperevm"
 native = true
-description = "Ramses V2 AMM (x(3,3) model) on HyperEVM ($2.6M TVL)"
+verified = true
+reward_strategy = "auto_stake"
+reward_tokens = ["RAM", "WHYPE"]
+description = "Ramses V2 AMM (x(3,3) model) on HyperEVM. 'auto_stake' is misleading — router.addLiquidity does NOT auto-deposit; caller must invoke gauge.deposit(amount). WHYPE/RAM gauge rewards RAM (0x555570...), not xRAM (0xAE6D5F... isReward=false). Claim via gauge.getReward(account, [RAM, WHYPE])."
 
 [protocol.contracts]
 # V2 AMM
@@ -32,19 +35,8 @@ token0 = "WHYPE"
 token1 = "RAM"
 gauge = "0x92fBD7B15dA58e03F6E3D1d7026c6c69cbD2E637"
 
-[[protocol.pools]]
-name = "hyperRAM/USDC"
-address = "0x5F5E466665397BD71F9bA595cE83E06593E51584"
-token0 = "hyperRAM"
-token1 = "USDC"
-gauge = "0x005e24c9029392f9496701749530c0F374Ca67FC"
-
-[[protocol.pools]]
-name = "sUSDe/hyperRAM"
-address = "0x0F71c99ba20AECEE5b5D3bcCb3A6871cE90eCD0a"
-token0 = "sUSDe"
-token1 = "hyperRAM"
-gauge = "0xd4c7120C644cf23A8EBcFEc0FA320b88BF8c8B03"
+# Pools using hyperRAM removed: hyperRAM contract (0xAAAE8378...) has NO BYTECODE
+# (verified 2026-04-29 via Ramses x(3,3) investigation). Re-add when token contract is republished.
 
 [[protocol.pools]]
 name = "USDC/WS"

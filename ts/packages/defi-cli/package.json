@@ -1,6 +1,6 @@
 {
   "name": "@hypurrquant/defi-cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Multi-chain DeFi CLI \u2014 lending, DEX, LP, bridge, vault, staking from your terminal",
   "type": "module",
   "license": "MIT",
@@ -39,6 +39,8 @@
     "url": "https://github.com/hypurrquant/defi-cli.git"
   },
   "scripts": {
+    "sync-config": "node -e \"const fs=require('fs');const p=require('path');const src=p.resolve(__dirname,'../../config');const dst=p.resolve(__dirname,'config');fs.rmSync(dst,{recursive:true,force:true});fs.cpSync(src,dst,{recursive:true});console.log('synced',src,'->',dst);\"",
+    "prebuild": "pnpm run sync-config",
     "build": "tsup",
     "test": "vitest run",
     "lint": "tsc --noEmit",

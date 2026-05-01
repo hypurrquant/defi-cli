@@ -1,0 +1,12 @@
+[protocol]
+name = "Beefy BNB"
+slug = "beefy-bnb"
+category = "vault"
+interface = "beefy_vault"
+chain = "bnb"
+native = false
+verified = true
+description = "Beefy yield vault on BNB Chain."
+
+[protocol.contracts]
+vault = "0x015E2d1b7AC621370A24B7dd426EF1ef4DA99B86"

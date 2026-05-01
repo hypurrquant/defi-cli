@@ -1,0 +1,14 @@
+[protocol]
+name = "Thena Fusion"
+slug = "thena-fusion"
+category = "dex"
+interface = "algebra_v3"
+chain = "bnb"
+native = true
+description = "Thena Fusion (Algebra V3) on BNB ($2M TVL) [gauge: no pools registered via voter as of 2026-04-03]"
+[protocol.contracts]
+router = "0x327Dd3208f0bCF590A66110aCB6e5e6941A4EfA0"
+factory = "0x306F06C147f064A010530292A1EB6737c3e378e4"
+quoter = "0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA"
+voter = "0xb594c0337580Bd06AFf6aB50973A7eF228616cbD"
+ve_token = "0xd9693EfEbD93133e1cd406d6d516F2d610ADae7c"

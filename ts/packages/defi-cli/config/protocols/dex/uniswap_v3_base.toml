@@ -1,0 +1,14 @@
+[protocol]
+name = "Uniswap V3 Base"
+slug = "uniswap-v3-base"
+category = "dex"
+interface = "uniswap_v3"
+chain = "base"
+native = false
+description = "Uniswap V3 on Base"
+
+[protocol.contracts]
+router = "0x2626664c2603336E57B271c5C0b26F421741e481"
+factory = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
+quoter = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+position_manager = "0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"

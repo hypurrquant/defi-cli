@@ -5,7 +5,9 @@ category = "dex"
 interface = "hybra"
 chain = "hyperevm"
 native = true
-description = "Hybra V4 CL DEX with ve(3,3) gauge emissions on HyperEVM"
+verified = true
+reward_strategy = "on_chain_gauge_tokenid"
+description = "Hybra V4 CL DEX with ve(3,3) gauge emissions on HyperEVM. gauge.earned(tokenId) single-arg variant."
 
 [protocol.contracts]
 # V4 CL

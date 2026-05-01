@@ -3,9 +3,13 @@ name = "Ramses CL"
 slug = "ramses-cl"
 category = "dex"
 interface = "uniswap_v3"
+cl_style = "ramses"
 chain = "hyperevm"
 native = false
-description = "Ramses V3 concentrated liquidity (x(3,3) model) on HyperEVM ($2.8M TVL)"
+verified = true
+reward_strategy = "auto_stake"
+reward_tokens = ["xRAM", "WHYPE"]
+description = "Ramses V3 concentrated liquidity (x(3,3) model) on HyperEVM ($2.8M TVL). factory bytecode + NPM.WETH9 = WHYPE + WHYPE/USDT0 pool slot0 active verified 2026-04-29. NPM.factory()/voter.length() revert by design (uses pool_deployer + gaugeForPool, non-standard but documented x(3,3) interface). 'Auto-stake' = no separate deposit; rewards via gauge.getReward(account, tokens[])."
 
 [protocol.contracts]
 # V3 CL AMM
@@ -22,14 +26,17 @@ gauge_factory = "0xE17988013E15d29B655634Da0056ba27BA4D3E27"
 fee_distributor_factory = "0xE7E05591362a74D3746F828941ec833e102a6E90"
 vote_module = "0x6736102621f7c0dbB0E2989e3ad7A8793e71930b"
 
-# CL gauged pools
+# CL gauged pools — gauge addresses verified via voter.gaugeForPool() 2026-04-29.
+# All 5 prior config gauges were STALE (off by 4-8 bytes); corrected below.
+# Runtime callers SHOULD prefer voter.gaugeForPool(pool) for fresh lookups since gauges
+# can be replaced by Ramses governance.
 [[protocol.pools]]
 name = "WHYPE/USDT0"
 address = "0xeE02e3A3034e9EF3bD569B140bc9911fcf1Ba067"
 token0 = "WHYPE"
 token1 = "USDT0"
 tick_spacing = 10
-gauge = "0x46e8936e83d6f3a3078D49F8C47b6EE0d078078c"
+gauge = "0x46e851d8264fE6951209d52ED7C86eE27142078c"
 
 [[protocol.pools]]
 name = "USDC/USDT0"
@@ -37,7 +44,7 @@ address = "0x46abBdfC675ffa9dDf032c64FEE363745204E63e"
 token0 = "USDC"
 token1 = "USDT0"
 tick_spacing = 1
-gauge = "0xF2A1DE75c65ad0f590E1F18d5D8E3Cc65e7ed836"
+gauge = "0xF2A1Df5DEB6B1555484Fe3D8603E6a781E98f836"
 
 [[protocol.pools]]
 name = "WHYPE/RAM"
@@ -45,7 +52,7 @@ address = "0x1Bd9646f3dd9008338323C3C310F63f15077Fa58"
 token0 = "WHYPE"
 token1 = "RAM"
 tick_spacing = 50
-gauge = "0xa00B42702fC1cF24A8cd96F0Af21AeFB543E5405"
+gauge = "0xa00B2B626D4b01A94aab548b5681936705755405"
 
 [[protocol.pools]]
 name = "WHYPE/UBTC"
@@ -53,7 +60,7 @@ address = "0x8326507ed1195b00Ee36B585c8f085A279DF96A1"
 token0 = "WHYPE"
 token1 = "UBTC"
 tick_spacing = 100
-gauge = "0x9072ee98D4481Cfe48f8F3D51B4b4bfef8d0d130"
+gauge = "0x9072003a843ee5BDad28D2e1606cf7c4B02Cd130"
 
 [[protocol.pools]]
 name = "USDH/USDC"
@@ -61,7 +68,7 @@ address = "0x04183b7F588Fa69D4C6aE17a54C93fe953AFd032"
 token0 = "USDH"
 token1 = "USDC"
 tick_spacing = 1
-gauge = "0x5ed429050D97c9E12f71Aee8F8bB3E2A5e67bB77"
+gauge = "0x5ed45f5E8635f46cd0EB4F8FC56c019EE45BbB77"
 
 # CL pools (no gauge)
 [[protocol.pools]]

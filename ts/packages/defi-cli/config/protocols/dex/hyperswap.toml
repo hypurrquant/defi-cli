@@ -1,0 +1,15 @@
+[protocol]
+name = "HyperSwap V3"
+slug = "hyperswap-v3"
+category = "dex"
+interface = "uniswap_v3"
+chain = "hyperevm"
+native = true
+verified = true
+reward_strategy = "lp_fee_only"
+description = "First native DEX on HyperEVM — Uniswap V3 fork. NPM↔factory cross-verified on-chain 2026-04-28; WETH9 = WHYPE (0x5555...5555). Quoter address pending."
+
+[protocol.contracts]
+router = "0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D"
+factory = "0xB1c0fa0B789320044A6F623cFe5eBda9562602E3"
+position_manager = "0x6eDA206207c09e5428F281761DdC0D300851fBC8"

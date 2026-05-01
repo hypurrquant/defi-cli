@@ -1,0 +1,21 @@
+[protocol]
+name = "Curve HyperEVM"
+slug = "curve-hyperevm"
+category = "dex"
+interface = "curve_stableswap"
+chain = "hyperevm"
+native = false
+verified = true
+reward_strategy = "lp_fee_only"
+description = "Curve Finance on HyperEVM (StableswapNG + TwoCryptoNG). 38 stable pools + 1 tricrypto pool deployed (verified 2026-04-29). Source: curvefi/curve-core deployments/prod/hyperliquid.yaml. Best for stable LP — low slippage, capital-efficient."
+
+[protocol.contracts]
+router = "0xd2002373543Ce3527023C75e7518C274A51ce712"
+stableswap_factory = "0x604388Bb1159AFd21eB5191cE22b4DeCdEE2Ae22"
+tricrypto_factory = "0x5702BDB1Ec244704E3cBBaAE11a0275aE5b07499"
+address_provider = "0x1764ee18e8B3ccA4787249Ceb249356192594585"
+metaregistry = "0x5eeE3091f747E60a045a2E715a4c71e600e31F6E"
+stableswap_implementation = "0xa7Ba18EeFcD9513230987eC2faB6711AF5AbD9c2"
+tricrypto_implementation = "0x635742dCC8313DCf8c904206037d962c042EAfBd"
+math = "0x686bdb3D24Bc6F3ED89ed3d3B659765c54aC78B4"
+views = "0xe61Fb97Ef6eBFBa12B36Ffd7be785c1F5A2DE66b"

@@ -5,7 +5,10 @@ category = "dex"
 interface = "algebra_v3"
 chain = "hyperevm"
 native = true
-description = "Algebra V3 ve(3,3) DEX on HyperEVM ($1.3M TVL)"
+verified = true
+native_input_style = "algebra-native"
+reward_strategy = "on_chain_farming_center"
+description = "Algebra V3 ve(3,3) DEX on HyperEVM ($1.3M TVL). Eternal farming verified 2026-04-03 (gauge-verification.md)."
 
 [protocol.contracts]
 router = "0x4e73E421480a7E0C24fB3c11019254edE194f736"

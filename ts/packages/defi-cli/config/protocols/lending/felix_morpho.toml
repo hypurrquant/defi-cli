@@ -5,7 +5,8 @@ category = "lending"
 interface = "morpho_blue"
 chain = "hyperevm"
 native = false
-description = "Felix Morpho Blue fork — MetaMorpho ERC-4626 lending vaults, TVL $103M"
+verified = true
+description = "Felix Morpho Blue fork — MetaMorpho ERC-4626 lending vaults. 7 MetaMorpho vaults all responding to totalAssets(), morpho.owner verified 2026-04-29."
 
 [protocol.contracts]
 morpho_blue = "0x68e37dE8d93d3496ae143F2E900490f6280C57cD"
