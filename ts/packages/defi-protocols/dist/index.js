@@ -5094,7 +5094,7 @@ var CompoundV2Adapter = class {
         total_borrow: 0n
       };
     }
-    const [supplyRate, borrowRate, totalSupply, totalBorrows] = await Promise.all([
+    const [supplyRate, borrowRate, totalSupplyVtoken, totalBorrows, exchangeRate] = await Promise.all([
       client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e) => {
         throw DefiError18.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`);
       }),
@@ -5102,22 +5102,24 @@ var CompoundV2Adapter = class {
         throw DefiError18.rpcError(`[${this.protocolName}] borrowRatePerBlock failed: ${e}`);
       }),
       client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
-      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n)
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n),
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "exchangeRateStored" }).catch(() => 0n)
     ]);
     const supplyPerBlock = Number(supplyRate) / 1e18;
     const borrowPerBlock = Number(borrowRate) / 1e18;
     const supplyApy = supplyPerBlock * BSC_BLOCKS_PER_YEAR * 100;
     const borrowApy = borrowPerBlock * BSC_BLOCKS_PER_YEAR * 100;
-    const supplyF = Number(totalSupply);
+    const totalSupplyUnderlying = exchangeRate > 0n ? totalSupplyVtoken * exchangeRate / 10n ** 18n : totalSupplyVtoken;
+    const supplyF = Number(totalSupplyUnderlying);
     const borrowF = Number(totalBorrows);
-    const utilization = supplyF > 0 ? borrowF / supplyF * 100 : 0;
+    const utilization = supplyF > 0 ? Math.round(borrowF / supplyF * 1e4) / 100 : 0;
     return {
       protocol: this.protocolName,
       asset,
       supply_apy: supplyApy,
       borrow_variable_apy: borrowApy,
       utilization,
-      total_supply: totalSupply,
+      total_supply: totalSupplyUnderlying,
       total_borrow: totalBorrows
     };
   }
