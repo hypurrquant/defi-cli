@@ -245,6 +245,17 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
           const amountUsdc = Number(BigInt(opts.amount)) / 1e6;
           const { fee, maxFeeSubunits } = await getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc);
 
+          // Reject when the burn amount cannot cover the protocol fee — otherwise
+          // we'd return negative output and the depositForBurn would revert.
+          if (BigInt(opts.amount) <= maxFeeSubunits) {
+            printOutput({
+              error: `CCTP: amount ${opts.amount} (${amountUsdc} USDC) is below the minimum bridge fee of ${maxFeeSubunits} (${fee} USDC). Increase --amount.`,
+              minimum_amount_wei: maxFeeSubunits.toString(),
+              minimum_amount_usdc: fee,
+            }, getOpts());
+            return;
+          }
+
           // Build depositForBurn call data
           // TokenMessenger V2: depositForBurn(amount, destinationDomain, mintRecipient, burnToken, maxFee, minFinalityThreshold)
           // mintRecipient must be 32 bytes (left-padded address)

@@ -11094,6 +11094,14 @@ function registerBridge(parent, getOpts) {
         }
         const amountUsdc = Number(BigInt(opts.amount)) / 1e6;
         const { fee, maxFeeSubunits } = await getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc);
+        if (BigInt(opts.amount) <= maxFeeSubunits) {
+          printOutput({
+            error: `CCTP: amount ${opts.amount} (${amountUsdc} USDC) is below the minimum bridge fee of ${maxFeeSubunits} (${fee} USDC). Increase --amount.`,
+            minimum_amount_wei: maxFeeSubunits.toString(),
+            minimum_amount_usdc: fee
+          }, getOpts());
+          return;
+        }
         const recipientPadded = `0x${"0".repeat(24)}${recipient.replace("0x", "").toLowerCase()}`;
         const { encodeFunctionData: encodeFunctionData30, parseAbi: parseAbi34 } = await import("viem");
         const tokenMessengerAbi = parseAbi34([
