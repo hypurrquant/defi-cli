@@ -19,6 +19,9 @@ const CTOKEN_ABI = parseAbi([
   "function borrowRatePerBlock() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
   "function totalBorrows() external view returns (uint256)",
+  "function balanceOf(address account) external view returns (uint256)",
+  "function exchangeRateStored() external view returns (uint256)",
+  "function borrowBalanceStored(address account) external view returns (uint256)",
   "function mint(uint256 mintAmount) external returns (uint256)",
   "function redeem(uint256 redeemTokens) external returns (uint256)",
   "function borrow(uint256 borrowAmount) external returns (uint256)",
@@ -185,9 +188,46 @@ export class CompoundV2Adapter implements ILending {
     };
   }
 
-  async getUserPosition(_user: Address): Promise<UserPosition> {
-    throw DefiError.unsupported(
-      `[${this.protocolName}] User position requires querying individual vToken balances`,
-    );
+  async getUserPosition(user: Address): Promise<UserPosition> {
+    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+
+    const ERC20_ABI = parseAbi([
+      "function symbol() external view returns (string)",
+    ]);
+
+    // Iterate every configured vToken, collect non-zero supply / borrow positions.
+    // Supply (in underlying) = balanceOf(user) * exchangeRateStored() / 1e18.
+    // Borrow (in underlying) = borrowBalanceStored(user).
+    const supplies: { asset: Address; symbol: string; amount: bigint }[] = [];
+    const borrows: { asset: Address; symbol: string; amount: bigint }[] = [];
+
+    await Promise.all(this.vTokenCandidates.map(async (vtoken) => {
+      try {
+        const [vtokenBal, rate, borrowed, underlying] = await Promise.all([
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "balanceOf", args: [user] }) as Promise<bigint>,
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "exchangeRateStored" }) as Promise<bigint>,
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "borrowBalanceStored", args: [user] }) as Promise<bigint>,
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "underlying" }).catch(() => null) as Promise<Address | null>,
+        ]);
+        if (vtokenBal === 0n && borrowed === 0n) return;
+        const assetAddr = (underlying ?? vtoken) as Address;
+        const symbol = await client.readContract({
+          address: assetAddr, abi: ERC20_ABI, functionName: "symbol",
+        }).catch(() => "?") as string;
+        const supplyUnderlying = (vtokenBal * rate) / 10n ** 18n;
+        if (supplyUnderlying > 0n) supplies.push({ asset: assetAddr, symbol, amount: supplyUnderlying });
+        if (borrowed > 0n) borrows.push({ asset: assetAddr, symbol, amount: borrowed });
+      } catch {
+        // skip vToken on RPC error
+      }
+    }));
+
+    return {
+      protocol: this.protocolName,
+      user,
+      supplies,
+      borrows,
+    };
   }
 }

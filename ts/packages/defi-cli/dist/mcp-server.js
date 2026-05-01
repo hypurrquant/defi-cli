@@ -339,7 +339,7 @@ var init_dist = __esm({
       aggregators;
       effectiveRpcUrl() {
         const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
-        return process.env[chainEnv] ?? process.env["HYPEREVM_RPC_URL"] ?? this.rpc_url;
+        return process.env[chainEnv] ?? this.rpc_url;
       }
     };
     ProtocolCategory = /* @__PURE__ */ ((ProtocolCategory2) => {
@@ -5729,6 +5729,9 @@ var init_dist2 = __esm({
       "function borrowRatePerBlock() external view returns (uint256)",
       "function totalSupply() external view returns (uint256)",
       "function totalBorrows() external view returns (uint256)",
+      "function balanceOf(address account) external view returns (uint256)",
+      "function exchangeRateStored() external view returns (uint256)",
+      "function borrowBalanceStored(address account) external view returns (uint256)",
       "function mint(uint256 mintAmount) external returns (uint256)",
       "function redeem(uint256 redeemTokens) external returns (uint256)",
       "function borrow(uint256 borrowAmount) external returns (uint256)",
@@ -5871,10 +5874,41 @@ var init_dist2 = __esm({
           total_borrow: totalBorrows
         };
       }
-      async getUserPosition(_user) {
-        throw DefiError.unsupported(
-          `[${this.protocolName}] User position requires querying individual vToken balances`
-        );
+      async getUserPosition(user) {
+        if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
+        const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+        const ERC20_ABI42 = parseAbi17([
+          "function symbol() external view returns (string)"
+        ]);
+        const supplies = [];
+        const borrows = [];
+        await Promise.all(this.vTokenCandidates.map(async (vtoken) => {
+          try {
+            const [vtokenBal, rate, borrowed, underlying] = await Promise.all([
+              client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "balanceOf", args: [user] }),
+              client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "exchangeRateStored" }),
+              client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "borrowBalanceStored", args: [user] }),
+              client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "underlying" }).catch(() => null)
+            ]);
+            if (vtokenBal === 0n && borrowed === 0n) return;
+            const assetAddr = underlying ?? vtoken;
+            const symbol = await client.readContract({
+              address: assetAddr,
+              abi: ERC20_ABI42,
+              functionName: "symbol"
+            }).catch(() => "?");
+            const supplyUnderlying = vtokenBal * rate / 10n ** 18n;
+            if (supplyUnderlying > 0n) supplies.push({ asset: assetAddr, symbol, amount: supplyUnderlying });
+            if (borrowed > 0n) borrows.push({ asset: assetAddr, symbol, amount: borrowed });
+          } catch {
+          }
+        }));
+        return {
+          protocol: this.protocolName,
+          user,
+          supplies,
+          borrows
+        };
       }
     };
     COMET_ABI = parseAbi18([
@@ -5884,6 +5918,8 @@ var init_dist2 = __esm({
       "function getBorrowRate(uint256 utilization) external view returns (uint64)",
       "function totalSupply() external view returns (uint256)",
       "function totalBorrow() external view returns (uint256)",
+      "function balanceOf(address account) external view returns (uint256)",
+      "function borrowBalanceOf(address account) external view returns (uint256)",
       "function supply(address asset, uint256 amount) external",
       "function withdraw(address asset, uint256 amount) external"
     ]);
@@ -6014,10 +6050,30 @@ var init_dist2 = __esm({
           total_borrow: totalBorrow
         };
       }
-      async getUserPosition(_user) {
-        throw DefiError.unsupported(
-          `[${this.protocolName}] User position requires querying Comet balanceOf + borrowBalanceOf`
-        );
+      async getUserPosition(user) {
+        if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
+        const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+        const ERC20_ABI42 = parseAbi18([
+          "function symbol() external view returns (string)"
+        ]);
+        const [supplyBal, borrowBal, baseToken] = await Promise.all([
+          client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "balanceOf", args: [user] }).catch(() => 0n),
+          client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "borrowBalanceOf", args: [user] }).catch(() => 0n),
+          client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "baseToken" })
+        ]);
+        const baseSymbol = await client.readContract({
+          address: baseToken,
+          abi: ERC20_ABI42,
+          functionName: "symbol"
+        }).catch(() => "?");
+        const supplies = supplyBal > 0n ? [{ asset: baseToken, symbol: baseSymbol, amount: supplyBal }] : [];
+        const borrows = borrowBal > 0n ? [{ asset: baseToken, symbol: baseSymbol, amount: borrowBal }] : [];
+        return {
+          protocol: this.protocolName,
+          user,
+          supplies,
+          borrows
+        };
       }
     };
     EULER_VAULT_ABI = parseAbi19([

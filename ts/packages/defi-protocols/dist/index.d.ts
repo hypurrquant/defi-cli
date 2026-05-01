@@ -678,7 +678,7 @@ declare class CompoundV2Adapter implements ILending {
     buildRepay(params: RepayParams): Promise<DeFiTx>;
     buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
     getRates(asset: Address): Promise<LendingRates>;
-    getUserPosition(_user: Address): Promise<UserPosition>;
+    getUserPosition(user: Address): Promise<UserPosition>;
 }
 
 declare class CompoundV3Adapter implements ILending {
@@ -692,7 +692,7 @@ declare class CompoundV3Adapter implements ILending {
     buildRepay(params: RepayParams): Promise<DeFiTx>;
     buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
     getRates(asset: Address): Promise<LendingRates>;
-    getUserPosition(_user: Address): Promise<UserPosition>;
+    getUserPosition(user: Address): Promise<UserPosition>;
 }
 
 declare class EulerV2Adapter implements ILending {

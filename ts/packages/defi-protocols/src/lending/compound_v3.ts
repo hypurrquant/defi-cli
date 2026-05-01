@@ -20,6 +20,8 @@ const COMET_ABI = parseAbi([
   "function getBorrowRate(uint256 utilization) external view returns (uint64)",
   "function totalSupply() external view returns (uint256)",
   "function totalBorrow() external view returns (uint256)",
+  "function balanceOf(address account) external view returns (uint256)",
+  "function borrowBalanceOf(address account) external view returns (uint256)",
   "function supply(address asset, uint256 amount) external",
   "function withdraw(address asset, uint256 amount) external",
 ]);
@@ -163,9 +165,40 @@ export class CompoundV3Adapter implements ILending {
     };
   }
 
-  async getUserPosition(_user: Address): Promise<UserPosition> {
-    throw DefiError.unsupported(
-      `[${this.protocolName}] User position requires querying Comet balanceOf + borrowBalanceOf`,
-    );
+  async getUserPosition(user: Address): Promise<UserPosition> {
+    if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+
+    const ERC20_ABI = parseAbi([
+      "function symbol() external view returns (string)",
+    ]);
+
+    // Comet exposes balanceOf for supply and borrowBalanceOf for borrow,
+    // both denominated in the base asset.
+    const [supplyBal, borrowBal, baseToken] = await Promise.all([
+      client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "balanceOf", args: [user] }).catch(() => 0n),
+      client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "borrowBalanceOf", args: [user] }).catch(() => 0n),
+      client.readContract({ address: this.comet, abi: COMET_ABI, functionName: "baseToken" }) as Promise<Address>,
+    ]);
+
+    const baseSymbol = await client.readContract({
+      address: baseToken,
+      abi: ERC20_ABI,
+      functionName: "symbol",
+    }).catch(() => "?") as string;
+
+    const supplies = (supplyBal as bigint) > 0n
+      ? [{ asset: baseToken, symbol: baseSymbol, amount: supplyBal as bigint }]
+      : [];
+    const borrows = (borrowBal as bigint) > 0n
+      ? [{ asset: baseToken, symbol: baseSymbol, amount: borrowBal as bigint }]
+      : [];
+
+    return {
+      protocol: this.protocolName,
+      user,
+      supplies,
+      borrows,
+    };
   }
 }

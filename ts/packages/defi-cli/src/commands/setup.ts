@@ -137,16 +137,19 @@ export function registerSetup(program: Command) {
         // ── RPC URLs ──
         console.log(pc.cyan(pc.bold("\n  RPC URLs")) + pc.gray(" (press Enter to use public defaults)"));
 
-        const hyperevmRpc = await ask(rl, "  HyperEVM RPC URL: ");
-        if (hyperevmRpc) {
-          newEnv.HYPEREVM_RPC_URL = hyperevmRpc;
-          console.log(`  ${pc.green("OK")} HyperEVM RPC set`);
-        }
-
-        const mantleRpc = await ask(rl, "  Mantle RPC URL: ");
-        if (mantleRpc) {
-          newEnv.MANTLE_RPC_URL = mantleRpc;
-          console.log(`  ${pc.green("OK")} Mantle RPC set`);
+        const rpcPrompts: Array<{ env: string; label: string }> = [
+          { env: "HYPEREVM_RPC_URL", label: "HyperEVM" },
+          { env: "MANTLE_RPC_URL",   label: "Mantle" },
+          { env: "BASE_RPC_URL",     label: "Base" },
+          { env: "BNB_RPC_URL",      label: "BNB" },
+          { env: "MONAD_RPC_URL",    label: "Monad" },
+        ];
+        for (const { env, label } of rpcPrompts) {
+          const value = await ask(rl, `  ${label} RPC URL: `);
+          if (value) {
+            newEnv[env] = value;
+            console.log(`  ${pc.green("OK")} ${label} RPC set`);
+          }
         }
 
         // Merge with existing non-overwritten keys (keep old keys not touched above)
@@ -164,11 +167,16 @@ export function registerSetup(program: Command) {
         if (finalEnv.DEFI_PRIVATE_KEY) {
           console.log(`  Key:     ${pc.green("configured")}`);
         }
-        if (finalEnv.HYPEREVM_RPC_URL) {
-          console.log(`  HyperEVM RPC: ${pc.gray(finalEnv.HYPEREVM_RPC_URL)}`);
-        }
-        if (finalEnv.MANTLE_RPC_URL) {
-          console.log(`  Mantle RPC:   ${pc.gray(finalEnv.MANTLE_RPC_URL)}`);
+        const rpcSummary: Array<[string, string]> = [
+          ["HYPEREVM_RPC_URL", "HyperEVM RPC"],
+          ["MANTLE_RPC_URL",   "Mantle RPC  "],
+          ["BASE_RPC_URL",     "Base RPC    "],
+          ["BNB_RPC_URL",      "BNB RPC     "],
+          ["MONAD_RPC_URL",    "Monad RPC   "],
+        ];
+        for (const [k, label] of rpcSummary) {
+          const v = finalEnv[k];
+          if (v) console.log(`  ${label}: ${pc.gray(v)}`);
         }
 
         console.log(pc.bold(pc.white("\n  Next steps:")));

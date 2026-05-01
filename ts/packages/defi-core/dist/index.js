@@ -253,7 +253,7 @@ var ChainConfig = class {
   aggregators;
   effectiveRpcUrl() {
     const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
-    return process.env[chainEnv] ?? process.env["HYPEREVM_RPC_URL"] ?? this.rpc_url;
+    return process.env[chainEnv] ?? this.rpc_url;
   }
 };
 

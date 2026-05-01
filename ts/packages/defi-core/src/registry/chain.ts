@@ -26,11 +26,11 @@ export class ChainConfig {
   aggregators?: AggregatorSlugs;
 
   effectiveRpcUrl(): string {
+    // Resolve per-chain RPC: prefer chain-specific env var (HYPEREVM_RPC_URL,
+    // MANTLE_RPC_URL, BASE_RPC_URL, BNB_RPC_URL, MONAD_RPC_URL), then the
+    // bundled default from chains.toml. NEVER fall back to another chain's
+    // RPC — calling Base via HYPEREVM_RPC_URL would route to the wrong chain.
     const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
-    return (
-      process.env[chainEnv] ??
-      process.env["HYPEREVM_RPC_URL"] ??
-      this.rpc_url
-    );
+    return process.env[chainEnv] ?? this.rpc_url;
   }
 }
