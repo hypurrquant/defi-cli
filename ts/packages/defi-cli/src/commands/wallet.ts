@@ -11,18 +11,20 @@ export function registerWallet(parent: Command, getOpts: () => OutputMode): void
   wallet
     .command("balance")
     .description("Show native token balance")
-    .requiredOption("--address <address>", "Wallet address to query")
+    .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .action(async (opts) => {
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+      if (!addr) { printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
 
-      const balance = await client.getBalance({ address: opts.address as `0x${string}` });
+      const balance = await client.getBalance({ address: addr as `0x${string}` });
       printOutput({
         chain: chain.name,
-        address: opts.address,
+        address: addr,
         native_token: chain.native_token,
         balance_wei: balance,
         balance_formatted: formatEther(balance),

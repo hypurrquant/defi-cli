@@ -293,43 +293,9 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
     .command("yield")
     .description("Yield operations: compare, scan, optimize, execute");
 
-  // yield (no subcommand) = scan with default USDC; --chain filters to single chain
-  yieldCmd
-    .option("--asset <token>", "Token symbol or address", "USDC")
-    .action(async (opts) => {
-      try {
-        const registry = Registry.loadEmbedded();
-        const asset = opts.asset as string;
-        const specifiedChain = parent.opts<{ chain?: string }>().chain;
-        const chainKeys = specifiedChain
-          ? [specifiedChain.toLowerCase()]
-          : Array.from(registry.chains.keys());
-        const allRates: Array<{ chain: string; protocol: string; supply_apy: number; borrow_variable_apy: number }> = [];
-
-        for (const chainKey of chainKeys) {
-          try {
-            const chain = registry.getChain(chainKey);
-            const rpc = chain.effectiveRpcUrl();
-            let assetAddr: Address;
-            try {
-              assetAddr = resolveAsset(registry, chainKey, asset);
-            } catch { continue; }
-            const rates = await collectLendingRates(registry, chainKey, rpc, assetAddr);
-            for (const r of rates) {
-              if (r.supply_apy > 0) {
-                allRates.push({ chain: chain.name, protocol: r.protocol, supply_apy: r.supply_apy, borrow_variable_apy: r.borrow_variable_apy });
-              }
-            }
-          } catch { /* skip chain */ }
-        }
-
-        allRates.sort((a, b) => b.supply_apy - a.supply_apy);
-        const best = allRates[0] ? `${allRates[0].protocol} on ${allRates[0].chain}` : null;
-        printOutput({ asset, chains_scanned: registry.chains.size, rates: allRates, best_supply: best }, getOpts());
-      } catch (err) {
-        printOutput({ error: String(err) }, getOpts());
-      }
-    });
+  // bare `defi yield` shows help — use `yield scan` / `yield compare` / `yield optimize` / `yield execute`.
+  // (Earlier the parent owned `--asset`, which collided with the same flag on every subcommand and
+  //  caused subcommand `requiredOption("--asset")` parsing to fail.)
 
   // yield compare
   yieldCmd

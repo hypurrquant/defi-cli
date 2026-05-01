@@ -4971,6 +4971,7 @@ import {
   DefiError as DefiError18
 } from "@hypurrquant/defi-core";
 var CTOKEN_ABI = parseAbi17([
+  "function underlying() external view returns (address)",
   "function supplyRatePerBlock() external view returns (uint256)",
   "function borrowRatePerBlock() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
@@ -4984,7 +4985,10 @@ var BSC_BLOCKS_PER_YEAR = 10512e3;
 var CompoundV2Adapter = class {
   protocolName;
   defaultVtoken;
+  vTokenCandidates;
   rpcUrl;
+  // Lazy cache: underlying asset address (lowercased) → vToken address
+  vTokenByAsset = null;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
     this.rpcUrl = rpcUrl;
@@ -4992,6 +4996,26 @@ var CompoundV2Adapter = class {
     const vtoken = contracts["vusdt"] ?? contracts["vusdc"] ?? contracts["vbnb"] ?? contracts["comptroller"];
     if (!vtoken) throw DefiError18.contractError("Missing vToken or comptroller address");
     this.defaultVtoken = vtoken;
+    this.vTokenCandidates = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k)).map(([, v]) => v);
+    if (this.vTokenCandidates.length === 0) this.vTokenCandidates = [vtoken];
+  }
+  async resolveVtoken(asset) {
+    if (!this.rpcUrl) return null;
+    if (!this.vTokenByAsset) {
+      const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+      const map = /* @__PURE__ */ new Map();
+      const lookups = await Promise.allSettled(
+        this.vTokenCandidates.map(async (v) => {
+          const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" });
+          return [u.toLowerCase(), v];
+        })
+      );
+      for (const r of lookups) {
+        if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
+      }
+      this.vTokenByAsset = map;
+    }
+    return this.vTokenByAsset.get(asset.toLowerCase()) ?? null;
   }
   name() {
     return this.protocolName;
@@ -5055,15 +5079,27 @@ var CompoundV2Adapter = class {
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError18.rpcError("No RPC URL configured");
     const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+    const vtoken = await this.resolveVtoken(asset);
+    if (!vtoken) {
+      return {
+        protocol: this.protocolName,
+        asset,
+        supply_apy: 0,
+        borrow_variable_apy: 0,
+        utilization: 0,
+        total_supply: 0n,
+        total_borrow: 0n
+      };
+    }
     const [supplyRate, borrowRate, totalSupply, totalBorrows] = await Promise.all([
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e) => {
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e) => {
         throw DefiError18.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`);
       }),
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "borrowRatePerBlock" }).catch((e) => {
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "borrowRatePerBlock" }).catch((e) => {
         throw DefiError18.rpcError(`[${this.protocolName}] borrowRatePerBlock failed: ${e}`);
       }),
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n)
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n)
     ]);
     const supplyPerBlock = Number(supplyRate) / 1e18;
     const borrowPerBlock = Number(borrowRate) / 1e18;
@@ -5095,6 +5131,7 @@ import {
   DefiError as DefiError19
 } from "@hypurrquant/defi-core";
 var COMET_ABI = parseAbi18([
+  "function baseToken() external view returns (address)",
   "function getUtilization() external view returns (uint256)",
   "function getSupplyRate(uint256 utilization) external view returns (uint64)",
   "function getBorrowRate(uint256 utilization) external view returns (uint64)",
@@ -5180,6 +5217,24 @@ var CompoundV3Adapter = class {
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError19.rpcError("No RPC URL configured");
     const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+    const baseToken = await client.readContract({
+      address: this.comet,
+      abi: COMET_ABI,
+      functionName: "baseToken"
+    }).catch((e) => {
+      throw DefiError19.rpcError(`[${this.protocolName}] baseToken failed: ${e}`);
+    });
+    if (baseToken.toLowerCase() !== asset.toLowerCase()) {
+      return {
+        protocol: this.protocolName,
+        asset,
+        supply_apy: 0,
+        borrow_variable_apy: 0,
+        utilization: 0,
+        total_supply: 0n,
+        total_borrow: 0n
+      };
+    }
     const utilization = await client.readContract({
       address: this.comet,
       abi: COMET_ABI,

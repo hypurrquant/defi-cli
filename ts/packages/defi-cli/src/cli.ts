@@ -22,7 +22,20 @@ import { registerSwap } from "./commands/swap.js";
 import { registerSetup } from "./commands/setup.js";
 import { registerOws } from "./commands/ows.js";
 
-const BANNER = `
+function buildBanner(): string {
+  let chainCount = 0;
+  let protocolCount = 0;
+  try {
+    const reg = Registry.loadEmbedded();
+    chainCount = reg.chains.size;
+    protocolCount = reg.protocols.length;
+  } catch {
+    // registry load failure shouldn't break --help; fall back silently
+  }
+  const stats = chainCount && protocolCount
+    ? `${chainCount} chains · ${protocolCount} protocols · by HypurrQuant`
+    : `by HypurrQuant`;
+  return `
   ██████╗ ███████╗███████╗██╗     ██████╗██╗     ██╗
   ██╔══██╗██╔════╝██╔════╝██║    ██╔════╝██║     ██║
   ██║  ██║█████╗  █████╗  ██║    ██║     ██║     ██║
@@ -30,11 +43,14 @@ const BANNER = `
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  2 chains · 21 protocols · by HypurrQuant
+  ${stats}
 
   Lending, LP farming, DEX swap, yield comparison
   — all from your terminal.
 `;
+}
+
+const BANNER = buildBanner();
 
 export const program = new Command()
   .name("defi")

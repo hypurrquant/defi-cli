@@ -667,8 +667,11 @@ declare class AaveOracleAdapter implements IOracle {
 declare class CompoundV2Adapter implements ILending {
     private readonly protocolName;
     private readonly defaultVtoken;
+    private readonly vTokenCandidates;
     private readonly rpcUrl?;
+    private vTokenByAsset;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
+    private resolveVtoken;
     name(): string;
     buildSupply(params: SupplyParams): Promise<DeFiTx>;
     buildBorrow(params: BorrowParams): Promise<DeFiTx>;

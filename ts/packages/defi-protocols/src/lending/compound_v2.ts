@@ -14,6 +14,7 @@ import {
 } from "@hypurrquant/defi-core";
 
 const CTOKEN_ABI = parseAbi([
+  "function underlying() external view returns (address)",
   "function supplyRatePerBlock() external view returns (uint256)",
   "function borrowRatePerBlock() external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
@@ -30,7 +31,10 @@ const BSC_BLOCKS_PER_YEAR = 10_512_000;
 export class CompoundV2Adapter implements ILending {
   private readonly protocolName: string;
   private readonly defaultVtoken: Address;
+  private readonly vTokenCandidates: Address[];
   private readonly rpcUrl?: string;
+  // Lazy cache: underlying asset address (lowercased) → vToken address
+  private vTokenByAsset: Map<string, Address> | null = null;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
@@ -43,6 +47,31 @@ export class CompoundV2Adapter implements ILending {
       contracts["comptroller"];
     if (!vtoken) throw DefiError.contractError("Missing vToken or comptroller address");
     this.defaultVtoken = vtoken;
+    // Collect all keys that look like vTokens (`v<symbol>`) — used by getRates
+    // to resolve the per-asset market. Falls back to defaultVtoken if empty.
+    this.vTokenCandidates = Object.entries(contracts)
+      .filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k))
+      .map(([, v]) => v as Address);
+    if (this.vTokenCandidates.length === 0) this.vTokenCandidates = [vtoken];
+  }
+
+  private async resolveVtoken(asset: Address): Promise<Address | null> {
+    if (!this.rpcUrl) return null;
+    if (!this.vTokenByAsset) {
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const map = new Map<string, Address>();
+      const lookups = await Promise.allSettled(
+        this.vTokenCandidates.map(async (v) => {
+          const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" }) as Address;
+          return [u.toLowerCase(), v] as const;
+        }),
+      );
+      for (const r of lookups) {
+        if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
+      }
+      this.vTokenByAsset = map;
+    }
+    return this.vTokenByAsset.get(asset.toLowerCase()) ?? null;
   }
 
   name(): string {
@@ -113,11 +142,27 @@ export class CompoundV2Adapter implements ILending {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
     const client = createPublicClient({ transport: http(this.rpcUrl) });
 
+    // Resolve the vToken whose underlying() matches the requested asset.
+    // Compound V2 forks (Venus etc.) have a separate vToken per asset; using a
+    // single default vToken contaminates cross-asset yield scans.
+    const vtoken = await this.resolveVtoken(asset);
+    if (!vtoken) {
+      return {
+        protocol: this.protocolName,
+        asset,
+        supply_apy: 0,
+        borrow_variable_apy: 0,
+        utilization: 0,
+        total_supply: 0n,
+        total_borrow: 0n,
+      };
+    }
+
     const [supplyRate, borrowRate, totalSupply, totalBorrows] = await Promise.all([
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`); }),
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "borrowRatePerBlock" }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] borrowRatePerBlock failed: ${e}`); }),
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
-      client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n),
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`); }),
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "borrowRatePerBlock" }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] borrowRatePerBlock failed: ${e}`); }),
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
+      client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n),
     ]);
 
     const supplyPerBlock = Number(supplyRate) / 1e18;

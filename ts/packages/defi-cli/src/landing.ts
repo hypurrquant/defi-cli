@@ -1,25 +1,29 @@
 import pc from "picocolors";
-import { encodeFunctionData, parseAbi, formatUnits, createPublicClient, http } from "viem";
+import { encodeFunctionData, parseAbi, formatUnits } from "viem";
 import type { Address, Hex } from "viem";
 import { Registry, multicallRead, decodeU256, MULTICALL3_ADDRESS } from "@hypurrquant/defi-core";
 import type { TokenEntry } from "@hypurrquant/defi-core";
 
-// Tokens to show on the landing page (ordered by importance)
-const HYPEREVM_DISPLAY = ["HYPE", "WHYPE", "USDC", "USDT0", "USDe", "kHYPE", "wstHYPE"];
-const MANTLE_DISPLAY = ["MNT", "WMNT", "USDC", "USDT", "WETH", "mETH"];
+// Per-chain dashboard token list (ordered by importance)
+const DASHBOARD_CHAINS: Array<{ slug: string; tokens: string[] }> = [
+  { slug: "hyperevm", tokens: ["HYPE", "WHYPE", "USDC", "USDT0", "USDe", "kHYPE", "wstHYPE"] },
+  { slug: "mantle",   tokens: ["MNT", "WMNT", "USDC", "USDT", "WETH", "mETH"] },
+  { slug: "base",     tokens: ["ETH", "WETH", "USDC", "AERO"] },
+  { slug: "bnb",      tokens: ["BNB", "WBNB", "USDT", "USDC", "BUSD", "CAKE"] },
+  { slug: "monad",    tokens: ["MON", "WMON", "USDC", "USDT0", "WETH", "WBTC"] },
+];
 
 const balanceOfAbi = parseAbi([
   "function balanceOf(address account) view returns (uint256)",
 ]);
 
-// multicall3 getEthBalance ABI
 const getEthBalanceAbi = parseAbi([
   "function getEthBalance(address addr) view returns (uint256)",
 ]);
 
 interface TokenBalance {
   symbol: string;
-  balance: string; // formatted, or "?" on error
+  balance: string;
   decimals: number;
 }
 
@@ -33,20 +37,12 @@ async function fetchBalances(
     if (isNative) {
       return [
         MULTICALL3_ADDRESS,
-        encodeFunctionData({
-          abi: getEthBalanceAbi,
-          functionName: "getEthBalance",
-          args: [wallet],
-        }),
+        encodeFunctionData({ abi: getEthBalanceAbi, functionName: "getEthBalance", args: [wallet] }),
       ];
     }
     return [
       t.address,
-      encodeFunctionData({
-        abi: balanceOfAbi,
-        functionName: "balanceOf",
-        args: [wallet],
-      }),
+      encodeFunctionData({ abi: balanceOfAbi, functionName: "balanceOf", args: [wallet] }),
     ];
   });
 
@@ -60,7 +56,6 @@ async function fetchBalances(
   return tokens.map((t, i) => {
     const raw = decodeU256(results[i]);
     const formatted = formatUnits(raw, t.decimals);
-    // Trim trailing zeros but keep 2 decimal places minimum
     const num = parseFloat(formatted);
     const display = num === 0 ? "0.00" : num >= 1000
       ? num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -88,6 +83,39 @@ function formatBalanceLine(sym: string, bal: string): string {
   return `  ${symPad}${balPad}`;
 }
 
+interface ResolvedChain {
+  slug: string;
+  name: string;
+  tokens: TokenEntry[];
+  balances: TokenBalance[];
+}
+
+async function resolveChainBalances(registry: Registry, wallet: Address): Promise<ResolvedChain[]> {
+  const chains = DASHBOARD_CHAINS.map(({ slug, tokens: order }) => {
+    const chain = registry.getChain(slug);
+    const allTokens = registry.tokens.get(slug) ?? [];
+    const sorted = order
+      .map(s => allTokens.find(t => t.symbol === s))
+      .filter(Boolean) as TokenEntry[];
+    return { slug, chain, tokens: sorted };
+  });
+
+  const balanceLists = await Promise.all(
+    chains.map(({ chain, tokens }) =>
+      fetchBalances(chain.effectiveRpcUrl(), wallet, tokens).catch(() =>
+        tokens.map(t => ({ symbol: t.symbol, balance: "?", decimals: t.decimals })),
+      ),
+    ),
+  );
+
+  return chains.map((c, i) => ({
+    slug: c.slug,
+    name: c.chain.name,
+    tokens: c.tokens,
+    balances: balanceLists[i] ?? [],
+  }));
+}
+
 export async function showLandingPage(isJson: boolean): Promise<void> {
   const registry = Registry.loadEmbedded();
   const wallet = process.env.DEFI_WALLET_ADDRESS as Address | undefined;
@@ -97,31 +125,13 @@ export async function showLandingPage(isJson: boolean): Promise<void> {
       console.log(JSON.stringify({ error: "DEFI_WALLET_ADDRESS not set" }, null, 2));
       return;
     }
-    const heChain = registry.getChain("hyperevm");
-    const mantleChain = registry.getChain("mantle");
-    const heTokens = (registry.tokens.get("hyperevm") ?? []).filter(t => HYPEREVM_DISPLAY.includes(t.symbol));
-    const mantleTokens = (registry.tokens.get("mantle") ?? []).filter(t => MANTLE_DISPLAY.includes(t.symbol));
-
-    // Sort to match display order
-    const heSorted = HYPEREVM_DISPLAY.map(s => heTokens.find(t => t.symbol === s)).filter(Boolean) as TokenEntry[];
-    const mantleSorted = MANTLE_DISPLAY.map(s => mantleTokens.find(t => t.symbol === s)).filter(Boolean) as TokenEntry[];
-
-    const [heBalances, mantleBalances] = await Promise.all([
-      fetchBalances(heChain.effectiveRpcUrl(), wallet, heSorted),
-      fetchBalances(mantleChain.effectiveRpcUrl(), wallet, mantleSorted),
-    ]);
-
-    console.log(JSON.stringify({
-      wallet,
-      chains: {
-        hyperevm: { name: heChain.name, balances: heBalances },
-        mantle: { name: mantleChain.name, balances: mantleBalances },
-      },
-    }, null, 2));
+    const resolved = await resolveChainBalances(registry, wallet);
+    const chains: Record<string, { name: string; balances: TokenBalance[] }> = {};
+    for (const c of resolved) chains[c.slug] = { name: c.name, balances: c.balances };
+    console.log(JSON.stringify({ wallet, chains }, null, 2));
     return;
   }
 
-  // Human-readable mode
   const { createRequire } = await import("node:module");
   const _require = createRequire(import.meta.url);
   const pkg = _require("../package.json") as { version: string };
@@ -147,75 +157,54 @@ export async function showLandingPage(isJson: boolean): Promise<void> {
     return;
   }
 
-  const heChain = registry.getChain("hyperevm");
-  const mantleChain = registry.getChain("mantle");
-
-  const heTokens = (registry.tokens.get("hyperevm") ?? []).filter(t => HYPEREVM_DISPLAY.includes(t.symbol));
-  const mantleTokens = (registry.tokens.get("mantle") ?? []).filter(t => MANTLE_DISPLAY.includes(t.symbol));
-
-  const heSorted = HYPEREVM_DISPLAY.map(s => heTokens.find(t => t.symbol === s)).filter(Boolean) as TokenEntry[];
-  const mantleSorted = MANTLE_DISPLAY.map(s => mantleTokens.find(t => t.symbol === s)).filter(Boolean) as TokenEntry[];
-
-  // Fetch both chains in parallel
-  const [heBalances, mantleBalances] = await Promise.all([
-    fetchBalances(heChain.effectiveRpcUrl(), wallet, heSorted).catch(() =>
-      heSorted.map(t => ({ symbol: t.symbol, balance: "?", decimals: t.decimals }))
-    ),
-    fetchBalances(mantleChain.effectiveRpcUrl(), wallet, mantleSorted).catch(() =>
-      mantleSorted.map(t => ({ symbol: t.symbol, balance: "?", decimals: t.decimals }))
-    ),
-  ]);
+  const resolved = await resolveChainBalances(registry, wallet);
 
   const colWidth = 38;
   const divider = "─".repeat(colWidth - 2);
+  const chainNames = resolved.map(c => c.name).join(pc.dim(" · "));
 
   console.log("");
-  console.log(
-    pc.bold(pc.cyan("  DeFi CLI v" + version)) +
-    pc.dim("  —  ") +
-    pc.bold(heChain.name) +
-    pc.dim(" · ") +
-    pc.bold(mantleChain.name)
-  );
+  console.log(pc.bold(pc.cyan("  DeFi CLI v" + version)) + pc.dim("  —  ") + pc.bold(chainNames));
   console.log("");
   console.log("  Wallet: " + pc.yellow(shortenAddress(wallet)));
   console.log("");
 
-  // Chain headers
-  const heHeader = padRight("  " + pc.bold(heChain.name), colWidth + 10 /* account for ANSI */);
-  const mantleHeader = pc.bold(mantleChain.name);
-  console.log(heHeader + "  " + mantleHeader);
+  // Render in 2-column rows; last odd chain rendered alone
+  for (let i = 0; i < resolved.length; i += 2) {
+    const left = resolved[i]!;
+    const right = resolved[i + 1];
 
-  const heDivider = padRight("  " + pc.dim(divider), colWidth + 10);
-  const mantleDivider = pc.dim(divider);
-  console.log(heDivider + "  " + mantleDivider);
+    const leftHeader = padRight("  " + pc.bold(left.name), colWidth + 10);
+    const rightHeader = right ? pc.bold(right.name) : "";
+    console.log(leftHeader + (right ? "  " + rightHeader : ""));
 
-  const maxRows = Math.max(heBalances.length, mantleBalances.length);
-  for (let i = 0; i < maxRows; i++) {
-    const heEntry = heBalances[i];
-    const mantleEntry = mantleBalances[i];
+    const leftDivider = padRight("  " + pc.dim(divider), colWidth + 10);
+    const rightDivider = right ? pc.dim(divider) : "";
+    console.log(leftDivider + (right ? "  " + rightDivider : ""));
 
-    const heText = heEntry ? formatBalanceLine(heEntry.symbol, heEntry.balance) : "";
-    const mantleText = mantleEntry ? formatBalanceLine(mantleEntry.symbol, mantleEntry.balance) : "";
+    const maxRows = Math.max(left.balances.length, right?.balances.length ?? 0);
+    for (let r = 0; r < maxRows; r++) {
+      const lEntry = left.balances[r];
+      const rEntry = right?.balances[r];
 
-    // Color zero balances dimly, non-zero normally
-    const heColored = heEntry
-      ? (heEntry.balance === "0.00" || heEntry.balance === "?"
-        ? pc.dim(heText)
-        : heText)
-      : "";
-    const mantleColored = mantleEntry
-      ? (mantleEntry.balance === "0.00" || mantleEntry.balance === "?"
-        ? pc.dim(mantleText)
-        : mantleText)
-      : "";
+      const lText = lEntry ? formatBalanceLine(lEntry.symbol, lEntry.balance) : "";
+      const rText = rEntry ? formatBalanceLine(rEntry.symbol, rEntry.balance) : "";
 
-    // Pad the left column (strip ANSI for length calculation)
-    const visibleLen = heText.length;
-    const padNeeded = colWidth - visibleLen;
-    const paddedHe = heColored + (padNeeded > 0 ? " ".repeat(padNeeded) : "");
+      const lColored = lEntry
+        ? (lEntry.balance === "0.00" || lEntry.balance === "?" ? pc.dim(lText) : lText)
+        : "";
+      const rColored = rEntry
+        ? (rEntry.balance === "0.00" || rEntry.balance === "?" ? pc.dim(rText) : rText)
+        : "";
 
-    console.log(paddedHe + "  " + mantleColored);
+      const lVisible = lText.length;
+      const lPad = colWidth - lVisible;
+      const lPadded = lColored + (lPad > 0 ? " ".repeat(lPad) : "");
+
+      console.log(lPadded + (right ? "  " + rColored : ""));
+    }
+
+    if (i + 2 < resolved.length) console.log("");
   }
 
   console.log("");

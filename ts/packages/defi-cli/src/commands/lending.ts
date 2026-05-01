@@ -26,12 +26,14 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
   lending.command("position")
     .description("Show current lending position")
     .requiredOption("--protocol <protocol>", "Protocol slug")
-    .requiredOption("--address <address>", "Wallet address to query")
+    .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .action(async (opts) => {
       const ctx = resolveContext(parent, getOpts, opts.protocol);
       if (!ctx) return;
+      const address = (opts.address ?? process.env["DEFI_WALLET_ADDRESS"]) as Address | undefined;
+      if (!address) { printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, getOpts()); return; }
       const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
-      const position = await adapter.getUserPosition(opts.address as Address);
+      const position = await adapter.getUserPosition(address);
       printOutput(position, getOpts());
     });
 

@@ -9,6 +9,35 @@ const LIFI_API = "https://li.quest/v1";
 const DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
 const CCTP_FEE_API = "https://iris-api.circle.com/v2/burn/USDC/fees";
 
+// Bridge destinations beyond the source-chain registry.
+// These chains are not registered for source operations (lending/LP/swap) but
+// are valid CCTP/LI.FI/deBridge destinations.
+const DEST_CHAIN_META: Record<string, { chain_id: number; name: string }> = {
+  ethereum: { chain_id: 1, name: "Ethereum" },
+  optimism: { chain_id: 10, name: "Optimism" },
+  polygon: { chain_id: 137, name: "Polygon" },
+  arbitrum: { chain_id: 42161, name: "Arbitrum" },
+  avalanche: { chain_id: 43114, name: "Avalanche" },
+  linea: { chain_id: 59144, name: "Linea" },
+  zksync: { chain_id: 324, name: "zkSync" },
+};
+
+function resolveDestChain(registry: Registry, slug: string): { chain_id: number; name: string } {
+  try {
+    const c = registry.getChain(slug);
+    return { chain_id: c.chain_id, name: c.name };
+  } catch {
+    const meta = DEST_CHAIN_META[slug];
+    if (!meta) {
+      throw new Error(
+        `Unknown destination chain '${slug}'. Source chains: hyperevm, mantle, base, bnb, monad. ` +
+        `Bridge destinations also include: ${Object.keys(DEST_CHAIN_META).join(", ")}.`,
+      );
+    }
+    return meta;
+  }
+}
+
 // ── deBridge DLN ──
 
 const DLN_CHAIN_IDS: Record<string, number> = {
@@ -154,7 +183,13 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
       if (!chainName) return;
       const registry = Registry.loadEmbedded();
       const fromChain = registry.getChain(chainName);
-      const toChain = registry.getChain(opts.toChain);
+      let toChain: { chain_id: number; name: string };
+      try {
+        toChain = resolveDestChain(registry, opts.toChain);
+      } catch (e) {
+        printOutput({ error: errMsg(e) }, getOpts());
+        return;
+      }
       const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
       const recipient = resolveWallet(opts.recipient);
       const provider = (opts.provider as string).toLowerCase();

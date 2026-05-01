@@ -34,8 +34,8 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
   portfolio
     .command("show")
     .description("Show current portfolio positions")
-    .requiredOption("--address <address>", "Wallet address to query")
-    .action(async (opts: { address: string }) => {
+    .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
+    .action(async (opts: { address?: string }) => {
 
       const mode = getOpts();
       const registry = Registry.loadEmbedded();
@@ -50,9 +50,11 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
         return;
       }
 
-      const user = opts.address as Address;
+      const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+      if (!addr) { printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode); return; }
+      const user = addr as Address;
       if (!/^0x[0-9a-fA-F]{40}$/.test(user)) {
-        printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+        printOutput({ error: `Invalid address: ${addr}` }, mode);
         return;
       }
 
@@ -212,20 +214,22 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
   portfolio
     .command("snapshot")
     .description("Take a new portfolio snapshot and save it locally")
-    .requiredOption("--address <address>", "Wallet address to snapshot")
-    .action(async (opts: { address: string }) => {
+    .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
+    .action(async (opts: { address?: string }) => {
       const mode = getOpts();
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
       const registry = Registry.loadEmbedded();
 
-      if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
-        printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+      const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+      if (!addr) { printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode); return; }
+      if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+        printOutput({ error: `Invalid address: ${addr}` }, mode);
         return;
       }
 
       try {
-        const snapshot = await takeSnapshot(chainName, opts.address, registry);
+        const snapshot = await takeSnapshot(chainName, addr, registry);
         const filepath = saveSnapshot(snapshot);
         printOutput(
           {
@@ -248,20 +252,22 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
   portfolio
     .command("pnl")
     .description("Show PnL since the last snapshot")
-    .requiredOption("--address <address>", "Wallet address")
+    .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .option("--since <hours>", "Compare against snapshot from N hours ago (default: last snapshot)")
-    .action(async (opts: { address: string; since?: string }) => {
+    .action(async (opts: { address?: string; since?: string }) => {
       const mode = getOpts();
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
       const registry = Registry.loadEmbedded();
 
-      if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
-        printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+      const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+      if (!addr) { printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode); return; }
+      if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+        printOutput({ error: `Invalid address: ${addr}` }, mode);
         return;
       }
 
-      const snapshots = loadSnapshots(chainName, opts.address, 50);
+      const snapshots = loadSnapshots(chainName, addr, 50);
       if (snapshots.length === 0) {
         printOutput({ error: "No snapshots found. Run `portfolio snapshot` first." }, mode);
         return;
@@ -280,12 +286,12 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
       }
 
       try {
-        const current = await takeSnapshot(chainName, opts.address, registry);
+        const current = await takeSnapshot(chainName, addr, registry);
         const pnl = calculatePnL(current, previous);
         printOutput(
           {
             chain: chainName,
-            wallet: opts.address,
+            wallet: addr,
             previous_snapshot: new Date(previous.timestamp).toISOString(),
             current_time: new Date(current.timestamp).toISOString(),
             ...pnl,
@@ -305,20 +311,22 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
   portfolio
     .command("history")
     .description("List saved portfolio snapshots with values")
-    .requiredOption("--address <address>", "Wallet address")
+    .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .option("--limit <n>", "Number of snapshots to show", "10")
-    .action(async (opts: { address: string; limit: string }) => {
+    .action(async (opts: { address?: string; limit: string }) => {
       const mode = getOpts();
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
 
-      if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
-        printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+      const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+      if (!addr) { printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode); return; }
+      if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+        printOutput({ error: `Invalid address: ${addr}` }, mode);
         return;
       }
 
       const limit = parseInt(opts.limit, 10);
-      const snapshots = loadSnapshots(chainName, opts.address, limit);
+      const snapshots = loadSnapshots(chainName, addr, limit);
 
       if (snapshots.length === 0) {
         printOutput({ message: "No snapshots found for this address on this chain." }, mode);

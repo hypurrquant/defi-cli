@@ -14,6 +14,7 @@ import {
 } from "@hypurrquant/defi-core";
 
 const COMET_ABI = parseAbi([
+  "function baseToken() external view returns (address)",
   "function getUtilization() external view returns (uint256)",
   "function getSupplyRate(uint256 utilization) external view returns (uint64)",
   "function getBorrowRate(uint256 utilization) external view returns (uint64)",
@@ -110,6 +111,26 @@ export class CompoundV3Adapter implements ILending {
   async getRates(asset: Address): Promise<LendingRates> {
     if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
     const client = createPublicClient({ transport: http(this.rpcUrl) });
+
+    // Compound V3 has a separate Comet contract per base asset. The configured
+    // comet only serves rates for its own base token; for any other asset, return
+    // zero rates so cross-asset yield scans don't surface mislabeled data.
+    const baseToken = await client.readContract({
+      address: this.comet,
+      abi: COMET_ABI,
+      functionName: "baseToken",
+    }).catch((e: unknown) => { throw DefiError.rpcError(`[${this.protocolName}] baseToken failed: ${e}`); }) as Address;
+    if (baseToken.toLowerCase() !== asset.toLowerCase()) {
+      return {
+        protocol: this.protocolName,
+        asset,
+        supply_apy: 0,
+        borrow_variable_apy: 0,
+        utilization: 0,
+        total_supply: 0n,
+        total_borrow: 0n,
+      };
+    }
 
     const utilization = await client.readContract({
       address: this.comet,

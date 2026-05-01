@@ -14,10 +14,12 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .command("balance")
     .description("Query token balance for an address")
     .requiredOption("--token <token>", "Token symbol or address")
-    .requiredOption("--owner <address>", "Wallet address to query")
+    .option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .action(async (opts) => {
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
+      if (!owner) { printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
@@ -25,7 +27,7 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
       const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
 
       const [balance, symbol, decimals] = await Promise.all([
-        client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [opts.owner as Address] }),
+        client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [owner as Address] }),
         client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "symbol" }),
         client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "decimals" }),
       ]);
@@ -33,7 +35,7 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
       printOutput({
         token: tokenAddr,
         symbol,
-        owner: opts.owner,
+        owner,
         balance,
         decimals,
       }, getOpts());
@@ -62,11 +64,13 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
     .command("allowance")
     .description("Check token allowance")
     .requiredOption("--token <token>", "Token symbol or address")
-    .requiredOption("--owner <address>", "Owner address")
+    .option("--owner <address>", "Owner address (defaults to DEFI_WALLET_ADDRESS)")
     .requiredOption("--spender <address>", "Spender address")
     .action(async (opts) => {
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
+      if (!owner) { printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
@@ -75,10 +79,10 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
 
       const allowance = await client.readContract({
         address: tokenAddr, abi: erc20Abi, functionName: "allowance",
-        args: [opts.owner as Address, opts.spender as Address],
+        args: [owner as Address, opts.spender as Address],
       });
 
-      printOutput({ token: tokenAddr, owner: opts.owner, spender: opts.spender, allowance }, getOpts());
+      printOutput({ token: tokenAddr, owner, spender: opts.spender, allowance }, getOpts());
     });
 
   token

@@ -5612,6 +5612,7 @@ var init_dist2 = __esm({
       }
     };
     CTOKEN_ABI = parseAbi17([
+      "function underlying() external view returns (address)",
       "function supplyRatePerBlock() external view returns (uint256)",
       "function borrowRatePerBlock() external view returns (uint256)",
       "function totalSupply() external view returns (uint256)",
@@ -5625,7 +5626,10 @@ var init_dist2 = __esm({
     CompoundV2Adapter = class {
       protocolName;
       defaultVtoken;
+      vTokenCandidates;
       rpcUrl;
+      // Lazy cache: underlying asset address (lowercased) → vToken address
+      vTokenByAsset = null;
       constructor(entry, rpcUrl) {
         this.protocolName = entry.name;
         this.rpcUrl = rpcUrl;
@@ -5633,6 +5637,26 @@ var init_dist2 = __esm({
         const vtoken = contracts["vusdt"] ?? contracts["vusdc"] ?? contracts["vbnb"] ?? contracts["comptroller"];
         if (!vtoken) throw DefiError.contractError("Missing vToken or comptroller address");
         this.defaultVtoken = vtoken;
+        this.vTokenCandidates = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k)).map(([, v]) => v);
+        if (this.vTokenCandidates.length === 0) this.vTokenCandidates = [vtoken];
+      }
+      async resolveVtoken(asset) {
+        if (!this.rpcUrl) return null;
+        if (!this.vTokenByAsset) {
+          const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+          const map = /* @__PURE__ */ new Map();
+          const lookups = await Promise.allSettled(
+            this.vTokenCandidates.map(async (v) => {
+              const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" });
+              return [u.toLowerCase(), v];
+            })
+          );
+          for (const r of lookups) {
+            if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
+          }
+          this.vTokenByAsset = map;
+        }
+        return this.vTokenByAsset.get(asset.toLowerCase()) ?? null;
       }
       name() {
         return this.protocolName;
@@ -5696,15 +5720,27 @@ var init_dist2 = __esm({
       async getRates(asset) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
         const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+        const vtoken = await this.resolveVtoken(asset);
+        if (!vtoken) {
+          return {
+            protocol: this.protocolName,
+            asset,
+            supply_apy: 0,
+            borrow_variable_apy: 0,
+            utilization: 0,
+            total_supply: 0n,
+            total_borrow: 0n
+          };
+        }
         const [supplyRate, borrowRate, totalSupply, totalBorrows] = await Promise.all([
-          client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e) => {
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "supplyRatePerBlock" }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] supplyRatePerBlock failed: ${e}`);
           }),
-          client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "borrowRatePerBlock" }).catch((e) => {
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "borrowRatePerBlock" }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] borrowRatePerBlock failed: ${e}`);
           }),
-          client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
-          client.readContract({ address: this.defaultVtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n)
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalSupply" }).catch(() => 0n),
+          client.readContract({ address: vtoken, abi: CTOKEN_ABI, functionName: "totalBorrows" }).catch(() => 0n)
         ]);
         const supplyPerBlock = Number(supplyRate) / 1e18;
         const borrowPerBlock = Number(borrowRate) / 1e18;
@@ -5730,6 +5766,7 @@ var init_dist2 = __esm({
       }
     };
     COMET_ABI = parseAbi18([
+      "function baseToken() external view returns (address)",
       "function getUtilization() external view returns (uint256)",
       "function getSupplyRate(uint256 utilization) external view returns (uint64)",
       "function getBorrowRate(uint256 utilization) external view returns (uint64)",
@@ -5815,6 +5852,24 @@ var init_dist2 = __esm({
       async getRates(asset) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
         const client = createPublicClient14({ transport: http14(this.rpcUrl) });
+        const baseToken = await client.readContract({
+          address: this.comet,
+          abi: COMET_ABI,
+          functionName: "baseToken"
+        }).catch((e) => {
+          throw DefiError.rpcError(`[${this.protocolName}] baseToken failed: ${e}`);
+        });
+        if (baseToken.toLowerCase() !== asset.toLowerCase()) {
+          return {
+            protocol: this.protocolName,
+            asset,
+            supply_apy: 0,
+            borrow_variable_apy: 0,
+            utilization: 0,
+            total_supply: 0n,
+            total_borrow: 0n
+          };
+        }
         const utilization = await client.readContract({
           address: this.comet,
           abi: COMET_ABI,
@@ -9414,11 +9469,16 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const rates = await adapter.getRates(asset);
     printOutput(rates, getOpts());
   });
-  lending.command("position").description("Show current lending position").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
+  lending.command("position").description("Show current lending position").requiredOption("--protocol <protocol>", "Protocol slug").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
+    const address = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!address) {
+      printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, getOpts());
+      return;
+    }
     const adapter = createLending(ctx.protocol, ctx.rpcUrl);
-    const position = await adapter.getUserPosition(opts.address);
+    const position = await adapter.getUserPosition(address);
     printOutput(position, getOpts());
   });
   lending.command("supply").description("Supply an asset to a lending protocol").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount to supply in wei").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
@@ -9692,39 +9752,6 @@ async function scanRatesForExecute(registry, asset) {
 }
 function registerYield(parent, getOpts, makeExecutor2) {
   const yieldCmd = parent.command("yield").description("Yield operations: compare, scan, optimize, execute");
-  yieldCmd.option("--asset <token>", "Token symbol or address", "USDC").action(async (opts) => {
-    try {
-      const registry = Registry.loadEmbedded();
-      const asset = opts.asset;
-      const specifiedChain = parent.opts().chain;
-      const chainKeys = specifiedChain ? [specifiedChain.toLowerCase()] : Array.from(registry.chains.keys());
-      const allRates = [];
-      for (const chainKey of chainKeys) {
-        try {
-          const chain = registry.getChain(chainKey);
-          const rpc = chain.effectiveRpcUrl();
-          let assetAddr;
-          try {
-            assetAddr = resolveAsset(registry, chainKey, asset);
-          } catch {
-            continue;
-          }
-          const rates = await collectLendingRates(registry, chainKey, rpc, assetAddr);
-          for (const r of rates) {
-            if (r.supply_apy > 0) {
-              allRates.push({ chain: chain.name, protocol: r.protocol, supply_apy: r.supply_apy, borrow_variable_apy: r.borrow_variable_apy });
-            }
-          }
-        } catch {
-        }
-      }
-      allRates.sort((a, b) => b.supply_apy - a.supply_apy);
-      const best = allRates[0] ? `${allRates[0].protocol} on ${allRates[0].chain}` : null;
-      printOutput({ asset, chains_scanned: registry.chains.size, rates: allRates, best_supply: best }, getOpts());
-    } catch (err) {
-      printOutput({ error: String(err) }, getOpts());
-    }
-  });
   yieldCmd.command("compare").description("Compare lending rates across protocols for an asset").option("--asset <token>", "Token symbol or address", "USDC").action(async (opts) => {
     try {
       const registry = Registry.loadEmbedded();
@@ -10319,7 +10346,7 @@ function decodeU2562(data, wordOffset = 0) {
 }
 function registerPortfolio(parent, getOpts) {
   const portfolio = parent.command("portfolio").description("Aggregate positions across all protocols");
-  portfolio.command("show").description("Show current portfolio positions").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
+  portfolio.command("show").description("Show current portfolio positions").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const mode = getOpts();
     const registry = Registry.loadEmbedded();
     const chainName = requireChain(parent, getOpts);
@@ -10331,9 +10358,14 @@ function registerPortfolio(parent, getOpts) {
       printOutput({ error: `Chain not found: ${chainName}` }, mode);
       return;
     }
-    const user = opts.address;
+    const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!addr) {
+      printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode);
+      return;
+    }
+    const user = addr;
     if (!/^0x[0-9a-fA-F]{40}$/.test(user)) {
-      printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+      printOutput({ error: `Invalid address: ${addr}` }, mode);
       return;
     }
     const rpc = chain.effectiveRpcUrl();
@@ -10459,17 +10491,22 @@ function registerPortfolio(parent, getOpts) {
       mode
     );
   });
-  portfolio.command("snapshot").description("Take a new portfolio snapshot and save it locally").requiredOption("--address <address>", "Wallet address to snapshot").action(async (opts) => {
+  portfolio.command("snapshot").description("Take a new portfolio snapshot and save it locally").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const mode = getOpts();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
-    if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
-      printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+    const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!addr) {
+      printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode);
+      return;
+    }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+      printOutput({ error: `Invalid address: ${addr}` }, mode);
       return;
     }
     try {
-      const snapshot = await takeSnapshot(chainName, opts.address, registry);
+      const snapshot = await takeSnapshot(chainName, addr, registry);
       const filepath = saveSnapshot(snapshot);
       printOutput(
         {
@@ -10487,16 +10524,21 @@ function registerPortfolio(parent, getOpts) {
       printOutput({ error: errMsg(e) }, mode);
     }
   });
-  portfolio.command("pnl").description("Show PnL since the last snapshot").requiredOption("--address <address>", "Wallet address").option("--since <hours>", "Compare against snapshot from N hours ago (default: last snapshot)").action(async (opts) => {
+  portfolio.command("pnl").description("Show PnL since the last snapshot").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").option("--since <hours>", "Compare against snapshot from N hours ago (default: last snapshot)").action(async (opts) => {
     const mode = getOpts();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
-    if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
-      printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+    const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!addr) {
+      printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode);
       return;
     }
-    const snapshots = loadSnapshots(chainName, opts.address, 50);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+      printOutput({ error: `Invalid address: ${addr}` }, mode);
+      return;
+    }
+    const snapshots = loadSnapshots(chainName, addr, 50);
     if (snapshots.length === 0) {
       printOutput({ error: "No snapshots found. Run `portfolio snapshot` first." }, mode);
       return;
@@ -10513,12 +10555,12 @@ function registerPortfolio(parent, getOpts) {
       previous = match;
     }
     try {
-      const current = await takeSnapshot(chainName, opts.address, registry);
+      const current = await takeSnapshot(chainName, addr, registry);
       const pnl = calculatePnL(current, previous);
       printOutput(
         {
           chain: chainName,
-          wallet: opts.address,
+          wallet: addr,
           previous_snapshot: new Date(previous.timestamp).toISOString(),
           current_time: new Date(current.timestamp).toISOString(),
           ...pnl,
@@ -10533,16 +10575,21 @@ function registerPortfolio(parent, getOpts) {
       printOutput({ error: errMsg(e) }, mode);
     }
   });
-  portfolio.command("history").description("List saved portfolio snapshots with values").requiredOption("--address <address>", "Wallet address").option("--limit <n>", "Number of snapshots to show", "10").action(async (opts) => {
+  portfolio.command("history").description("List saved portfolio snapshots with values").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").option("--limit <n>", "Number of snapshots to show", "10").action(async (opts) => {
     const mode = getOpts();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
-    if (!/^0x[0-9a-fA-F]{40}$/.test(opts.address)) {
-      printOutput({ error: `Invalid address: ${opts.address}` }, mode);
+    const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!addr) {
+      printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, mode);
+      return;
+    }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+      printOutput({ error: `Invalid address: ${addr}` }, mode);
       return;
     }
     const limit = parseInt(opts.limit, 10);
-    const snapshots = loadSnapshots(chainName, opts.address, limit);
+    const snapshots = loadSnapshots(chainName, addr, limit);
     if (snapshots.length === 0) {
       printOutput({ message: "No snapshots found for this address on this chain." }, mode);
       return;
@@ -10705,16 +10752,21 @@ init_dist();
 import { createPublicClient as createPublicClient24, http as http24, formatEther } from "viem";
 function registerWallet(parent, getOpts) {
   const wallet = parent.command("wallet").description("Wallet management");
-  wallet.command("balance").description("Show native token balance").requiredOption("--address <address>", "Wallet address to query").action(async (opts) => {
+  wallet.command("balance").description("Show native token balance").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!addr) {
+      printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient24({ transport: http24(chain.effectiveRpcUrl()) });
-    const balance = await client.getBalance({ address: opts.address });
+    const balance = await client.getBalance({ address: addr });
     printOutput({
       chain: chain.name,
-      address: opts.address,
+      address: addr,
       native_token: chain.native_token,
       balance_wei: balance,
       balance_formatted: formatEther(balance)
@@ -10731,22 +10783,27 @@ init_dist();
 import { createPublicClient as createPublicClient25, http as http25, maxUint256 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
-  token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--owner <address>", "Wallet address to query").action(async (opts) => {
+  token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!owner) {
+      printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
     const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
     const [balance, symbol, decimals] = await Promise.all([
-      client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [opts.owner] }),
+      client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [owner] }),
       client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "symbol" }),
       client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "decimals" })
     ]);
     printOutput({
       token: tokenAddr,
       symbol,
-      owner: opts.owner,
+      owner,
       balance,
       decimals
     }, getOpts());
@@ -10762,9 +10819,14 @@ function registerToken(parent, getOpts, makeExecutor2) {
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  token.command("allowance").description("Check token allowance").requiredOption("--token <token>", "Token symbol or address").requiredOption("--owner <address>", "Owner address").requiredOption("--spender <address>", "Spender address").action(async (opts) => {
+  token.command("allowance").description("Check token allowance").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Owner address (defaults to DEFI_WALLET_ADDRESS)").requiredOption("--spender <address>", "Spender address").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
+    if (!owner) {
+      printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
@@ -10773,9 +10835,9 @@ function registerToken(parent, getOpts, makeExecutor2) {
       address: tokenAddr,
       abi: erc20Abi,
       functionName: "allowance",
-      args: [opts.owner, opts.spender]
+      args: [owner, opts.spender]
     });
-    printOutput({ token: tokenAddr, owner: opts.owner, spender: opts.spender, allowance }, getOpts());
+    printOutput({ token: tokenAddr, owner, spender: opts.spender, allowance }, getOpts());
   });
   token.command("transfer").description("Transfer tokens to an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--to <address>", "Recipient address").requiredOption("--amount <amount>", "Amount to transfer (in wei)").action(async (opts) => {
     const executor = makeExecutor2();
@@ -10794,6 +10856,29 @@ init_dist();
 var LIFI_API = "https://li.quest/v1";
 var DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
 var CCTP_FEE_API = "https://iris-api.circle.com/v2/burn/USDC/fees";
+var DEST_CHAIN_META = {
+  ethereum: { chain_id: 1, name: "Ethereum" },
+  optimism: { chain_id: 10, name: "Optimism" },
+  polygon: { chain_id: 137, name: "Polygon" },
+  arbitrum: { chain_id: 42161, name: "Arbitrum" },
+  avalanche: { chain_id: 43114, name: "Avalanche" },
+  linea: { chain_id: 59144, name: "Linea" },
+  zksync: { chain_id: 324, name: "zkSync" }
+};
+function resolveDestChain(registry, slug) {
+  try {
+    const c = registry.getChain(slug);
+    return { chain_id: c.chain_id, name: c.name };
+  } catch {
+    const meta = DEST_CHAIN_META[slug];
+    if (!meta) {
+      throw new Error(
+        `Unknown destination chain '${slug}'. Source chains: hyperevm, mantle, base, bnb, monad. Bridge destinations also include: ${Object.keys(DEST_CHAIN_META).join(", ")}.`
+      );
+    }
+    return meta;
+  }
+}
 var DLN_CHAIN_IDS = {
   ethereum: 1,
   optimism: 10,
@@ -10892,7 +10977,13 @@ function registerBridge(parent, getOpts) {
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
     const fromChain = registry.getChain(chainName);
-    const toChain = registry.getChain(opts.toChain);
+    let toChain;
+    try {
+      toChain = resolveDestChain(registry, opts.toChain);
+    } catch (e) {
+      printOutput({ error: errMsg(e) }, getOpts());
+      return;
+    }
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
     const recipient = resolveWallet(opts.recipient);
     const provider = opts.provider.toLowerCase();
@@ -11649,7 +11740,17 @@ function handleOwsError(e, getOpts) {
 // src/cli.ts
 var _require2 = createRequire2(import.meta.url);
 var _pkg = _require2("../package.json");
-var BANNER = `
+function buildBanner() {
+  let chainCount = 0;
+  let protocolCount = 0;
+  try {
+    const reg = Registry.loadEmbedded();
+    chainCount = reg.chains.size;
+    protocolCount = reg.protocols.length;
+  } catch {
+  }
+  const stats = chainCount && protocolCount ? `${chainCount} chains \xB7 ${protocolCount} protocols \xB7 by HypurrQuant` : `by HypurrQuant`;
+  return `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2557
   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551    \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551     \u2588\u2588\u2551
   \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551    \u2588\u2588\u2551     \u2588\u2588\u2551     \u2588\u2588\u2551
@@ -11657,11 +11758,13 @@ var BANNER = `
   \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551     \u2588\u2588\u2551    \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551
   \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D     \u255A\u2550\u255D     \u255A\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D
 
-  2 chains \xB7 21 protocols \xB7 by HypurrQuant
+  ${stats}
 
   Lending, LP farming, DEX swap, yield comparison
   \u2014 all from your terminal.
 `;
+}
+var BANNER = buildBanner();
 var program = new Command().name("defi").description("DeFi CLI \u2014 Multi-chain DeFi toolkit").version(_pkg.version).addHelpText("before", BANNER).option("--json", "Output as JSON").option("--ndjson", "Output as newline-delimited JSON").option("--fields <fields>", "Select specific output fields (comma-separated)").option("--chain <chain>", "Target chain").option("--dry-run", "Dry-run mode (default, no broadcast)", true).option("--broadcast", "Actually broadcast the transaction");
 function getOutputMode() {
   const opts = program.opts();
