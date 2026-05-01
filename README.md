@@ -8,7 +8,7 @@
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  7 chains · 48 protocols · 5 aggregators
+  5 chains · 39 protocols · 5 aggregators
 ```
 
 Multi-chain DeFi toolkit with verified mainnet broadcast paths. Lending, LP farming, DEX swap, cross-chain bridge, yield comparison — all from your terminal. Built for humans and AI agents.
@@ -98,34 +98,15 @@ Requires Node.js >= 20 and pnpm.
 | `traderjoe-monad` | DEX | uniswap_v2 + lb_factory |
 | `morpho-blue-monad` | Lending | morpho_blue |
 
-### Ethereum (6)
-
-| Slug | Category | Interface |
-|---|---|---|
-| `aave-v2-ethereum` | Lending | aave_v2 |
-| `aave-v3-ethereum` | Lending | aave_v3 |
-| `compound-v3-ethereum` | Lending | compound_v3 |
-| `morpho-blue-ethereum` | Lending | morpho_blue |
-| `uniswap-v2-ethereum` | DEX | uniswap_v2 |
-| `uniswap-v3-ethereum` | DEX | uniswap_v3 |
-
-### Arbitrum (3)
-
-| Slug | Category | Interface |
-|---|---|---|
-| `aave-v3-arbitrum` | Lending | aave_v3 |
-| `compound-v3-arbitrum` | Lending | compound_v3 |
-| `uniswap-v3-arbitrum` | DEX | uniswap_v3 |
-
 ## DEX Aggregators (Live-verified)
 
-| Aggregator | HyperEVM | Mantle | Base | BNB | Ethereum | Arbitrum |
-|---|---|---|---|---|---|---|
-| KyberSwap | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| OpenOcean | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| LiquidSwap | ✅ | — | — | — | — | — |
-| LI.FI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Relay | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Aggregator | HyperEVM | Mantle | Base | BNB | Monad |
+|---|---|---|---|---|---|
+| KyberSwap | ✅ | ❌ | ✅ | ✅ | — |
+| OpenOcean | ✅ | ✅ | ✅ | ✅ | — |
+| LiquidSwap | ✅ | — | — | — | — |
+| LI.FI | ✅ | ✅ | ✅ | ✅ | — |
+| Relay | ✅ | ✅ | ✅ | ✅ | — |
 
 Slug mapping per chain lives in `chains.toml` `[chain.X.aggregators]`. LI.FI/Relay route by numeric `chain_id` (slug `"auto"`).
 
@@ -190,13 +171,13 @@ defi --chain base lp claim --protocol aerodrome-cl \
 # Provider auto-detect via chains.toml aggregator slugs
 defi --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei> --broadcast
 defi --chain base swap --provider kyber --from WETH --to USDC --amount <wei> --broadcast
-defi --chain ethereum swap --provider relay --from WETH --to USDC --amount <wei> --broadcast
+defi --chain bnb swap --provider relay --from WBNB --to USDT --amount <wei> --broadcast
 ```
 
 ### Cross-chain bridge
 
 ```bash
-defi --chain ethereum bridge --token USDC --amount 100000000 --to-chain base --provider lifi --broadcast
+defi --chain base bridge --token USDC --amount 100000000 --to-chain ethereum --provider lifi --broadcast
 ```
 
 ## Command Reference
@@ -236,9 +217,9 @@ defi-cli/
 │   │   └── defi-cli/                # CLI commands (~20)
 │   └── test/
 └── ts/config/
-    ├── chains.toml                  # 7 chain configs + per-chain aggregator slug map
+    ├── chains.toml                  # 5 chain configs + per-chain aggregator slug map
     ├── tokens/<chain>.toml          # Per-chain token registries
-    └── protocols/<category>/*.toml  # 48 protocol configs
+    └── protocols/<category>/*.toml  # 39 protocol configs
 ```
 
 ### Adapter abstraction (4-layer)
@@ -261,7 +242,7 @@ CLI (defi-cli)  →  Factory (createDex/createLending/createGauge/…)
 
 | Flag | Description |
 |---|---|
-| `--chain <name>` | Target chain (hyperevm, mantle, base, bnb, monad, arbitrum, ethereum) |
+| `--chain <name>` | Target chain (hyperevm, mantle, base, bnb, monad) |
 | `--json` | Structured JSON output |
 | `--ndjson` | Newline-delimited JSON (streaming) |
 | `--fields <a,b>` | Filter output to selected fields |

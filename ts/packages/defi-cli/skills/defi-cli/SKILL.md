@@ -1,43 +1,44 @@
 ---
 name: defi-cli
-description: "Multi-chain DeFi operations CLI for HyperEVM (Hyperliquid) and Mantle. Use when user asks to: supply/withdraw from lending, swap tokens, add/remove LP, bridge assets, manage LP autopilot, claim rewards, compare APYs, check prices, track portfolio, or mentions defi-cli, HyperEVM, Hyperliquid EVM, Mantle, HypurrFi, HyperLend, Felix, KittenSwap, NEST, Ramses, Merchant Moe, KyberSwap, OpenOcean, LiquidSwap."
+description: "Multi-chain DeFi operations CLI for HyperEVM, Mantle, Base, BNB, Monad. Use when user asks to: supply/withdraw from lending, swap tokens via aggregator, add/remove/claim LP, bridge assets, manage LP autopilot, claim emission rewards, compound positions, compare APYs, check prices, track portfolio, or mentions defi-cli, HyperEVM, Mantle, Base, Aerodrome, Merchant Moe, KittenSwap, Ramses, Uniswap, Aave, Compound, Morpho, KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay."
 allowed-tools: "Bash(defi:*), Bash(npx defi-cli:*), Bash(npx -y defi-cli:*)"
 license: MIT
 metadata:
   author: hypurrquant
-  version: "0.4.0"
+  version: "1.0.0"
 ---
 
 # defi-cli Agent Guide
 
-Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, yield comparison — all from your terminal.
+Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, yield comparison.
 
-2 chains: **HyperEVM** (Hyperliquid EVM, chain ID 999) and **Mantle** (chain ID 5000).
-21 protocols across lending, DEX, vault, CDP.
+**5 chains · 39 protocols · 5 DEX aggregators**
 
 ## Rules
 
 1. **Always use `--json`** on every command.
 2. **Always use `--dry-run`** (default) before any mutating transaction. Only add `--broadcast` after user confirms.
-3. **Always use `--chain`** for transaction commands (`lending supply`, `swap`, `lp`, `token`, `price`, `wallet`, `bridge`). Query commands (`yield`, `status`) scan all chains by default.
+3. **Always use `--chain`** for transaction commands. Query commands (`yield scan`, `status`) scan all chains by default.
 4. **NEVER broadcast without user confirmation.**
 5. **NEVER read private key files or `~/.` config files.**
-6. **Amounts are in wei** (18 decimals for most tokens, 6 for USDC/USDT). Use `BigInt(humanAmount * 10**decimals)` to convert.
+6. **Amounts are in wei** (18 decimals for native/WETH, 6 for USDC/USDT). Use `BigInt(humanAmount * 10**decimals)` to convert.
 
 ## Install
 
 ```bash
-defi --version 2>/dev/null           # check if installed
-npm install -g @hypurrquant/defi-cli@latest 2>/dev/null || npx -y @hypurrquant/defi-cli@latest --json status
+defi --version 2>/dev/null            # check if installed
+npm install -g @hypurrquant/defi-cli@latest
+# or
+npx -y @hypurrquant/defi-cli@latest --json status
 ```
 
-Use `defi` if global install works, otherwise `npx -y @hypurrquant/defi-cli@latest` as prefix.
+Use `defi` if global install works, otherwise `npx -y -p @hypurrquant/defi-cli@latest defi` as prefix.
 
 ## Global Flags
 
-`--json` (required) | `--chain <chain>` (hyperevm or mantle, required for tx commands) | `--dry-run` (default, safe) | `--broadcast` (executes tx) | `--fields <f1,f2>` | `--ndjson`
+`--json` (required) | `--chain <chain>` (hyperevm, mantle, base, bnb, monad) | `--dry-run` (default, safe) | `--broadcast` (executes tx) | `--fields <f1,f2>` | `--ndjson`
 
-**Wallet**: set `DEFI_WALLET_ADDRESS` env for read queries. Set `DEFI_PRIVATE_KEY` for tx signing.
+**Wallet**: set `DEFI_WALLET_ADDRESS` env for read queries. Set `DEFI_PRIVATE_KEY` for tx signing. Or use `DEFI_WALLET_ADDRESS=ows:<name>` after `defi ows create <name>` for encrypted vault.
 
 ## Environment
 
@@ -48,133 +49,163 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 
 ## Chains
 
-| Alias | Full Name | Chain ID |
-|-------|-----------|----------|
-| `hyperevm` | HyperEVM (Hyperliquid) | 999 |
-| `mantle` | Mantle | 5000 |
+| Alias | Chain | Chain ID | Status |
+|-------|-------|----------|--------|
+| `hyperevm` | HyperEVM | 999 | 🟢 production |
+| `mantle` | Mantle | 5000 | 🟢 production |
+| `base` | Base | 8453 | 🟢 production |
+| `bnb` | BNB Chain | 56 | 🟡 staged |
+| `monad` | Monad | 143 | 🟡 staged |
 
-## Protocol Slugs
+🟢 = mainnet broadcast verified | 🟡 = configs verified, awaiting funded broadcast
 
-### HyperEVM Lending
-| Slug | Protocol | Interface |
-|------|----------|-----------|
-| `hyperlend` | HyperLend | aave_v3 |
-| `hypurrfi` | HypurrFi | aave_v3 |
-| `felix-morpho` | Felix Morpho | morpho_blue |
+## Protocol Slugs by Chain
 
-### HyperEVM DEX
-| Slug | Protocol | Interface |
-|------|----------|-----------|
-| `kittenswap` | KittenSwap | algebra_v3 |
-| `nest-v1` | NEST V1 | algebra_v3 |
-| `ramses-cl` | Ramses CL | uniswap_v3 |
-| `ramses-hl` | Ramses HL | solidly_v2 |
-| `hybra` | Hybra | solidly_v2 |
-| `project-x` | Project X | uniswap_v2 |
+For full protocol list see `references/protocols.md`. High-level summary:
 
-### HyperEVM Vaults / CDP
-| Slug | Protocol | Interface |
-|------|----------|-----------|
-| `felix` | Felix CDP | liquity_v2 |
-| `felix-vaults` | Felix Vaults | erc4626 |
-| `hyperbeat` | Hyperbeat | erc4626 |
-| `looping` | Looping | erc4626 |
-| `upshift` | Upshift | erc4626 |
-| `lazy-summer` | Lazy Summer | erc4626 |
+### HyperEVM (11)
+**Lending**: `hyperlend`, `hypurrfi`, `felix-morpho` · **DEX**: `project-x`, `hyperswap`, `curve-hyperevm`, `ramses-cl`, `ramses-hl`, `kittenswap`, `hybra`, `nest`
 
-### Mantle Protocols
-| Slug | Protocol | Interface |
-|------|----------|-----------|
-| `aave-v3-mantle` | Aave V3 Mantle | aave_v3 |
-| `uniswap-v3-mantle` | Uniswap V3 | uniswap_v3 |
-| `merchantmoe-mantle` | Merchant Moe | uniswap_v2 + lb |
+### Mantle (3)
+**Lending**: `aave-v3-mantle` · **DEX**: `uniswap-v3-mantle`, `merchantmoe-mantle` (LB + MOE emission)
+
+### Base (5)
+**Lending**: `aave-v3-base`, `compound-v3-base` · **DEX**: `uniswap-v3-base`, `aerodrome-base` (V2 + AERO), `aerodrome-cl` (Slipstream + AERO)
+
+### BNB (16)
+**Lending**: `aave-v3-bnb`, `kinza-bnb`, `venus-bnb`, `venus-flux-bnb` · **DEX**: `pancakeswap-v3-bnb` (+ MasterChef CAKE), `pancakeswap-v2-bnb`, `uniswap-v3-bnb`, `thena-v1`, `thena-fusion`, `biswap-bnb`, `apeswap-bnb`, `bakeryswap-bnb`, `bscswap-bnb`, `babydogeswap-bnb`, `fstswap-bnb` · **Vault**: `beefy-bnb`
+
+### Monad (4)
+`uniswap-v2-monad`, `uniswap-v3-monad`, `traderjoe-monad` (LB), `morpho-blue-monad`
+
+## DEX Aggregator Providers
+
+| Provider | Supported chains | Notes |
+|----------|------------------|-------|
+| KyberSwap | hyperevm, base, bnb | Default for HyperEVM |
+| OpenOcean | hyperevm, mantle, base, bnb | Universal fallback |
+| LiquidSwap | hyperevm | HyperEVM-native (LiquidLaunch) |
+| LI.FI | all source chains via chainId | Cross-chain swaps too |
+| Relay | all source chains via chainId | Multi-step routes (auto skip approve step) |
 
 ## Core Workflow: Lending
 
 ```
-1. defi --json yield --asset USDC                                              # compare APYs (all chains)
+1. defi --json yield scan --asset USDC                                          # compare APYs across all chains
 2. defi --json --chain hyperevm lending position --protocol hyperlend           # check position
-3. defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000  # dry-run
+3. defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000   # dry-run
 4. [show result to user, get confirmation]
 5. defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
 6. defi --json --chain hyperevm lending position --protocol hyperlend           # verify
 ```
 
-## Core Workflow: Swap (DEX Aggregator)
-
-Aggregates KyberSwap, OpenOcean, LiquidSwap for best price automatically.
+## Core Workflow: DEX Aggregator Swap
 
 ```
-1. defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000   # dry-run
+1. defi --json --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei>   # dry-run via LI.FI
 2. [confirm with user]
-3. defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000 --broadcast
+3. defi --json --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei> --broadcast
 ```
 
-## Core Workflow: LP Autopilot
+## Core Workflow: LP with Emission Claim (Merchant Moe LB)
 
 ```
-1. defi --json --chain hyperevm lp discover                                    # find pools with APR/TVL
-2. [user reviews, edits ~/.defi/pools.toml with chosen pools]
-3. defi --json --chain hyperevm lp autopilot --budget 1000000000               # dry-run allocation
-4. [confirm with user]
-5. defi --json --chain hyperevm lp autopilot --budget 1000000000 --broadcast   # execute
+1. defi --json --chain mantle lp discover --protocol merchantmoe-mantle --emission-only   # active emission pools sorted by APR
+2. defi --json --chain mantle lp add --protocol merchantmoe-mantle --token-a WMNT --token-b USDT0 \
+     --amount-a <wei> --amount-b <wei> --pool 0x... --num-bins 3 --broadcast
+3. defi --json --chain mantle lp positions --protocol merchantmoe-mantle           # see active positions + pending MOE
+4. defi --json --chain mantle lp claim --protocol merchantmoe-mantle --pool 0x... --broadcast   # auto-detects user's actual bins
+5. defi --json --chain mantle lp remove --protocol merchantmoe-mantle --token-a WMNT --token-b USDT0 \
+     --pool 0x... --bins <bin1>,<bin2> --broadcast
+```
+
+## Core Workflow: LP with NFT Gauge (Aerodrome Slipstream / Hybra V4)
+
+```
+1. defi --json --chain base lp farm --protocol aerodrome-cl --token-a WETH --token-b USDC \
+     --amount-a <wei> --amount-b <wei> --range 5 --pool 0x... --broadcast      # mint + auto-stake
+2. defi --json --chain base lp claim --protocol aerodrome-cl --gauge 0x... --token-id <id> --broadcast   # claim AERO
+3. defi --json --chain base lp remove --protocol aerodrome-cl --token-a WETH --token-b USDC \
+     --liquidity <amount> --token-id <id> --gauge 0x... --broadcast       # auto-unstake + remove
+```
+
+## Core Workflow: V3 Fee Auto-Compound
+
+```
+1. defi --json --chain base lp compound --protocol uniswap-v3-base --token-id <id> --slippage 50  # static-call detects fees
+2. [if fees > 0, confirm and re-run with --broadcast]
+3. defi --json --chain base lp compound --protocol uniswap-v3-base --token-id <id> --broadcast
+```
+
+## Core Workflow: Cross-chain Bridge
+
+Bridge **source** must be a supported chain (hyperevm/mantle/base/bnb/monad). Bridge **destination** can be any chain LI.FI/deBridge route to, or any CCTP V2 chain (ethereum, arbitrum, optimism, polygon, avalanche, base).
+
+```
+1. defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider lifi   # dry-run
+2. [confirm cost + ETA]
+3. defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider lifi --broadcast
 ```
 
 ## Core Workflow: Yield Comparison
 
 ```
-1. defi --json yield                                                  # all chains USDC rates
-2. defi --json --chain mantle yield --asset USDC                     # Mantle only
+1. defi --json yield scan --asset USDC                                  # all chains, all protocols
+2. defi --json --chain mantle yield compare --asset USDT                # one chain only
+3. defi --json yield optimize --asset USDC --amount 100000000           # auto-strategy with diversification
 ```
 
 ## Error Handling
 
 | Error | Action |
 |-------|--------|
-| `Chain not found: X` | use `hyperevm` or `mantle` |
-| `Protocol not found: X` | run `defi --json status` to list valid slugs |
-| `No route found` | swap aggregator has no route — try smaller amount or different pair |
-| `No prices fetched` | asset not listed in registry — use token address directly |
-| `Multicall failed` | RPC issue — retry or check `status` |
+| `Chain not found: X` | use one of: hyperevm, mantle, base, bnb, monad |
+| `Protocol not found: X` | run `defi --json status` to list valid slugs for the chain |
+| `KyberSwap: unsupported chain` | use openocean, lifi, or relay |
+| `AMOUNT_TOO_LOW` (Relay) | increase amount or switch provider |
+| `No fees to compound` | V3 position has no accumulated fees yet — wait for swaps to cross range |
+| `No pools found` | protocol may be inactive on this chain or discover branch missing config |
 | `DEFI_WALLET_ADDRESS not set` | set env var or pass `--address` |
 
 ## Examples
 
-**"What are the best USDC lending rates?"**
+**"What are the best USDC lending rates across all chains?"**
 ```bash
-defi --json yield --asset USDC
+defi --json yield scan --asset USDC
 ```
 
-**"Supply 1000 USDC to HyperLend"**
+**"Add LP to WMNT/USDT0 on Mantle and earn MOE"**
 ```bash
-defi --json yield --asset USDC
-defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000
-# after user confirms:
-defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
+defi --json --chain mantle lp add --protocol merchantmoe-mantle --token-a WMNT --token-b USDT0 \
+  --amount-a 1000000000000000000 --amount-b 600000 --pool 0x03BeafC0d25BB553fCa274301832419C05269987 --num-bins 3 --broadcast
 ```
 
-**"Swap 1 WHYPE to USDC"**
+**"Show all my LP positions and pending rewards on Mantle"**
 ```bash
-defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000
-defi --json --chain hyperevm swap --from WHYPE --to USDC --amount 1000000000000000000 --broadcast
+defi --json --chain mantle lp positions --protocol merchantmoe-mantle
 ```
 
-**"Find Mantle LP pools with rewards"**
+**"Claim AERO from my Aerodrome Slipstream NFT"**
 ```bash
-defi --json --chain mantle lp discover
+defi --json --chain base lp claim --protocol aerodrome-cl --gauge 0xF33a96b5932D9E9B9A0eDA447AbD8C9d48d2e0c8 --token-id <id> --broadcast
 ```
 
-**"Bridge 100 USDC from HyperEVM to Mantle"**
+**"Swap 1 ETH to USDC on Base via best route"**
 ```bash
-defi --json --chain hyperevm bridge --token USDC --amount 100000000 --to-chain mantle
+defi --json --chain base swap --provider kyber --from WETH --to USDC --amount 1000000000000000000
 ```
 
-**"Check my portfolio on HyperEVM"**
+**"Bridge 100 USDC from Base to Arbitrum via CCTP"**
 ```bash
-defi --json --chain hyperevm portfolio show --address 0xYourAddress
+defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider cctp --broadcast
 ```
 
-**"Claim LP rewards from KittenSwap"**
+**"Check my portfolio on Base"**
 ```bash
-defi --json --chain hyperevm lp claim --protocol kittenswap --pool 0xYourPool --broadcast
+defi --json --chain base portfolio show --address 0xYourAddress
+```
+
+**"Find all Aerodrome Slipstream emission pools sorted by APR"**
+```bash
+defi --json --chain base lp discover --protocol aerodrome-cl --emission-only
 ```

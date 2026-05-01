@@ -10,7 +10,7 @@ describe("Registry", () => {
 
   it("has core chains configured", () => {
     const registry = Registry.loadEmbedded();
-    const chains = ["hyperevm", "arbitrum", "base", "bnb", "ethereum", "monad", "mantle"];
+    const chains = ["hyperevm", "base", "bnb", "monad", "mantle"];
     for (const name of chains) {
       const chain = registry.getChain(name);
       expect(chain).toBeDefined();

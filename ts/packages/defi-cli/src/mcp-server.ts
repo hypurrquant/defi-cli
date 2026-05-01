@@ -61,7 +61,7 @@ server.tool(
   "defi_status",
   "Show chain and protocol status: lists all protocols deployed on a chain with contract addresses and categories",
   {
-    chain: z.string().optional().describe("Chain name (default: hyperevm). E.g. hyperevm, ethereum, arbitrum, base"),
+    chain: z.string().optional().describe("Chain name (default: hyperevm). One of: hyperevm, mantle, base, bnb, monad"),
   },
   async ({ chain }) => {
     try {
@@ -360,8 +360,8 @@ server.tool(
   "defi_bridge",
   "Get a cross-chain bridge quote via LI.FI, deBridge DLN, or Circle CCTP. Returns estimated output amount and fees",
   {
-    from_chain: z.string().describe("Source chain name, e.g. ethereum, arbitrum, base"),
-    to_chain: z.string().describe("Destination chain name, e.g. hyperevm, arbitrum"),
+    from_chain: z.string().describe("Source chain name (supported source chains: hyperevm, mantle, base, bnb, monad)"),
+    to_chain: z.string().describe("Destination chain name. CCTP V2 destinations include ethereum, arbitrum, optimism, polygon, avalanche; LI.FI/deBridge accept any chain"),
     token: z.string().optional().describe("Token symbol to bridge (default: USDC). Use native for native token"),
     amount: z.string().describe("Amount in human-readable units, e.g. '100' for 100 USDC"),
     recipient: z.string().optional().describe("Recipient address on destination chain"),
@@ -1175,6 +1175,411 @@ server.tool(
     return {
       content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }],
     };
+  },
+);
+
+// ============================================================
+// defi_lp_compound — auto-compound V3 LP fees
+// ============================================================
+
+server.tool(
+  "defi_lp_compound",
+  "V3 fee auto-compound: collect accrued LP fees and re-add them as liquidity in one tx. Requires NFT tokenId. Returns simulated/confirmed tx with collected fee amounts.",
+  {
+    chain: z.string().describe("Chain name (e.g. base, hyperevm, mantle)"),
+    protocol: z.string().describe("Protocol slug (e.g. uniswap-v3-base, hyperswap, project-x)"),
+    token_id: z.string().describe("NFT tokenId of the LP position to compound"),
+    slippage_bps: z.number().optional().describe("Slippage tolerance in bps (default: 50 = 0.5%)"),
+    address: z.string().optional().describe("Recipient address (defaults to DEFI_WALLET_ADDRESS)"),
+    broadcast: z.boolean().optional().describe("Broadcast tx (default: false = dry-run)"),
+  },
+  async ({ chain, protocol, token_id, slippage_bps, address, broadcast }) => {
+    try {
+      const chainName = chain.toLowerCase();
+      const registry = getRegistry();
+      const chainConfig = registry.getChain(chainName);
+      const rpcUrl = chainConfig.effectiveRpcUrl();
+      const proto = registry.getProtocol(protocol);
+      const recipient = (address ?? process.env["DEFI_WALLET_ADDRESS"]) as Address | undefined;
+      if (!recipient) throw new Error("address required (or set DEFI_WALLET_ADDRESS)");
+
+      const adapter = createDex(proto, rpcUrl);
+      if (!("buildCompound" in adapter) || typeof (adapter as { buildCompound?: unknown }).buildCompound !== "function") {
+        throw new Error(`[${proto.name}] adapter does not support compound (V3 fee-only protocols only)`);
+      }
+      const compoundOpts = slippage_bps !== undefined ? { slippageBps: slippage_bps } : undefined;
+      const tx = await (adapter as { buildCompound: (tokenId: bigint, recipient: Address, opts?: { slippageBps?: number }) => Promise<unknown> })
+        .buildCompound(BigInt(token_id), recipient, compoundOpts);
+
+      const executor = makeExecutor(broadcast ?? false, rpcUrl, chainConfig.explorer_url);
+      const result = await executor.execute(tx as Parameters<typeof executor.execute>[0]);
+
+      return {
+        content: [{ type: "text", text: ok(result, { chain: chainName, protocol, token_id, broadcast: broadcast ?? false }) }],
+      };
+    } catch (e) {
+      return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e), { chain, protocol, token_id }) }], isError: true };
+    }
+  },
+);
+
+// ============================================================
+// defi_lp_claim — claim LP rewards (gauge / LB / V3 fees / Nest)
+// ============================================================
+
+server.tool(
+  "defi_lp_claim",
+  "Claim LP rewards from a pool. Auto-dispatches by protocol interface: V3 fees (NPM.collect), gauge emission (Solidly/Hybra/Ramses CL), Merchant Moe LB hooks, KittenSwap eternal farming, off-chain Nest tickets. Requires either token-id (CL/NFT positions) or gauge (V2-style staking) plus pool for LB.",
+  {
+    chain: z.string().describe("Chain name"),
+    protocol: z.string().describe("Protocol slug"),
+    pool: z.string().optional().describe("Pool address (required for LB / KittenSwap farming)"),
+    gauge: z.string().optional().describe("Gauge address (required for solidly/hybra)"),
+    token_id: z.string().optional().describe("NFT tokenId (CL gauge or farming positions)"),
+    bins: z.string().optional().describe("Comma-separated bin IDs (Merchant Moe LB; auto-detected if omitted)"),
+    address: z.string().optional().describe("Wallet address (defaults to DEFI_WALLET_ADDRESS)"),
+    redeem_type: z.number().optional().describe("Hybra: 0=instant exit (penalty), 1=2yr veHYBR lock (default)"),
+    broadcast: z.boolean().optional().describe("Broadcast tx (default: false = dry-run)"),
+  },
+  async ({ chain, protocol, pool, gauge, token_id, bins, address, redeem_type, broadcast }) => {
+    try {
+      const chainName = chain.toLowerCase();
+      const registry = getRegistry();
+      const chainConfig = registry.getChain(chainName);
+      const rpcUrl = chainConfig.effectiveRpcUrl();
+      const proto = registry.getProtocol(protocol);
+      const account = (address ?? process.env["DEFI_WALLET_ADDRESS"]) as Address | undefined;
+      if (!account) throw new Error("address required (or set DEFI_WALLET_ADDRESS)");
+      const iface = proto.interface;
+      const executor = makeExecutor(broadcast ?? false, rpcUrl, chainConfig.explorer_url);
+
+      const { createKittenSwapFarming, createMerchantMoeLB, createGauge } = await import("@hypurrquant/defi-protocols");
+
+      // V3 fee-only collect (no gauge case)
+      const isV3Fee = proto.reward_strategy === "lp_fee_only" || (iface === "uniswap_v3" && token_id && !gauge);
+      if (isV3Fee) {
+        if (!token_id) throw new Error("token_id required for V3 fee collection");
+        const adapter = createDex(proto, rpcUrl);
+        if (!("buildCollectFees" in adapter) || typeof (adapter as { buildCollectFees?: unknown }).buildCollectFees !== "function") {
+          throw new Error(`[${proto.name}] adapter does not support buildCollectFees`);
+        }
+        const tx = await (adapter as { buildCollectFees: (id: bigint, recipient: Address) => Promise<unknown> })
+          .buildCollectFees(BigInt(token_id), account);
+        const result = await executor.execute(tx as Parameters<typeof executor.execute>[0]);
+        return { content: [{ type: "text", text: ok(result, { chain: chainName, protocol, kind: "v3_fee", broadcast: broadcast ?? false }) }] };
+      }
+
+      // KittenSwap eternal farming
+      if (iface === "algebra_v3" && proto.contracts?.["farming_center"]) {
+        if (!pool) throw new Error("pool required for KittenSwap farming claim");
+        if (!token_id) throw new Error("token_id required for KittenSwap farming claim");
+        const adapter = createKittenSwapFarming(proto, rpcUrl);
+        const tx = await adapter.buildCollectRewards(BigInt(token_id), pool as Address, account);
+        const result = await executor.execute(tx);
+        return { content: [{ type: "text", text: ok(result, { chain: chainName, protocol, kind: "kittenswap_farming", broadcast: broadcast ?? false }) }] };
+      }
+
+      // Merchant Moe LB
+      if (iface === "uniswap_v2" && proto.contracts?.["lb_factory"]) {
+        if (!pool) throw new Error("pool required for Merchant Moe LB claim");
+        const adapter = createMerchantMoeLB(proto, rpcUrl);
+        const binIds = bins ? bins.split(",").map(s => parseInt(s.trim(), 10)) : undefined;
+        const tx = await adapter.buildClaimRewards(account, pool as Address, binIds);
+        const result = await executor.execute(tx);
+        return { content: [{ type: "text", text: ok(result, { chain: chainName, protocol, kind: "lb", broadcast: broadcast ?? false }) }] };
+      }
+
+      // Solidly / Hybra / Ramses-CL gauge claim
+      if (["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(iface) ||
+          (iface === "uniswap_v3" && proto.contracts?.["voter"])) {
+        if (!gauge) throw new Error("gauge required for gauge-based claim");
+        const adapter = createGauge(proto, rpcUrl);
+        type GaugeTx = Awaited<ReturnType<typeof adapter.buildClaimRewards>>;
+        let tx: GaugeTx;
+
+        if (token_id && iface === "uniswap_v3" && proto.reward_strategy === "auto_stake" &&
+            "buildClaimRewardsViaNPMPeriodReward" in adapter &&
+            typeof (adapter as { buildClaimRewardsViaNPMPeriodReward?: unknown }).buildClaimRewardsViaNPMPeriodReward === "function") {
+          const npm = proto.contracts?.["position_manager"] as Address | undefined;
+          if (!npm) throw new Error(`${proto.name} requires contracts.position_manager for NPM-based claim`);
+          tx = await (adapter as {
+            buildClaimRewardsViaNPMPeriodReward: (
+              npm: Address, tokenId: bigint, receiver: Address,
+              opts?: { tokens?: Address[]; gauge?: Address; period?: bigint },
+            ) => Promise<GaugeTx>;
+          }).buildClaimRewardsViaNPMPeriodReward(npm, BigInt(token_id), account, { gauge: gauge as Address });
+        } else if (token_id) {
+          if (!adapter.buildClaimRewardsByTokenId) throw new Error(`${proto.name} does not support NFT-based claim`);
+          const claimOpts = redeem_type !== undefined ? { redeemType: redeem_type } : undefined;
+          tx = await (adapter as { buildClaimRewardsByTokenId: (g: Address, id: bigint, opts?: { redeemType?: number }) => Promise<GaugeTx> })
+            .buildClaimRewardsByTokenId(gauge as Address, BigInt(token_id), claimOpts);
+        } else {
+          tx = await adapter.buildClaimRewards(gauge as Address, account);
+        }
+        const result = await executor.execute(tx);
+        return { content: [{ type: "text", text: ok(result, { chain: chainName, protocol, kind: "gauge", broadcast: broadcast ?? false }) }] };
+      }
+
+      throw new Error(`No claim method found for protocol interface '${iface}'`);
+    } catch (e) {
+      return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e), { chain, protocol }) }], isError: true };
+    }
+  },
+);
+
+// ============================================================
+// defi_lp_farm — add liquidity + auto-stake into gauge/farming
+// ============================================================
+
+server.tool(
+  "defi_lp_farm",
+  "Add liquidity and auto-stake into gauge/farming for emissions. Two-step flow: mint LP NFT, then deposit into gauge (Solidly/Hybra) or enterFarming (KittenSwap eternal). Merchant Moe LB hooks need no staking.",
+  {
+    chain: z.string().describe("Chain name"),
+    protocol: z.string().describe("Protocol slug"),
+    token_a: z.string().describe("First token symbol or address"),
+    token_b: z.string().describe("Second token symbol or address"),
+    amount_a: z.string().describe("Amount of token A in wei"),
+    amount_b: z.string().describe("Amount of token B in wei"),
+    pool: z.string().optional().describe("Pool name (e.g. WHYPE/USDC) or address"),
+    gauge: z.string().optional().describe("Gauge address (auto-resolved if omitted)"),
+    recipient: z.string().optional().describe("Recipient/owner (defaults to DEFI_WALLET_ADDRESS)"),
+    tick_lower: z.number().optional().describe("Lower tick (CL)"),
+    tick_upper: z.number().optional().describe("Upper tick (CL)"),
+    range_pct: z.number().optional().describe("±N% concentrated range around current price"),
+    broadcast: z.boolean().optional().describe("Broadcast tx (default: false = dry-run)"),
+  },
+  async ({ chain, protocol, token_a, token_b, amount_a, amount_b, pool, gauge, recipient, tick_lower, tick_upper, range_pct, broadcast }) => {
+    try {
+      const chainName = chain.toLowerCase();
+      const registry = getRegistry();
+      const chainConfig = registry.getChain(chainName);
+      const rpcUrl = chainConfig.effectiveRpcUrl();
+      const proto = registry.getProtocol(protocol);
+      const owner = (recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001") as Address;
+
+      const tokenA = resolveToken(registry, chainName, token_a);
+      const tokenB = resolveToken(registry, chainName, token_b);
+
+      let poolAddr: Address | undefined;
+      if (pool) {
+        poolAddr = pool.startsWith("0x")
+          ? (pool as Address)
+          : registry.resolvePool(protocol, pool).address as Address;
+      }
+
+      const dexAdapter = createDex(proto, rpcUrl);
+      const addTx = await dexAdapter.buildAddLiquidity({
+        protocol: proto.name,
+        token_a: tokenA,
+        token_b: tokenB,
+        amount_a: BigInt(amount_a),
+        amount_b: BigInt(amount_b),
+        recipient: owner,
+        tick_lower,
+        tick_upper,
+        range_pct,
+        pool: poolAddr,
+      });
+
+      const executor = makeExecutor(broadcast ?? false, rpcUrl, chainConfig.explorer_url);
+      const addResult = await executor.execute(addTx);
+
+      const steps: Array<Record<string, unknown>> = [{ step: "lp_add", ...addResult }];
+
+      if (addResult.status !== "confirmed" && addResult.status !== "simulated") {
+        return { content: [{ type: "text", text: ok({ steps, note: "LP add did not succeed; staking skipped." }, { chain: chainName, protocol, broadcast: broadcast ?? false }) }] };
+      }
+
+      const mintedTokenId = addResult.details?.minted_token_id ? BigInt(addResult.details.minted_token_id as string) : undefined;
+      const iface = proto.interface;
+      const { createKittenSwapFarming, createGauge } = await import("@hypurrquant/defi-protocols");
+
+      // KittenSwap farming
+      if (iface === "algebra_v3" && proto.contracts?.["farming_center"]) {
+        if (!mintedTokenId) {
+          steps.push({ step: "stake_farming", skipped: "no tokenId in dry-run mode" });
+        } else if (!poolAddr) {
+          throw new Error("pool required for KittenSwap farming");
+        } else {
+          const farmAdapter = createKittenSwapFarming(proto, rpcUrl);
+          const stakeTx = await farmAdapter.buildEnterFarming(mintedTokenId, poolAddr, owner);
+          const stakeResult = await executor.execute(stakeTx);
+          steps.push({ step: "stake_farming", ...stakeResult });
+        }
+        return { content: [{ type: "text", text: ok({ steps }, { chain: chainName, protocol, broadcast: broadcast ?? false }) }] };
+      }
+
+      // Solidly / CL / Hybra / uniswap_v3+voter (Aerodrome Slipstream) gauge stake
+      const isGaugeStakeable = ["solidly_v2", "solidly_cl", "hybra"].includes(iface) ||
+        (iface === "uniswap_v3" && proto.contracts?.["voter"]);
+      if (isGaugeStakeable) {
+        if (!mintedTokenId && iface !== "solidly_v2") {
+          steps.push({ step: "stake_gauge", skipped: "no tokenId in dry-run mode" });
+          return { content: [{ type: "text", text: ok({ steps }, { chain: chainName, protocol, broadcast: broadcast ?? false }) }] };
+        }
+        let gaugeAddr = gauge as Address | undefined;
+        const gaugeAdapter = createGauge(proto, rpcUrl);
+        if (!gaugeAddr && poolAddr && gaugeAdapter.resolveGauge) {
+          try { gaugeAddr = await gaugeAdapter.resolveGauge(poolAddr); } catch { /* ignore */ }
+        }
+        if (!gaugeAddr) throw new Error("gauge required (could not auto-resolve)");
+
+        let amountArg = 0n;
+        if (iface === "solidly_v2" && poolAddr) {
+          const { createPublicClient, http: httpTransport, parseAbi } = await import("viem");
+          const erc20Abi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+          const lpClient = createPublicClient({ transport: httpTransport(rpcUrl) });
+          amountArg = await lpClient.readContract({
+            address: poolAddr, abi: erc20Abi, functionName: "balanceOf", args: [owner],
+          }) as bigint;
+          if (amountArg === 0n) {
+            steps.push({ step: "stake_gauge", skipped: "LP balance 0 after mint" });
+            return { content: [{ type: "text", text: ok({ steps }, { chain: chainName, protocol, broadcast: broadcast ?? false }) }] };
+          }
+        }
+        const lpTokenArg = iface === "solidly_v2" ? poolAddr : undefined;
+        const stakeTx = await gaugeAdapter.buildDeposit(gaugeAddr, amountArg, mintedTokenId, lpTokenArg);
+        const stakeResult = await executor.execute(stakeTx);
+        steps.push({ step: "stake_gauge", ...stakeResult });
+        return { content: [{ type: "text", text: ok({ steps }, { chain: chainName, protocol, broadcast: broadcast ?? false }) }] };
+      }
+
+      // Merchant Moe LB: hooks auto-handle rewards
+      if (iface === "uniswap_v2" && proto.contracts?.["lb_factory"]) {
+        steps.push({ step: "stake_gauge", skipped: "Merchant Moe LB hooks auto-handle rewards" });
+        return { content: [{ type: "text", text: ok({ steps }, { chain: chainName, protocol, broadcast: broadcast ?? false }) }] };
+      }
+
+      steps.push({ step: "stake_gauge", skipped: "No staking adapter for this interface" });
+      return { content: [{ type: "text", text: ok({ steps }, { chain: chainName, protocol, broadcast: broadcast ?? false }) }] };
+    } catch (e) {
+      return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e), { chain, protocol }) }], isError: true };
+    }
+  },
+);
+
+// ============================================================
+// defi_lp_positions — scan all LP positions across protocols
+// ============================================================
+
+server.tool(
+  "defi_lp_positions",
+  "Show all LP positions for a wallet across protocols on a chain. Includes Merchant Moe LB bins (with pending MOE), V3/Algebra/Hybra NFT positions. Auto-detects user's actual bin IDs for LB pools.",
+  {
+    chain: z.string().describe("Chain name"),
+    protocol: z.string().optional().describe("Filter to a single protocol slug"),
+    pool: z.string().optional().describe("Filter to a specific pool address"),
+    bins: z.string().optional().describe("Comma-separated bin IDs (LB; auto-detected if omitted)"),
+    address: z.string().optional().describe("Wallet address (defaults to DEFI_WALLET_ADDRESS)"),
+  },
+  async ({ chain, protocol, pool, bins, address }) => {
+    try {
+      const chainName = chain.toLowerCase();
+      const registry = getRegistry();
+      const chainConfig = registry.getChain(chainName);
+      const rpcUrl = chainConfig.effectiveRpcUrl();
+      const user = (address ?? process.env["DEFI_WALLET_ADDRESS"]) as Address | undefined;
+      if (!user) throw new Error("address required (or set DEFI_WALLET_ADDRESS)");
+
+      const { createMerchantMoeLB } = await import("@hypurrquant/defi-protocols");
+      const { createPublicClient, http: httpTransport, parseAbi } = await import("viem");
+
+      const allProtocols = registry.getProtocolsForChain(chainName);
+      const protocols = protocol ? [registry.getProtocol(protocol)] : allProtocols;
+      const results: Array<Record<string, unknown>> = [];
+
+      await Promise.allSettled(
+        protocols.map(async (proto) => {
+          try {
+            // Merchant Moe LB
+            if (proto.interface === "uniswap_v2" && proto.contracts?.["lb_factory"]) {
+              const adapter = createMerchantMoeLB(proto, rpcUrl);
+              const binIds = bins ? bins.split(",").map(s => parseInt(s.trim(), 10)) : undefined;
+              const poolsToScan: Address[] = pool
+                ? [pool as Address]
+                : (await adapter.discoverRewardedPools()).map(p => p.pool as Address);
+              for (const poolAddr of poolsToScan) {
+                try {
+                  const userBins = binIds ?? await adapter.findUserBinsWithBalance(poolAddr, user);
+                  if (userBins.length === 0) continue;
+                  const positions = await adapter.getUserPositions(user, poolAddr, userBins);
+                  if (positions.length === 0) continue;
+                  const pending = await adapter.getPendingRewards(user, poolAddr, userBins).catch(() => []);
+                  const totalPending = pending.reduce((s, r) => s + (r.amount ?? 0n), 0n);
+                  for (const pos of positions) {
+                    results.push({
+                      protocol: proto.slug,
+                      type: "lb",
+                      pool: poolAddr,
+                      ...pos,
+                      pending_reward: totalPending.toString(),
+                      pending_reward_token: pending[0]?.token,
+                    });
+                  }
+                } catch { /* skip pools with no balance */ }
+              }
+            }
+
+            // V3/Algebra/Hybra NFT positions
+            const npm = proto.contracts?.["position_manager"] as Address | undefined;
+            if (npm && ["uniswap_v3", "algebra_v3", "hybra"].includes(proto.interface)) {
+              const npmAbi = parseAbi([
+                "function balanceOf(address) view returns (uint256)",
+                "function tokenOfOwnerByIndex(address, uint256) view returns (uint256)",
+                "function positions(uint256) view returns (uint96 nonce, address op, address t0, address t1, uint24 fee, int24 tl, int24 tu, uint128 liq, uint256 a, uint256 b, uint128 o0, uint128 o1)",
+              ]);
+              const ramsesAbi = parseAbi([
+                "function positions(uint256) view returns (address t0, address t1, int24 ts, int24 tl, int24 tu, uint128 liq, uint256 a, uint256 b, uint128 o0, uint128 o1)",
+              ]);
+              const client = createPublicClient({ transport: httpTransport(rpcUrl) });
+              let count: bigint;
+              try {
+                count = await client.readContract({ address: npm, abi: npmAbi, functionName: "balanceOf", args: [user] }) as bigint;
+              } catch { return; }
+              const max = Math.min(Number(count), 50);
+              for (let i = 0; i < max; i++) {
+                try {
+                  const tokenId = await client.readContract({
+                    address: npm, abi: npmAbi, functionName: "tokenOfOwnerByIndex", args: [user, BigInt(i)],
+                  }) as bigint;
+                  let liq: bigint = 0n;
+                  let token0: Address | undefined;
+                  let token1: Address | undefined;
+                  let tickLower: number | undefined;
+                  let tickUpper: number | undefined;
+                  try {
+                    const r = await client.readContract({ address: npm, abi: ramsesAbi, functionName: "positions", args: [tokenId] }) as readonly [Address, Address, number, number, number, bigint, bigint, bigint, bigint, bigint];
+                    [token0, token1, , tickLower, tickUpper, liq] = r;
+                  } catch {
+                    const r = await client.readContract({ address: npm, abi: npmAbi, functionName: "positions", args: [tokenId] }) as readonly [bigint, Address, Address, Address, number, number, number, bigint, bigint, bigint, bigint, bigint];
+                    [, , token0, token1, , tickLower, tickUpper, liq] = r;
+                  }
+                  if (liq > 0n) {
+                    results.push({
+                      protocol: proto.slug,
+                      type: "v3_nft",
+                      token_id: tokenId.toString(),
+                      token0,
+                      token1,
+                      liquidity: liq.toString(),
+                      tick_lower: tickLower,
+                      tick_upper: tickUpper,
+                    });
+                  }
+                } catch { /* skip malformed */ }
+              }
+            }
+          } catch { /* skip protocol on error */ }
+        }),
+      );
+
+      return {
+        content: [{ type: "text", text: ok({ chain: chainName, positions: results, total: results.length }, { wallet: user, scanned_protocols: protocols.length }) }],
+      };
+    } catch (e) {
+      return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e), { chain }) }], isError: true };
+    }
   },
 );
 

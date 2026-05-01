@@ -1,113 +1,160 @@
 # defi-cli Command Reference
 
 All commands support `--json` for structured output. Always use `--json` when calling from an agent.
-All amounts are in **wei** unless noted. USDC/USDT use 6 decimals; native tokens and most ERC-20s use 18.
+All amounts are in **wei** unless noted. USDC/USDT/USDT0 use 6 decimals; native tokens, WETH/WMNT/WBNB/WMON/WHYPE/AERO/MOE use 18; WBTC uses 8.
 
-## Dashboard (read-only, safe)
-
-```bash
-defi --json                                         # multicall balance dashboard
-defi --json --chain mantle                          # Mantle dashboard
-```
+`--chain <chain>` selects the network: `hyperevm`, `mantle`, `base`, `bnb`, `monad`. Query commands (`yield scan`, `status`) scan all chains by default; transaction commands require an explicit `--chain`.
 
 ## Status & Discovery (read-only, safe)
 
 ```bash
-defi --json status                                  # list all protocols for current chain
-defi --json --chain mantle status                   # list Mantle protocols
+defi --json status                                  # current chain protocols
+defi --json --chain mantle status                   # Mantle protocols + addresses
 defi --json schema                                  # full CLI schema as JSON
 ```
 
 ## Yield (read-only, safe)
 
 ```bash
-defi --json yield                                   # lending APY comparison (default: USDC, HyperEVM)
-defi --json yield --asset USDT                      # compare for a different asset
-defi --json --chain mantle yield --asset USDC        # Mantle lending rates
+defi --json yield scan --asset USDC                 # all chains, all lending protocols, ranked by supply APY
+defi --json --chain mantle yield compare --asset USDT
+defi --json yield optimize --asset USDC --amount 100000000   # diversification plan
 ```
 
 ## Price (read-only, safe)
 
 ```bash
-defi --json price --asset WHYPE                     # oracle + DEX prices for an asset
-defi --json price --asset USDC --source oracle      # oracle prices only
-defi --json price --asset WHYPE --source dex        # DEX spot prices only
-defi --json --chain mantle price --asset WMNT        # price on Mantle
+defi --json --chain hyperevm price --asset WHYPE          # oracle + DEX
+defi --json --chain hyperevm price --asset USDC --source oracle
+defi --json --chain mantle price --asset WMNT --source dex
 ```
 
-## Lending (read-only queries, then mutating)
+## Lending
 
 ```bash
 # Read-only
-defi --json lending rates --protocol <slug> --asset <token>
-defi --json lending position --protocol <slug>
+defi --json --chain <chain> lending rates --protocol <slug> --asset <token>
+defi --json --chain <chain> lending position --protocol <slug>
 
-# Mutating (dry-run first, then --broadcast)
-defi --json lending supply --protocol <slug> --asset <token> --amount <wei>
-defi --json lending supply --protocol <slug> --asset <token> --amount <wei> --on-behalf-of <addr>
-defi --json lending withdraw --protocol <slug> --asset <token> --amount <wei> [--to <addr>]
+# Mutating (dry-run by default — add --broadcast to execute)
+defi --json --chain <chain> lending supply  --protocol <slug> --asset <token> --amount <wei>
+defi --json --chain <chain> lending withdraw --protocol <slug> --asset <token> --amount <wei>
+defi --json --chain <chain> lending borrow   --protocol <slug> --asset <token> --amount <wei>
+defi --json --chain <chain> lending repay    --protocol <slug> --asset <token> --amount <wei>
 ```
 
-Auto-approve: if token allowance is insufficient, the CLI checks, approves the exact amount, then supplies — all in one `--broadcast` call.
+Auto-approve: if token allowance is insufficient, the CLI checks, approves, then supplies — all in one `--broadcast` call.
 
-## Swap (DEX aggregator — KyberSwap, OpenOcean, LiquidSwap)
+## Swap (DEX aggregator — 5 providers)
 
 ```bash
-defi --json swap --token-in <token> --token-out <token> --amount <wei> [--slippage <bps>]
-defi --json swap --token-in WHYPE --token-out USDC --amount 1000000000000000000 --slippage 50
+defi --json --chain <chain> swap --provider <p> --from <token> --to <token> --amount <wei> [--slippage <bps>]
 ```
 
-Note: `swap` aggregates multiple DEX APIs for best route. Use `--broadcast` to execute.
+Providers: `kyber` (KyberSwap), `openocean`, `liquid` (LiquidSwap, HyperEVM-only), `lifi` (LI.FI, all chains + cross-chain), `relay` (multi-step routes, auto-skips approve step).
+
+```bash
+defi --json --chain hyperevm swap --provider kyber    --from WHYPE --to USDC --amount 1000000000000000000
+defi --json --chain mantle   swap --provider lifi     --from MOE   --to WMNT --amount 1000000000000000000
+defi --json --chain base     swap --provider openocean --from WETH --to USDC --amount 100000000000000000
+```
 
 ## LP Operations
 
 ### Discover Pools
 
 ```bash
-defi --json lp discover                             # all 134 emission pools
-defi --json lp discover --protocol kittenswap       # filter by protocol
-defi --json lp discover --min-apr 10                # filter by minimum APR
+defi --json --chain <chain> lp discover                            # all fee + emission pools
+defi --json --chain hyperevm lp discover --protocol kittenswap     # filter by protocol
+defi --json --chain mantle  lp discover --protocol merchantmoe-mantle --emission-only
+defi --json --chain base    lp discover --protocol aerodrome-cl --emission-only   # APR-sorted
 ```
 
 ### Add Liquidity
 
 ```bash
-defi --json lp add --protocol <slug> --pool-address <addr> --amount-a <wei> --amount-b <wei>
+defi --json --chain <chain> lp add --protocol <slug> \
+  --token-a <token> --token-b <token> --amount-a <wei> --amount-b <wei> \
+  --pool <address>                                  # required for LB / specific pool
+  [--num-bins 3]                                    # Liquidity Book (Merchant Moe / TraderJoe)
+  [--range 5]                                       # ±N% concentrated range (V3 / Slipstream)
+  [--tick-lower N --tick-upper N]                   # explicit ticks
 ```
 
 ### Farm (Add + Auto-stake)
 
 ```bash
-# Add liquidity and stake into gauge/farming for emissions
-defi --json lp farm --protocol <slug> --pool-address <addr> --amount-a <wei> --amount-b <wei>
+defi --json --chain <chain> lp farm --protocol <slug> \
+  --token-a <token> --token-b <token> --amount-a <wei> --amount-b <wei> \
+  --pool <address> [--gauge <addr>] [--range 5]
 ```
+
+Two-step flow: mint LP → deposit into gauge (Solidly/Hybra), enterFarming (KittenSwap/Algebra eternal), or no-op (Merchant Moe LB hooks).
 
 ### Claim Rewards
 
 ```bash
-defi --json lp claim --protocol <slug> --pool-address <addr>
+# V3 fee collect
+defi --json --chain <chain> lp claim --protocol <slug> --token-id <id>
+
+# Solidly / Aerodrome V2 / Ramses HL gauge (account-based)
+defi --json --chain <chain> lp claim --protocol <slug> --gauge <addr>
+
+# Aerodrome Slipstream / Hybra V4 / Ramses CL (NFT gauge)
+defi --json --chain <chain> lp claim --protocol <slug> --gauge <addr> --token-id <id>
+defi --json --chain hyperevm lp claim --protocol hybra --gauge <addr> --token-id <id> --redeem-type 0   # instant exit (penalty)
+
+# KittenSwap eternal farming
+defi --json --chain hyperevm lp claim --protocol kittenswap --pool <addr> --token-id <id>
+
+# Merchant Moe LB (auto-detects user's actual bins)
+defi --json --chain mantle lp claim --protocol merchantmoe-mantle --pool <addr>
+
+# Off-chain Nest ticket
+defi --json --chain hyperevm lp claim --protocol nest --address <wallet>
 ```
+
+### Compound (V3 fee auto-compound)
+
+```bash
+defi --json --chain <chain> lp compound --protocol <slug> --token-id <id> [--slippage 50]
+```
+
+Collects accrued fees and re-adds them as liquidity in one tx. V3 fee-only protocols (Uniswap V3, HyperSwap, Project X).
 
 ### Remove Liquidity
 
 ```bash
-# Auto-unstake (if staked) then remove liquidity
-defi --json lp remove --protocol <slug> --pool-address <addr>
+# V3 / Slipstream (NFT-based)
+defi --json --chain <chain> lp remove --protocol <slug> \
+  --token-a <token> --token-b <token> --liquidity <amount> --token-id <id> [--gauge <addr>]
+
+# Solidly V2 (LP-token-based)
+defi --json --chain <chain> lp remove --protocol <slug> \
+  --token-a <token> --token-b <token> --liquidity <wei> --gauge <addr>
+
+# Liquidity Book (Merchant Moe / TraderJoe)
+defi --json --chain <chain> lp remove --protocol <slug> \
+  --token-a <token> --token-b <token> --pool <addr> --bins <bin1>,<bin2>,...
 ```
 
 ### LP Positions
 
 ```bash
-defi --json lp positions                            # all LP positions across protocols
+defi --json --chain <chain> lp positions                          # scan all protocols
+defi --json --chain <chain> lp positions --protocol <slug>
+defi --json --chain mantle lp positions --protocol merchantmoe-mantle --pool <addr>
 ```
+
+Auto-detects Merchant Moe LB user bins via on-chain balance scan, plus pending MOE rewards. Walks NPM tokenIds for V3/Algebra/Hybra positions.
 
 ### LP Autopilot
 
 Reads `~/.defi/pools.toml` for whitelisted pools and allocates budget automatically.
 
 ```bash
-defi --json lp autopilot --budget <wei>             # dry-run (default)
-defi --json lp autopilot --budget 1000000000 --broadcast  # execute
+defi --json --chain <chain> lp autopilot --budget 1000   # USD; dry-run (default)
+defi --json --chain <chain> lp autopilot --budget 1000 --broadcast
 ```
 
 **pools.toml format:**
@@ -116,47 +163,53 @@ defi --json lp autopilot --budget 1000000000 --broadcast  # execute
 protocol = "kittenswap"
 pool_address = "0x..."
 weight = 50
+chain = "hyperevm"
 
 [[pools]]
-protocol = "nest-v1"
+protocol = "aerodrome-cl"
 pool_address = "0x..."
 weight = 50
+chain = "base"
 ```
 
 ## Portfolio
 
 ```bash
-defi --json portfolio                               # aggregate positions across all protocols
+defi --json --chain <chain> portfolio show [--address <addr>]
+defi --json --chain <chain> portfolio snapshot [--address <addr>]
+defi --json --chain <chain> portfolio pnl [--address <addr>]
 ```
 
 ## Token
 
 ```bash
 # Read-only
-defi --json token balance --token <token> [--owner <addr>]
-defi --json token allowance --token <token> --spender <addr> [--owner <addr>]
+defi --json --chain <chain> token balance   --token <token> [--owner <addr>]
+defi --json --chain <chain> token allowance --token <token> --spender <addr> [--owner <addr>]
 
 # Mutating
-defi --json token approve --token <token> --spender <addr> [--amount max|<wei>]
-defi --json token transfer --token <token> --to <addr> --amount <wei>
+defi --json --chain <chain> token approve   --token <token> --spender <addr> [--amount max|<wei>]
+defi --json --chain <chain> token transfer  --token <token> --to <addr> --amount <wei>
 ```
 
 ## Wallet
 
 ```bash
-defi --json wallet address                          # show configured wallet address
-defi --json wallet balance [--address <addr>]       # native token balance
+defi --json wallet address
+defi --json --chain <chain> wallet balance [--address <addr>]
 ```
 
 ## Bridge (cross-chain)
 
+Source chain (`--chain`) must be a supported chain: `hyperevm`, `mantle`, `base`, `bnb`, `monad`. Destination (`--to-chain`) can be any chain LI.FI/deBridge route to, plus all CCTP V2 chains.
+
 ```bash
-# LI.FI (default, supports most token/chain combos)
-defi --json bridge --token USDC --amount 100000000 --to-chain mantle
+# LI.FI (default, broadest coverage)
+defi --json --chain base bridge --token USDC --amount 100000000 --to-chain ethereum --provider lifi
 
 # deBridge DLN
-defi --json bridge --token USDC --amount 100000000 --to-chain arbitrum --provider debridge
+defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider debridge
 
-# Circle CCTP V2 (native USDC only: ethereum, avalanche, optimism, arbitrum, base, polygon)
-defi --json bridge --token USDC --amount 100000000 --to-chain arbitrum --provider cctp
+# Circle CCTP V2 destinations: ethereum, avalanche, optimism, arbitrum, base, polygon
+defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider cctp
 ```

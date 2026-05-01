@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dw/@hypurrquant/defi-cli.svg)](https://www.npmjs.com/package/@hypurrquant/defi-cli)
 [![license](https://img.shields.io/npm/l/@hypurrquant/defi-cli.svg)](https://github.com/hypurrquant/defi-cli/blob/main/LICENSE)
 
-Multi-chain DeFi CLI — **7 chains · 48 protocols · 5 aggregators**. Lending, LP farming with emission claim, DEX swap via aggregator, cross-chain bridge.
+Multi-chain DeFi CLI — **5 chains · 39 protocols · 5 aggregators**. Lending, LP farming with emission claim, DEX swap via aggregator, cross-chain bridge.
 
 ```bash
 npm install -g @hypurrquant/defi-cli
@@ -23,8 +23,6 @@ npx -y @hypurrquant/defi-cli --json status
 | Base | 8453 | 🟢 production | 5 |
 | BNB | 56 | 🟡 staged | 16 |
 | Monad | 143 | 🟡 staged | 4 |
-| Arbitrum | 42161 | 🟡 staged | 3 |
-| Ethereum | 1 | 🟡 staged | 6 |
 
 🟢 = full lifecycle broadcast verified (mint/supply → claim → withdraw)
 🟡 = configs + read-only paths verified, awaiting funded broadcast
@@ -68,21 +66,15 @@ npx -y @hypurrquant/defi-cli --json status
 ### Monad (4)
 `uniswap-v2-monad`, `uniswap-v3-monad`, `traderjoe-monad` (LB), `morpho-blue-monad`
 
-### Ethereum (6)
-`aave-v2-ethereum`, `aave-v3-ethereum`, `compound-v3-ethereum`, `morpho-blue-ethereum`, `uniswap-v2-ethereum`, `uniswap-v3-ethereum`
-
-### Arbitrum (3)
-`aave-v3-arbitrum`, `compound-v3-arbitrum`, `uniswap-v3-arbitrum`
-
 ## DEX Aggregators (Live-verified)
 
-| Aggregator | HyperEVM | Mantle | Base | BNB | Ethereum | Arbitrum |
-|---|---|---|---|---|---|---|
-| KyberSwap | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| OpenOcean | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| LiquidSwap | ✅ | — | — | — | — | — |
-| LI.FI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Relay | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Aggregator | HyperEVM | Mantle | Base | BNB | Monad |
+|---|---|---|---|---|---|
+| KyberSwap | ✅ | ❌ | ✅ | ✅ | — |
+| OpenOcean | ✅ | ✅ | ✅ | ✅ | — |
+| LiquidSwap | ✅ | — | — | — | — |
+| LI.FI | ✅ | ✅ | ✅ | ✅ | — |
+| Relay | ✅ | ✅ | ✅ | ✅ | — |
 
 ## Setup
 
@@ -169,7 +161,7 @@ defi --chain base lp claim --protocol aerodrome-cl \
 # Pick the cheapest provider per chain
 defi --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei> --broadcast
 defi --chain base swap --provider kyber --from WETH --to USDC --amount <wei> --broadcast
-defi --chain ethereum swap --provider relay --from WETH --to USDC --amount <wei> --broadcast
+defi --chain bnb swap --provider relay --from WBNB --to USDT --amount <wei> --broadcast
 ```
 
 ## Agent-First Design
@@ -229,7 +221,7 @@ Or copy `skills/defi-cli/` into your Claude Code skills directory.
 ## Global Flags
 
 ```bash
---chain <name>      # hyperevm | mantle | base | bnb | monad | arbitrum | ethereum
+--chain <name>      # hyperevm | mantle | base | bnb | monad
 --json              # JSON output
 --ndjson            # NDJSON streaming
 --fields <a,b>      # Output field filter
