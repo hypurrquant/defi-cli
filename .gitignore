@@ -46,3 +46,5 @@ ts/docs/images/
 
 # Node
 node_modules/
+*.tgz
+ts/packages/defi-cli/hypurrquant-defi-cli-*.tgz
