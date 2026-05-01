@@ -12,6 +12,7 @@ import {
   createKittenSwapFarming,
   createMerchantMoeLB,
   createLending,
+  createNestOffChain,
 } from "@hypurrquant/defi-protocols";
 import { loadWhitelist } from "../whitelist.js";
 import type { WhitelistEntry } from "../whitelist.js";
@@ -24,6 +25,126 @@ function resolveAccount(optOwner?: string, optWallet?: string): Address {
   return address;
 }
 
+interface PipelineStep {
+  step: "mint" | "stake" | "claim" | "collect";
+  function: string;
+  optional?: boolean;
+  note?: string;
+  cli_command?: string;
+}
+
+interface PipelineInput {
+  chain?: string;
+  pool?: string;
+  tokenA?: string;
+  tokenB?: string;
+  amountA?: string;
+  amountB?: string;
+  tickLower?: string;
+  tickUpper?: string;
+  range?: string;
+  tokenId?: string;
+  gauge?: string;
+}
+
+/** Build a CLI command string with provided args inlined and `<placeholder>` for unknowns */
+function buildCmd(parts: Array<[string, string | undefined, string]>): string {
+  // parts: [flag, value, placeholder]
+  const segs: string[] = [];
+  for (const [flag, value, placeholder] of parts) {
+    segs.push(`${flag} ${value ?? `<${placeholder}>`}`);
+  }
+  return segs.join(" ");
+}
+
+/**
+ * Translate a protocol's reward_strategy into the on-chain function sequence
+ * a caller must execute. cli_command fields are filled with provided args
+ * (or `<placeholder>` for unknown values).
+ */
+function buildPipelineSteps(
+  p: { slug: string; reward_strategy?: string },
+  input: PipelineInput = {},
+): PipelineStep[] {
+  const slug = p.slug;
+  const chainFlag = input.chain ? `--chain ${input.chain} ` : "";
+  const baseAdd = `defi ${chainFlag}lp add ` + buildCmd([
+    ["--protocol", slug, "slug"],
+    ["--token-a", input.tokenA, "token-a"],
+    ["--token-b", input.tokenB, "token-b"],
+    ["--amount-a", input.amountA, "amount-a"],
+    ["--amount-b", input.amountB, "amount-b"],
+    ...(input.pool ? [["--pool", input.pool, "pool"] as [string, string, string]] : []),
+    ...(input.tickLower ? [["--tick-lower", input.tickLower, "tick-lower"] as [string, string, string]] : []),
+    ...(input.tickUpper ? [["--tick-upper", input.tickUpper, "tick-upper"] as [string, string, string]] : []),
+    ...(input.range ? [["--range", input.range, "range"] as [string, string, string]] : []),
+  ]);
+  const baseFarm = `defi ${chainFlag}lp farm ` + buildCmd([
+    ["--protocol", slug, "slug"],
+    ["--token-a", input.tokenA, "token-a"],
+    ["--token-b", input.tokenB, "token-b"],
+    ["--amount-a", input.amountA, "amount-a"],
+    ["--amount-b", input.amountB, "amount-b"],
+    ...(input.pool ? [["--pool", input.pool, "pool"] as [string, string, string]] : []),
+  ]);
+  const claimWithTokenId = (extra = "") => `defi ${chainFlag}lp claim ` + buildCmd([
+    ["--protocol", slug, "slug"],
+    ["--token-id", input.tokenId, "token-id-from-mint-result"],
+    ...(input.pool ? [["--pool", input.pool, "pool"] as [string, string, string]] : []),
+    ...(input.gauge ? [["--gauge", input.gauge, "gauge"] as [string, string, string]] : []),
+  ]) + extra;
+  const claimWithGauge = () => `defi ${chainFlag}lp claim ` + buildCmd([
+    ["--protocol", slug, "slug"],
+    ["--gauge", input.gauge, "gauge-from-voter.gaugeForPool"],
+  ]);
+
+  switch (p.reward_strategy) {
+    case "lp_fee_only":
+      return [
+        { step: "mint", function: "NPM.mint(MintParams)", cli_command: baseAdd },
+        { step: "collect", function: "NPM.collect(tokenId, recipient)", note: "No emissions; collects accrued LP trading fees only", cli_command: claimWithTokenId() },
+      ];
+    case "on_chain_farming_center":
+      return [
+        { step: "mint", function: "NPM.mint(MintParams)", cli_command: baseAdd },
+        { step: "stake", function: "farmingCenter.enterFarming(incentiveKey, tokenId)", cli_command: baseFarm, note: "lp farm chains mint+stake into one tx sequence" },
+        { step: "claim", function: "farmingCenter.collectRewards(incentiveKey, tokenId)", cli_command: claimWithTokenId() },
+      ];
+    case "on_chain_gauge_tokenid":
+      return [
+        { step: "mint", function: "NPM.mint(MintParams)", cli_command: baseAdd },
+        { step: "stake", function: "gauge.deposit(tokenId)", cli_command: baseFarm, note: "lp farm chains mint+stake into one tx sequence" },
+        { step: "claim", function: "gauge.earned(tokenId) → gauge.getReward(tokenId)", cli_command: claimWithTokenId() },
+      ];
+    case "on_chain_gauge":
+      return [
+        { step: "mint", function: "Router.addLiquidity / NPM.mint", cli_command: baseAdd },
+        { step: "stake", function: "gauge.deposit(amount)", cli_command: baseFarm },
+        { step: "claim", function: "gauge.earned(token, account) → gauge.getReward(account, tokens[])", cli_command: claimWithGauge() },
+      ];
+    case "auto_stake":
+      return [
+        { step: "mint", function: "Router.addLiquidity / NPM.mint", note: "LP automatically receives x(3,3) emissions — no separate stake step", cli_command: baseAdd },
+        { step: "claim", function: "gauge.getReward(account, tokens[])", note: "Multi-token reward (xRAM + WHYPE on Ramses HL)", cli_command: claimWithGauge() },
+      ];
+    case "on_chain_masterchef":
+      return [
+        { step: "mint", function: "NPM.mint or pool.mint", cli_command: baseAdd },
+        { step: "stake", function: "MasterChef.deposit(pid, amount)", cli_command: baseFarm },
+        { step: "claim", function: "MasterChef.harvest(pid) or pendingCake(pid, user)", cli_command: claimWithTokenId() },
+      ];
+    case "off_chain_api":
+      return [
+        { step: "mint", function: "NPM.mint(MintParams)", cli_command: baseAdd },
+        { step: "claim", function: "GET claim-data → voter.aggregateClaim(...)", note: "Read-only: backend-signed ticket only; broadcast ABI unresolved (selector 0xd6d7a454, 11 args, public registries miss). Use the printed `ticket` payload to submit through the Nest UI.", cli_command: `defi ${chainFlag}lp claim --protocol ${slug} --address <wallet>` },
+      ];
+    case "none":
+      return [{ step: "mint", function: "Router/NPM mint", note: "No reward path declared", cli_command: baseAdd }];
+    default:
+      return [{ step: "mint", function: "Router/NPM mint", note: "reward_strategy unset — pipeline cannot be inferred", cli_command: baseAdd }];
+  }
+}
+
 /** Resolve a pool: "TOKEN_A/TOKEN_B" name → address from registry, or raw 0x address */
 function resolvePoolAddress(registry: ReturnType<typeof Registry.loadEmbedded>, protocolSlug: string, pool: string): Address {
   if (pool.startsWith("0x")) return pool as Address;
@@ -31,6 +152,44 @@ function resolvePoolAddress(registry: ReturnType<typeof Registry.loadEmbedded>, 
 }
 
 // ── Gauge APR enrichment ──
+
+type V3PositionInfo = {
+  token0: Address;
+  token1: Address;
+  tickLower: number;
+  tickUpper: number;
+  liquidity: bigint;
+};
+
+/**
+ * Probe a V3-style NPM.positions(tokenId) and return normalized position info.
+ * Tries the Ramses-CL non-standard layout (no nonce/operator) first, then the
+ * standard Uniswap-V3 layout. Returns null if both decode attempts fail.
+ */
+async function detectV3Liquidity(
+  client: ReturnType<typeof createPublicClient>,
+  npm: Address,
+  tokenId: bigint,
+): Promise<V3PositionInfo | null> {
+  const ramsesAbi = parseAbi([
+    "function positions(uint256) view returns (address t0, address t1, int24 ts, int24 tl, int24 tu, uint128 liq, uint256 a, uint256 b, uint128 o0, uint128 o1)",
+  ]);
+  const standardAbi = parseAbi([
+    "function positions(uint256) view returns (uint96 nonce, address op, address t0, address t1, uint24 fee, int24 tl, int24 tu, uint128 liq, uint256 a, uint256 b, uint128 o0, uint128 o1)",
+  ]);
+  try {
+    const r = await client.readContract({ address: npm, abi: ramsesAbi, functionName: "positions", args: [tokenId] }) as readonly [Address, Address, number, number, number, bigint, bigint, bigint, bigint, bigint];
+    if (r[5] !== undefined) {
+      return { token0: r[0], token1: r[1], tickLower: r[3], tickUpper: r[4], liquidity: r[5] };
+    }
+  } catch { /* try standard */ }
+  try {
+    const r = await client.readContract({ address: npm, abi: standardAbi, functionName: "positions", args: [tokenId] }) as readonly [bigint, Address, Address, Address, number, number, number, bigint, bigint, bigint, bigint, bigint];
+    return { token0: r[2], token1: r[3], tickLower: r[5], tickUpper: r[6], liquidity: r[7] };
+  } catch {
+    return null;
+  }
+}
 
 const V2_PAIR_ABI = parseAbi([
   "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
@@ -43,7 +202,7 @@ interface DiscoveredPool {
   pool: string;
   pair?: string;
   type: "FEE" | "EMISSION";
-  source: "gauge" | "farming" | "lb_hooks" | "fee" | "masterchef";
+  source: "gauge" | "farming" | "lb_hooks" | "fee" | "masterchef" | "curve_factory";
   apr?: string;
   total_reward?: string;
   bonus_reward?: string;
@@ -412,6 +571,41 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
               } catch { /* masterchef query failed */ }
             }
 
+            // Curve StableswapNG: enumerate via factory.pool_count + pool_list
+            if (protocol.interface === "curve_stableswap" && protocol.contracts?.["stableswap_factory"]) {
+              const factory = protocol.contracts["stableswap_factory"] as Address;
+              const factoryAbi = parseAbi([
+                "function pool_count() view returns (uint256)",
+                "function pool_list(uint256) view returns (address)",
+              ]);
+              const poolAbi = parseAbi([
+                "function coins(uint256) view returns (address)",
+                "function name() view returns (string)",
+              ]);
+              const cClient = createPublicClient({ transport: http(rpcUrl) });
+              try {
+                const count = await cClient.readContract({ address: factory, abi: factoryAbi, functionName: "pool_count" }) as bigint;
+                const MAX_SCAN = Math.min(Number(count), 50);
+                for (let i = 0; i < MAX_SCAN; i++) {
+                  try {
+                    const pool = await cClient.readContract({ address: factory, abi: factoryAbi, functionName: "pool_list", args: [BigInt(i)] }) as Address;
+                    const [c0, c1, name] = await Promise.all([
+                      cClient.readContract({ address: pool, abi: poolAbi, functionName: "coins", args: [0n] }).catch(() => null) as Promise<Address | null>,
+                      cClient.readContract({ address: pool, abi: poolAbi, functionName: "coins", args: [1n] }).catch(() => null) as Promise<Address | null>,
+                      cClient.readContract({ address: pool, abi: poolAbi, functionName: "name" }).catch(() => "") as Promise<string>,
+                    ]);
+                    results.push({
+                      protocol: protocol.slug,
+                      pool,
+                      pair: name || `${c0 ?? "?"}/${c1 ?? "?"}`,
+                      type: "FEE",
+                      source: "curve_factory",
+                    } as DiscoveredPool);
+                  } catch { /* skip malformed pool */ }
+                }
+              } catch { /* factory query failed */ }
+            }
+
           } catch {
             // Skip protocols that fail discovery (no adapter, missing contracts, etc.)
           }
@@ -421,8 +615,17 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       // Compute APR for gauge pools with active rewardRate
       await _enrichGaugeAprs(results, rpcUrl, registry, chainName);
 
+      // Sort by APR descending (puts top-yield pools first; pools with no APR sink to bottom)
+      results.sort((a, b) => (b.aprPercent ?? 0) - (a.aprPercent ?? 0));
       if (opts.emissionOnly) {
-        printOutput(results.filter((r) => r.type === "EMISSION"), getOpts());
+        // Filter to pools that are actually distributing rewards right now (moePerDay > 0 OR rewardRate > 0)
+        printOutput(
+          results.filter((r) =>
+            r.type === "EMISSION" &&
+            ((r.moePerDay ?? 0) > 0 || (r.rewardRate && BigInt(r.rewardRate) > 0n)),
+          ),
+          getOpts(),
+        );
       } else {
         printOutput(results, getOpts());
       }
@@ -443,6 +646,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)")
     .option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)")
     .option("--range <percent>", "±N% concentrated range around current price (e.g. --range 2)")
+    .option("--num-bins <n>", "Merchant Moe LB: bins on each side of active (default 5)")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain;
@@ -450,7 +654,6 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const protocol = registry.getProtocol(opts.protocol);
-      const adapter = createDex(protocol, chain.effectiveRpcUrl());
       const tokenA = opts.tokenA.startsWith("0x")
         ? (opts.tokenA as Address)
         : registry.resolveToken(chainName, opts.tokenA).address as Address;
@@ -460,6 +663,30 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const recipient = (opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001") as Address;
       const poolAddr = opts.pool ? resolvePoolAddress(registry, opts.protocol, opts.pool) : undefined;
 
+      // Merchant Moe LB add: distinct path from V2 — uses LBRouter.addLiquidity with bin distribution
+      if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
+        if (!poolAddr) throw new Error("--pool is required for Merchant Moe LB add");
+        const lbAdapter = createMerchantMoeLB(protocol, chain.effectiveRpcUrl());
+        const [tokenX, tokenY, amountX, amountY] = tokenA.toLowerCase() < tokenB.toLowerCase()
+          ? [tokenA, tokenB, BigInt(opts.amountA), BigInt(opts.amountB)]
+          : [tokenB, tokenA, BigInt(opts.amountB), BigInt(opts.amountA)];
+        const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
+        const binStep = await client.readContract({
+          address: poolAddr, abi: parseAbi(["function getBinStep() view returns (uint16)"]), functionName: "getBinStep",
+        }) as number;
+        const tx = await lbAdapter.buildAddLiquidity({
+          pool: poolAddr,
+          tokenX, tokenY, binStep,
+          amountX, amountY,
+          recipient,
+          numBins: opts.numBins !== undefined ? parseInt(opts.numBins, 10) : 5,
+        });
+        const result = await executor.execute(tx);
+        printOutput(result, getOpts());
+        return;
+      }
+
+      const adapter = createDex(protocol, chain.effectiveRpcUrl());
       const tx = await adapter.buildAddLiquidity({
         protocol: protocol.name,
         token_a: tokenA,
@@ -557,8 +784,10 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         return;
       }
 
-      // Solidly V2 / CL / Hybra gauge staking
-      if (["solidly_v2", "solidly_cl", "hybra"].includes(iface)) {
+      // Solidly V2 / CL / Hybra / uniswap_v3-with-voter (Aerodrome Slipstream) gauge staking
+      const isGaugeStakeable = ["solidly_v2", "solidly_cl", "hybra"].includes(iface)
+        || (iface === "uniswap_v3" && protocol.contracts?.["voter"]);
+      if (isGaugeStakeable) {
         if (!mintedTokenId && iface !== "solidly_v2") {
           process.stderr.write("Step 2/2: Skipped staking (no tokenId — run in --broadcast mode to get minted NFT)\n");
           return;
@@ -580,11 +809,22 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
 
         process.stderr.write("Step 2/2: Staking into gauge...\n");
         const gaugeAdapter = createGauge(protocol, rpcUrl);
-        // Hybra uses tokenId-based deposit; solidly_v2 uses amount (max uint256 = deposit full balance)
+        // Hybra uses tokenId-based deposit; solidly_v2 uses amount.
+        // Aerodrome V2 (and most Solidly forks) gauge.deposit reverts on uint256.max — query
+        // user's actual LP balance and stake that exact amount.
         const tokenIdArg = mintedTokenId;
-        const amountArg = iface === "solidly_v2"
-          ? BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935") // uint256 max
-          : 0n;
+        let amountArg = 0n;
+        if (iface === "solidly_v2" && poolAddr) {
+          const erc20Abi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+          const lpClient = createPublicClient({ transport: http(rpcUrl) });
+          amountArg = await lpClient.readContract({
+            address: poolAddr, abi: erc20Abi, functionName: "balanceOf", args: [recipient],
+          }) as bigint;
+          if (amountArg === 0n) {
+            process.stderr.write("Step 2/2: Skipped staking — LP balance 0 (Step 1 add returned no LP).\n");
+            return;
+          }
+        }
         // For solidly_v2, the LP token is the pool itself — pass poolAddr so approve is generated
         const lpTokenArg = iface === "solidly_v2" ? poolAddr : undefined;
         const stakeTx = await gaugeAdapter.buildDeposit(gaugeAddr, amountArg, tokenIdArg, lpTokenArg);
@@ -613,6 +853,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)")
     .option("--bins <binIds>", "Comma-separated bin IDs (for Merchant Moe LB)")
     .option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
+    .option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default)")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain;
@@ -623,6 +864,105 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const protocol = registry.getProtocol(opts.protocol);
       const account = resolveAccount(opts.address, lp.opts<{ wallet?: string }>().wallet);
       const iface = protocol.interface;
+
+      // V3 NPM.collect — used either when the whole protocol is fee-only
+      // (e.g. swap-only V3 forks) OR when an auto_stake protocol's specific
+      // pool has no gauge (caller passes --token-id without --gauge).
+      const isV3Fee =
+        protocol.reward_strategy === "lp_fee_only" ||
+        (iface === "uniswap_v3" && opts.tokenId && !opts.gauge);
+      if (isV3Fee) {
+        if (!opts.tokenId) throw new Error("--token-id is required for V3 LP fee collection");
+        const adapter = createDex(protocol, rpcUrl);
+        if (!("buildCollectFees" in adapter) || typeof (adapter as { buildCollectFees?: unknown }).buildCollectFees !== "function") {
+          throw new Error(`[${protocol.name}] adapter does not support buildCollectFees`);
+        }
+        const tx = await (adapter as { buildCollectFees: (tokenId: bigint, recipient: Address) => Promise<unknown> })
+          .buildCollectFees(BigInt(opts.tokenId), account);
+        const result = await executor.execute(tx as Parameters<typeof executor.execute>[0]);
+        printOutput(result, getOpts());
+        return;
+      }
+
+      // Off-chain claim (Nest): emissions read from blaze.nest.aegas.it / usenest.xyz.
+      // The backend issues a signed claim ticket; we reproduce the byte-level
+      // calldata pattern observed in successful onchain claims (template derived
+      // from diffing two confirmed claim txs — only the ticket struct slots
+      // differ between callers).
+      if (protocol.reward_strategy === "off_chain_api") {
+        const nest = createNestOffChain(protocol);
+        const status = await nest.getClaimStatus(account);
+        const ticket = await nest.getClaimTicket(account);
+        if (!ticket) {
+          printOutput({
+            protocol: protocol.slug,
+            wallet: account,
+            voter: nest.getVoterAddress(),
+            reward_symbol: "NEST",
+            pending_amount: 0,
+            note: "No claim ticket available — backend reports no points to claim.",
+          }, getOpts());
+          return;
+        }
+        const tx = await nest.buildClaim(account);
+
+        // Pre-flight simulation gate: verify the voter accepts the calldata under
+        // `from: account` before paying gas. Catches expired tickets, signature
+        // mismatches, replay rejections, etc. without burning a tx.
+        const preflightClient = createPublicClient({ transport: http(rpcUrl) });
+        try {
+          await preflightClient.call({
+            account,
+            to: tx.to as Address,
+            data: tx.data as Hex,
+            value: tx.value,
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          printOutput({
+            protocol: protocol.slug,
+            wallet: account,
+            voter: nest.getVoterAddress(),
+            reward_symbol: "NEST",
+            pending_amount: status.pendingFormatted,
+            pending_raw: status.pendingRaw.toString(),
+            ticket: {
+              amount: ticket.amount.toString(),
+              timestamp: ticket.timestamp.toString(),
+              day: ticket.day === null ? null : ticket.day.toString(),
+              signature: ticket.signature,
+            },
+            preflight: "revert",
+            preflight_error: msg.length > 400 ? msg.slice(0, 400) + "..." : msg,
+            broadcast: "skipped",
+            note: "Simulation reverted — broadcast aborted to avoid wasted gas. Common causes: ticket expired, caller != ticket signer, ticket already claimed.",
+          }, getOpts());
+          return;
+        }
+
+        // Simulation passed → broadcast (or stay in dry-run if executor is configured that way)
+        const result = await executor.execute(tx);
+        printOutput({
+          protocol: protocol.slug,
+          wallet: account,
+          voter: nest.getVoterAddress(),
+          reward_symbol: "NEST",
+          pending_amount: status.pendingFormatted,
+          pending_raw: status.pendingRaw.toString(),
+          total_claimed_raw: status.totalClaimedRaw.toString(),
+          total_available_raw: status.totalAvailableRaw.toString(),
+          ticket: {
+            amount: ticket.amount.toString(),
+            timestamp: ticket.timestamp.toString(),
+            day: ticket.day === null ? null : ticket.day.toString(),
+            signature: ticket.signature,
+          },
+          preflight: "passed",
+          claim_result: result,
+          note: "Calldata derived from byte-level template (verified against two known-successful onchain claim txs). Pre-flight eth_call simulation passed before broadcast.",
+        }, getOpts());
+        return;
+      }
 
       // KittenSwap farming: collectRewards (collect + claim in one tx)
       if (iface === "algebra_v3" && protocol.contracts?.["farming_center"]) {
@@ -657,10 +997,36 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
           (iface === "uniswap_v3" && protocol.contracts?.["voter"])) {
         if (!opts.gauge) throw new Error("--gauge is required for gauge claim");
         const adapter = createGauge(protocol, rpcUrl);
-        let tx;
-        if (opts.tokenId) {
+        type GaugeTx = Awaited<ReturnType<typeof adapter.buildClaimRewards>>;
+        let tx: GaugeTx;
+        // Ramses CL pattern: x(3,3) auto-stake on uniswap_v3 — claim must go through NPM
+        // (gauge.getReward* reverts NOT_AUTHORIZED_CLAIMER for EOAs; only NPM/voter authorized).
+        // We call NPM.getPeriodReward(currentEpoch, tokenId, tokens[], receiver).
+        if (opts.tokenId &&
+            iface === "uniswap_v3" &&
+            protocol.reward_strategy === "auto_stake" &&
+            "buildClaimRewardsViaNPMPeriodReward" in adapter &&
+            typeof (adapter as { buildClaimRewardsViaNPMPeriodReward?: unknown }).buildClaimRewardsViaNPMPeriodReward === "function") {
+          const npm = protocol.contracts?.["position_manager"] as Address | undefined;
+          if (!npm) throw new Error(`${protocol.name} requires contracts.position_manager for NPM-based claim`);
+          tx = await (adapter as {
+            buildClaimRewardsViaNPMPeriodReward: (
+              npm: Address, tokenId: bigint, receiver: Address,
+              opts?: { tokens?: Address[]; gauge?: Address; period?: bigint },
+            ) => Promise<GaugeTx>;
+          }).buildClaimRewardsViaNPMPeriodReward(
+            npm,
+            BigInt(opts.tokenId),
+            account,
+            { gauge: opts.gauge as Address },
+          );
+        } else if (opts.tokenId) {
           if (!adapter.buildClaimRewardsByTokenId) throw new Error(`${protocol.name} does not support NFT-based claim`);
-          tx = await adapter.buildClaimRewardsByTokenId(opts.gauge as Address, BigInt(opts.tokenId));
+          const claimOpts = opts.redeemType !== undefined
+            ? { redeemType: parseInt(opts.redeemType, 10) }
+            : undefined;
+          tx = await (adapter as { buildClaimRewardsByTokenId: (gauge: Address, tokenId: bigint, opts?: { redeemType?: number }) => Promise<GaugeTx> })
+            .buildClaimRewardsByTokenId(opts.gauge as Address, BigInt(opts.tokenId), claimOpts);
         } else {
           tx = await adapter.buildClaimRewards(opts.gauge as Address, account);
         }
@@ -670,6 +1036,51 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       }
 
       throw new Error(`No claim method found for protocol interface '${iface}'`);
+    });
+
+  // ─────────────────────────────────────────
+  // lp pipeline (mint→stake→claim plan with optional inputs)
+  // ─────────────────────────────────────────
+  lp.command("pipeline")
+    .description("Show the mint→stake→claim sequence implied by a protocol's reward_strategy. Pass --token-a/-b/--amount-a/-b etc. to get fully-resolved CLI commands you can copy-paste.")
+    .requiredOption("--protocol <protocol>", "Protocol slug")
+    .option("--pool <pool>", "Pool name or address (e.g. WHYPE/USDC)")
+    .option("--token-a <token>", "First token symbol or address")
+    .option("--token-b <token>", "Second token symbol or address")
+    .option("--amount-a <amount>", "Amount of token A in wei")
+    .option("--amount-b <amount>", "Amount of token B in wei")
+    .option("--tick-lower <tick>", "Lower tick (V3/CL)")
+    .option("--tick-upper <tick>", "Upper tick (V3/CL)")
+    .option("--range <percent>", "±N% concentrated range")
+    .option("--token-id <id>", "NFT tokenId for already-minted positions (skips mint step)")
+    .option("--gauge <addr>", "Gauge address for stake/claim")
+    .action((opts) => {
+      const registry = Registry.loadEmbedded();
+      const protocol = registry.getProtocol(opts.protocol);
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      const steps = buildPipelineSteps(protocol, {
+        chain: chainName,
+        pool: opts.pool,
+        tokenA: opts.tokenA,
+        tokenB: opts.tokenB,
+        amountA: opts.amountA,
+        amountB: opts.amountB,
+        tickLower: opts.tickLower,
+        tickUpper: opts.tickUpper,
+        range: opts.range,
+        tokenId: opts.tokenId,
+        gauge: opts.gauge,
+      });
+      printOutput({
+        protocol: protocol.slug,
+        chain: protocol.chain,
+        interface: protocol.interface,
+        is_active: protocol.is_active !== false,
+        verified: protocol.verified === true,
+        reward_strategy: protocol.reward_strategy ?? "(unset — falls back to interface inference)",
+        steps,
+        note: "Plan output. Run each cli_command sequentially. After the mint step, broadcast mode prints `details.minted_token_id` — feed that into the next step's --token-id.",
+      }, getOpts());
     });
 
   // ─────────────────────────────────────────
@@ -685,6 +1096,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)")
     .option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)")
     .option("--recipient <address>", "Recipient address")
+    .option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default — WARNING: long lock)")
+    .option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw")
+    .option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain;
@@ -695,6 +1109,55 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       const protocol = registry.getProtocol(opts.protocol);
       const iface = protocol.interface;
       const recipient = (opts.recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001") as Address;
+
+      // Merchant Moe LB remove: distinct path — uses LBRouter.removeLiquidity with per-bin amounts + ERC1155 approveForAll
+      if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
+        if (!opts.pool) throw new Error("--pool is required for Merchant Moe LB remove");
+        if (!opts.bins) throw new Error("--bins <id1,id2,...> is required for Merchant Moe LB remove");
+        const lbAdapter = createMerchantMoeLB(protocol, rpcUrl);
+        const tokenA = opts.tokenA.startsWith("0x")
+          ? (opts.tokenA as Address)
+          : registry.resolveToken(chainName, opts.tokenA).address as Address;
+        const tokenB = opts.tokenB.startsWith("0x")
+          ? (opts.tokenB as Address)
+          : registry.resolveToken(chainName, opts.tokenB).address as Address;
+        const [tokenX, tokenY] = tokenA.toLowerCase() < tokenB.toLowerCase() ? [tokenA, tokenB] : [tokenB, tokenA];
+        const binIds = (opts.bins as string).split(",").map((s) => parseInt(s.trim()));
+        const client = createPublicClient({ transport: http(rpcUrl) });
+        const binStep = await client.readContract({
+          address: opts.pool as Address, abi: parseAbi(["function getBinStep() view returns (uint16)"]), functionName: "getBinStep",
+        }) as number;
+        let amounts: bigint[];
+        if (opts.amounts) {
+          amounts = (opts.amounts as string).split(",").map((s) => BigInt(s.trim()));
+        } else {
+          // Default: full balance per bin
+          const balanceAbi = parseAbi(["function balanceOf(address account, uint256 id) view returns (uint256)"]);
+          amounts = await Promise.all(binIds.map((id) =>
+            client.readContract({ address: opts.pool as Address, abi: balanceAbi, functionName: "balanceOf", args: [recipient, BigInt(id)] }) as Promise<bigint>,
+          ));
+        }
+        // Pre-tx: approveForAll(LBRouter, true) on the LBPair (ERC1155)
+        const approveForAllAbi = parseAbi(["function approveForAll(address operator, bool approved) external"]);
+        const lbRouter = protocol.contracts["lb_router"] as Address;
+        const approveTx = {
+          description: `[${protocol.name}] approveForAll LBPair → LBRouter`,
+          to: opts.pool as Address,
+          data: encodeFunctionData({ abi: approveForAllAbi, functionName: "approveForAll", args: [lbRouter, true] }),
+          value: 0n,
+          gas_estimate: 80_000,
+        };
+        const tx = await lbAdapter.buildRemoveLiquidity({
+          tokenX, tokenY, binStep,
+          binIds, amounts,
+          recipient,
+        });
+        tx.pre_txs = [approveTx, ...(tx.pre_txs ?? [])];
+        const result = await executor.execute(tx);
+        printOutput({ step: "lb_remove", ...result }, getOpts());
+        return;
+      }
+
       const tokenA = opts.tokenA.startsWith("0x")
         ? (opts.tokenA as Address)
         : registry.resolveToken(chainName, opts.tokenA).address as Address;
@@ -719,8 +1182,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         }
         didUnstake = true;
       }
-      // Solidly / Hybra gauge withdraw
-      else if (["solidly_v2", "solidly_cl", "hybra"].includes(iface)) {
+      // Solidly / Hybra / uniswap_v3-with-voter (Aerodrome Slipstream) gauge withdraw
+      else if (["solidly_v2", "solidly_cl", "hybra"].includes(iface)
+        || (iface === "uniswap_v3" && protocol.contracts?.["voter"])) {
         let gaugeAddr = opts.gauge as Address | undefined;
         if (!gaugeAddr && poolAddr) {
           try {
@@ -733,10 +1197,30 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
           }
         }
         if (gaugeAddr) {
+          // Skip unstake if gauge balance is already 0 (e.g., user pre-unstaked manually)
+          if (iface === "solidly_v2" && !opts.tokenId) {
+            const erc20Abi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+            const gClient = createPublicClient({ transport: http(rpcUrl) });
+            const gaugeBal = await gClient.readContract({
+              address: gaugeAddr, abi: erc20Abi, functionName: "balanceOf", args: [recipient],
+            }) as bigint;
+            if (gaugeBal === 0n) {
+              process.stderr.write("Step 1/2: Skipped unstake — gauge balance 0 (already unstaked).\n");
+              didUnstake = true; // mark as success to allow remove
+              gaugeAddr = undefined; // skip the unstake block below
+            }
+          }
+        }
+        if (gaugeAddr) {
           process.stderr.write("Step 1/2: Withdrawing from gauge...\n");
           const gaugeAdapter = createGauge(protocol, rpcUrl);
           const tokenId = opts.tokenId ? BigInt(opts.tokenId) : undefined;
-          const withdrawTx = await gaugeAdapter.buildWithdraw(gaugeAddr, BigInt(opts.liquidity), tokenId);
+          const wOpts = opts.redeemType !== undefined ? { redeemType: parseInt(opts.redeemType, 10) } : undefined;
+          if (iface === "hybra" && (!wOpts || wOpts.redeemType === 1)) {
+            process.stderr.write("WARNING: Hybra default redeemType=1 locks rewards into 2-year veHYBR NFT. Pass --redeem-type 0 for instant exit (with penalty).\n");
+          }
+          const withdrawTx = await (gaugeAdapter as { buildWithdraw: (g: Address, a: bigint, t?: bigint, o?: { redeemType?: number }) => Promise<unknown> })
+            .buildWithdraw(gaugeAddr, BigInt(opts.liquidity), tokenId, wOpts) as Awaited<ReturnType<typeof gaugeAdapter.buildWithdraw>>;
           const withdrawResult = await executor.execute(withdrawTx);
           printOutput({ step: "unstake_gauge", ...withdrawResult }, getOpts());
           if (withdrawResult.status !== "confirmed" && withdrawResult.status !== "simulated") {
@@ -760,9 +1244,39 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         token_b: tokenB,
         liquidity: BigInt(opts.liquidity),
         recipient,
+        token_id: opts.tokenId ? BigInt(opts.tokenId) : undefined,
       });
       const removeResult = await executor.execute(removeTx);
       printOutput({ step: "lp_remove", ...removeResult }, getOpts());
+    });
+
+  // ─────────────────────────────────────────
+  // lp compound  (collect fees → increaseLiquidity in one tx)
+  // ─────────────────────────────────────────
+  lp.command("compound")
+    .description("Auto-compound: collect accrued LP fees and immediately re-add them as liquidity (V3 fee-only protocols).")
+    .requiredOption("--protocol <protocol>", "Protocol slug")
+    .requiredOption("--token-id <id>", "NFT tokenId of the position to compound")
+    .option("--address <address>", "Wallet/recipient address (defaults to DEFI_WALLET_ADDRESS)")
+    .option("--slippage <bps>", "Slippage tolerance in basis points (default 50 = 0.5%). Sets amount0Min/amount1Min on increaseLiquidity to protect against MEV.")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const chainName = parent.opts<{ chain?: string }>().chain;
+      if (!chainName) { printOutput({ error: "--chain is required (e.g. --chain hyperevm)" }, getOpts()); return; }
+      const registry = Registry.loadEmbedded();
+      const chain = registry.getChain(chainName);
+      const rpcUrl = chain.effectiveRpcUrl();
+      const protocol = registry.getProtocol(opts.protocol);
+      const recipient = resolveAccount(opts.address, lp.opts<{ wallet?: string }>().wallet);
+      const adapter = createDex(protocol, rpcUrl);
+      if (!("buildCompound" in adapter) || typeof (adapter as { buildCompound?: unknown }).buildCompound !== "function") {
+        throw new Error(`[${protocol.name}] adapter does not support compound (v1 supports V3 fee-only protocols)`);
+      }
+      const compoundOpts = opts.slippage !== undefined ? { slippageBps: parseInt(opts.slippage, 10) } : undefined;
+      const tx = await (adapter as { buildCompound: (tokenId: bigint, recipient: Address, opts?: { slippageBps?: number }) => Promise<unknown> })
+        .buildCompound(BigInt(opts.tokenId), recipient, compoundOpts);
+      const result = await executor.execute(tx as Parameters<typeof executor.execute>[0]);
+      printOutput(result, getOpts());
     });
 
   // ─────────────────────────────────────────
@@ -792,21 +1306,71 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       await Promise.allSettled(
         protocols.map(async (protocol) => {
           try {
-            // Merchant Moe LB positions
+            // Merchant Moe LB positions: scan all rewarded pools (no --pool) or one specific pool
             if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
-              if (!opts.pool) return; // LB positions require a pool
               const adapter = createMerchantMoeLB(protocol, rpcUrl);
               const binIds = opts.bins
                 ? (opts.bins as string).split(",").map((s: string) => parseInt(s.trim()))
                 : undefined;
-              const positions = await adapter.getUserPositions(user, opts.pool as Address, binIds);
-              for (const pos of positions) {
-                results.push({
-                  protocol: protocol.slug,
-                  type: "lb",
-                  pool: opts.pool,
-                  ...pos,
-                });
+              const poolsToScan: Address[] = opts.pool
+                ? [opts.pool as Address]
+                : (await adapter.discoverRewardedPools()).map((p) => p.pool as Address);
+              for (const poolAddr of poolsToScan) {
+                try {
+                  const userBins = binIds ?? await adapter.findUserBinsWithBalance(poolAddr, user);
+                  if (userBins.length === 0) continue;
+                  const positions = await adapter.getUserPositions(user, poolAddr, userBins);
+                  if (positions.length === 0) continue;
+                  // Query pending MOE for these bins
+                  const pending = await adapter.getPendingRewards(user, poolAddr, userBins).catch(() => []);
+                  const totalPending = pending.reduce((s, r) => s + (r.amount ?? 0n), 0n);
+                  for (const pos of positions) {
+                    results.push({
+                      protocol: protocol.slug,
+                      type: "lb",
+                      pool: poolAddr,
+                      ...pos,
+                      pending_reward: totalPending.toString(),
+                      pending_reward_token: pending[0]?.token,
+                    });
+                  }
+                } catch { /* skip pools the user has no balance in */ }
+              }
+            }
+
+            // V3/Algebra/Hybra NFT positions via position_manager
+            const npm = protocol.contracts?.["position_manager"] as Address | undefined;
+            if (npm && ["uniswap_v3", "algebra_v3", "hybra"].includes(protocol.interface)) {
+              const npmAbi = parseAbi([
+                "function balanceOf(address owner) view returns (uint256)",
+                "function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)",
+              ]);
+              const client = createPublicClient({ transport: http(rpcUrl) });
+              let count: bigint;
+              try {
+                count = await client.readContract({ address: npm, abi: npmAbi, functionName: "balanceOf", args: [user] }) as bigint;
+              } catch { return; }
+              const max = Math.min(Number(count), 50);
+              for (let i = 0; i < max; i++) {
+                try {
+                  const tokenId = await client.readContract({
+                    address: npm, abi: npmAbi, functionName: "tokenOfOwnerByIndex", args: [user, BigInt(i)],
+                  }) as bigint;
+                  // Try Ramses-CL layout (no nonce/operator) first; fallback to standard.
+                  const liq = await detectV3Liquidity(client, npm, tokenId);
+                  if (liq && liq.liquidity > 0n) {
+                    results.push({
+                      protocol: protocol.slug,
+                      type: "v3_nft",
+                      token_id: tokenId.toString(),
+                      token0: liq.token0,
+                      token1: liq.token1,
+                      liquidity: liq.liquidity.toString(),
+                      tickLower: liq.tickLower,
+                      tickUpper: liq.tickUpper,
+                    });
+                  }
+                } catch { /* skip malformed */ }
               }
             }
           } catch {

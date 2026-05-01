@@ -18,6 +18,11 @@ import type {
 const thenaPmAbi = parseAbi([
   "struct MintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
   "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+  "struct DecreaseLiquidityParams { uint256 tokenId; uint128 liquidity; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }",
+  "function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+  "struct CollectParams { uint256 tokenId; address recipient; uint128 amount0Max; uint128 amount1Max; }",
+  "function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+  "function multicall(bytes[] data) external payable returns (bytes[] memory results)",
 ]);
 
 const thenaRouterAbi = parseAbi([
@@ -174,7 +179,27 @@ export class ThenaCLAdapter implements IDex {
     };
   }
 
-  async buildRemoveLiquidity(_params: RemoveLiquidityParams): Promise<DeFiTx> {
-    throw DefiError.unsupported(`[${this.protocolName}] remove_liquidity requires tokenId`);
+  async buildRemoveLiquidity(params: RemoveLiquidityParams): Promise<DeFiTx> {
+    const pm = this.positionManager;
+    if (!pm) throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager'`);
+    if (!params.token_id) throw DefiError.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+    const MAX_UINT128 = (1n << 128n) - 1n;
+    const deadline = BigInt("18446744073709551615");
+    const decreaseData = encodeFunctionData({
+      abi: thenaPmAbi, functionName: "decreaseLiquidity",
+      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }],
+    });
+    const collectData = encodeFunctionData({
+      abi: thenaPmAbi, functionName: "collect",
+      args: [{ tokenId: params.token_id, recipient: params.recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
+    });
+    const data = encodeFunctionData({
+      abi: thenaPmAbi, functionName: "multicall",
+      args: [[decreaseData, collectData]],
+    });
+    return {
+      description: `[${this.protocolName}] Remove ${params.liquidity} liquidity from tokenId ${params.token_id}`,
+      to: pm, data, value: 0n, gas_estimate: 400_000,
+    };
   }
 }

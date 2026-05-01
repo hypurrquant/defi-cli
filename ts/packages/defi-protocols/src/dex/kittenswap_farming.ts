@@ -47,7 +47,7 @@ const farmingCenterAbi = parseAbi([
   "function enterFarming((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
   "function exitFarming((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
   "function collectRewards((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
-  "function claimReward(address rewardToken, address to, uint128 amountRequested) external returns (uint256 reward)",
+  "function claimReward(address rewardToken, address to, uint256 amountRequested) external returns (uint256 reward)",
 ]);
 
 const positionManagerAbi = parseAbi([
@@ -141,7 +141,7 @@ function encodeClaimReward(rewardToken: Address, to: Address): Hex {
   return encodeFunctionData({
     abi: farmingCenterAbi,
     functionName: "claimReward",
-    args: [rewardToken, to, 2n ** 128n - 1n], // max uint128
+    args: [rewardToken, to, 2n ** 256n - 1n], // max uint256 (KittenSwap variant uses uint256 amount, not uint128)
   });
 }
 
@@ -168,6 +168,8 @@ export class KittenSwapFarmingAdapter {
   private readonly positionManager: Address;
   private readonly rpcUrl: string;
   private readonly factory: Address | undefined;
+  private readonly rewardToken: Address;
+  private readonly bonusRewardToken: Address;
 
   constructor(
     protocolName: string,
@@ -176,6 +178,8 @@ export class KittenSwapFarmingAdapter {
     positionManager: Address,
     rpcUrl: string,
     factory?: Address,
+    rewardToken: Address = KITTEN_TOKEN,
+    bonusRewardToken: Address = WHYPE_TOKEN,
   ) {
     this.protocolName = protocolName;
     this.farmingCenter = farmingCenter;
@@ -183,6 +187,8 @@ export class KittenSwapFarmingAdapter {
     this.positionManager = positionManager;
     this.rpcUrl = rpcUrl;
     this.factory = factory;
+    this.rewardToken = rewardToken;
+    this.bonusRewardToken = bonusRewardToken;
   }
 
   name(): string {
@@ -201,8 +207,8 @@ export class KittenSwapFarmingAdapter {
     // Fast path: runtime cache
     if (nonceCache.has(poolLc)) {
       return {
-        rewardToken: KITTEN_TOKEN,
-        bonusRewardToken: WHYPE_TOKEN,
+        rewardToken: this.rewardToken,
+        bonusRewardToken: this.bonusRewardToken,
         pool,
         nonce: nonceCache.get(poolLc)!,
       };
@@ -215,8 +221,8 @@ export class KittenSwapFarmingAdapter {
       const nonce = BigInt(n);
       nonces.push(nonce);
       const key: IncentiveKey = {
-        rewardToken: KITTEN_TOKEN,
-        bonusRewardToken: WHYPE_TOKEN,
+        rewardToken: this.rewardToken,
+        bonusRewardToken: this.bonusRewardToken,
         pool,
         nonce,
       };
@@ -256,8 +262,8 @@ export class KittenSwapFarmingAdapter {
           const nonce = nonces[i]!;
           nonceCache.set(poolLc, nonce);
           return {
-            rewardToken: KITTEN_TOKEN,
-            bonusRewardToken: WHYPE_TOKEN,
+            rewardToken: this.rewardToken,
+            bonusRewardToken: this.bonusRewardToken,
             pool,
             nonce,
           };
@@ -369,8 +375,8 @@ export class KittenSwapFarmingAdapter {
 
     const calls: Hex[] = [
       encodeCollectRewards(key, tokenId),
-      encodeClaimReward(KITTEN_TOKEN, owner),
-      encodeClaimReward(WHYPE_TOKEN, owner),
+      encodeClaimReward(this.rewardToken, owner),
+      encodeClaimReward(this.bonusRewardToken, owner),
     ];
 
     return {
@@ -387,8 +393,8 @@ export class KittenSwapFarmingAdapter {
    */
   async buildClaimReward(owner: Address): Promise<DeFiTx> {
     const calls: Hex[] = [
-      encodeClaimReward(KITTEN_TOKEN, owner),
-      encodeClaimReward(WHYPE_TOKEN, owner),
+      encodeClaimReward(this.rewardToken, owner),
+      encodeClaimReward(this.bonusRewardToken, owner),
     ];
 
     return {
@@ -478,8 +484,8 @@ export class KittenSwapFarmingAdapter {
     for (const pool of pools) {
       for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
         const key: IncentiveKey = {
-          rewardToken: KITTEN_TOKEN,
-          bonusRewardToken: WHYPE_TOKEN,
+          rewardToken: this.rewardToken,
+          bonusRewardToken: this.bonusRewardToken,
           pool: pool as Address,
           nonce: BigInt(n),
         };
@@ -537,8 +543,8 @@ export class KittenSwapFarmingAdapter {
             // Prefer active incentives; among active ones, prefer higher nonce (newer)
             if (!bestKey || (isActive && !bestActive) || (isActive === bestActive && nonce > bestKey.nonce)) {
               bestKey = {
-                rewardToken: KITTEN_TOKEN,
-                bonusRewardToken: WHYPE_TOKEN,
+                rewardToken: this.rewardToken,
+                bonusRewardToken: this.bonusRewardToken,
                 pool,
                 nonce,
               };

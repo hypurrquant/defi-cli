@@ -242,12 +242,16 @@ export class HybraGaugeAdapter implements IGaugeSystem {
     };
   }
 
-  async buildWithdraw(gauge: Address, _amount: bigint, tokenId?: bigint): Promise<DeFiTx> {
+  async buildWithdraw(gauge: Address, _amount: bigint, tokenId?: bigint, opts?: { redeemType?: number }): Promise<DeFiTx> {
     if (tokenId === undefined) throw new DefiError("CONTRACT_ERROR", "tokenId required for CL gauge withdraw");
+    const redeemType = opts?.redeemType ?? 1;
+    const warning = redeemType === 1
+      ? " — WARNING: redeemType=1 locks accumulated rewards into 2-year veHYBR NFT. Use --redeem-type 0 for instant exit (with penalty)."
+      : "";
     return {
-      description: `[${this.protocolName}] Withdraw NFT #${tokenId} from gauge`,
+      description: `[${this.protocolName}] Withdraw NFT #${tokenId} from gauge (redeemType=${redeemType})${warning}`,
       to: gauge,
-      data: encodeFunctionData({ abi: gaugeCLAbi, functionName: "withdraw", args: [tokenId, 1] }),
+      data: encodeFunctionData({ abi: gaugeCLAbi, functionName: "withdraw", args: [tokenId, redeemType] }),
       value: 0n, gas_estimate: 1_000_000,
     };
   }
@@ -258,13 +262,15 @@ export class HybraGaugeAdapter implements IGaugeSystem {
     throw DefiError.unsupported(`[${this.protocolName}] Use buildClaimRewardsByTokenId for CL gauges`);
   }
 
-  async buildClaimRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<DeFiTx> {
+  async buildClaimRewardsByTokenId(gauge: Address, tokenId: bigint, opts?: { redeemType?: number }): Promise<DeFiTx> {
+    // redeemType: 0 = instant exit (with penalty), 1 = lock into 2-year veHYBR (default)
+    const redeemType = opts?.redeemType ?? 1;
     return {
-      description: `[${this.protocolName}] Claim rewards for NFT #${tokenId}`,
+      description: `[${this.protocolName}] Claim rewards for NFT #${tokenId} (redeemType=${redeemType})`,
       to: this.gaugeManager,
       data: encodeFunctionData({
         abi: gaugeManagerAbi, functionName: "claimRewards",
-        args: [gauge, [tokenId], 1], // redeemType=1
+        args: [gauge, [tokenId], redeemType],
       }),
       value: 0n, gas_estimate: 1_000_000,
     };

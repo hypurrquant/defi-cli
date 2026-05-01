@@ -86,7 +86,6 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 | Slug | Protocol | Interface |
 |------|----------|-----------|
 | `aave-v3-mantle` | Aave V3 Mantle | aave_v3 |
-| `lendle-mantle` | Lendle | aave_v3 |
 | `uniswap-v3-mantle` | Uniswap V3 | uniswap_v3 |
 | `merchantmoe-mantle` | Merchant Moe | uniswap_v2 + lb |
 

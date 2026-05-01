@@ -16,6 +16,7 @@ import { SolidlyGaugeAdapter } from "./dex/solidly_gauge.js";
 import { MasterChefAdapter } from "./dex/masterchef.js";
 import { MerchantMoeLBAdapter } from "./dex/merchant_moe_lb.js";
 import { KittenSwapFarmingAdapter } from "./dex/kittenswap_farming.js";
+import { NestOffChainAdapter } from "./dex/nest_offchain.js";
 
 // Trait interfaces
 import type { IDex } from "@hypurrquant/defi-core";
@@ -302,6 +303,106 @@ export function createMerchantMoeLB(entry: ProtocolEntry, rpcUrl?: string): Merc
 // KittenSwap Algebra Farming
 // ============================================================
 
+// ============================================================
+// Nest Off-Chain (NEST emissions are NOT readable on-chain — backend-signed claim tickets)
+// ============================================================
+
+/** Create a NestOffChainAdapter for Nest reward queries via blaze.nest.aegas.it / usenest.xyz */
+export function createNestOffChain(entry: ProtocolEntry): NestOffChainAdapter {
+  return new NestOffChainAdapter(entry);
+}
+
+// ============================================================
+// Reward Reader — unified strategy dispatch
+// (mirrors HypurrQuant_FE packages/core/defi/lp/incentive/query/resolve.ts)
+// ============================================================
+
+/**
+ * Discriminated union returned by createRewardReader. Callers narrow on `kind`
+ * to access the strategy-specific adapter API.
+ *
+ *   - off_chain_api          → Nest backend-signed tickets (NestOffChainAdapter)
+ *   - on_chain_farming_center → Algebra Integral eternal farming (KittenSwap)
+ *   - on_chain_gauge_tokenid  → gauge.earned(tokenId) per CL position (Hybra)
+ *   - on_chain_gauge          → Solidly-style gauge.earned(addr) (Aerodrome V2, Thena V1)
+ *   - auto_stake              → Ramses x(3,3): no external claim needed
+ *   - on_chain_masterchef     → MasterChef pid→pending (PancakeSwap V3)
+ *   - none                    → Swap-only DEX, no rewards
+ */
+export type RewardReader =
+  | { kind: "off_chain_api"; adapter: NestOffChainAdapter }
+  | { kind: "on_chain_farming_center"; adapter: KittenSwapFarmingAdapter }
+  | { kind: "on_chain_gauge_tokenid"; adapter: HybraGaugeAdapter }
+  | { kind: "on_chain_gauge"; adapter: SolidlyGaugeAdapter }
+  | { kind: "auto_stake"; adapter: SolidlyGaugeAdapter }
+  | { kind: "on_chain_masterchef"; adapter: MasterChefAdapter }
+  | { kind: "none" };
+
+/**
+ * Build a strategy-aware reward reader for the given protocol entry.
+ *
+ * Reads `entry.reward_strategy` first (set in the protocol TOML). When the
+ * field is missing (legacy entries), falls back to inferring from the
+ * adapter `interface` and contract presence, mirroring the previous
+ * implicit dispatch in createGauge.
+ */
+export function createRewardReader(
+  entry: ProtocolEntry,
+  rpcUrl?: string,
+  tokens?: Address[],
+): RewardReader {
+  const strategy = entry.reward_strategy ?? inferRewardStrategy(entry);
+
+  switch (strategy) {
+    case "off_chain_api":
+      return { kind: "off_chain_api", adapter: new NestOffChainAdapter(entry) };
+
+    case "on_chain_farming_center":
+      if (!rpcUrl) throw DefiError.invalidParam("createRewardReader: rpcUrl required for on_chain_farming_center");
+      return { kind: "on_chain_farming_center", adapter: createKittenSwapFarming(entry, rpcUrl) };
+
+    case "on_chain_gauge_tokenid":
+      return { kind: "on_chain_gauge_tokenid", adapter: new HybraGaugeAdapter(entry, rpcUrl) };
+
+    case "on_chain_gauge":
+      return { kind: "on_chain_gauge", adapter: new SolidlyGaugeAdapter(entry, rpcUrl, tokens) };
+
+    case "auto_stake":
+      // Same adapter shape (Solidly), but caller is expected to recognize that
+      // emissions accrue internally — no buildClaimRewards/getReward call needed.
+      return { kind: "auto_stake", adapter: new SolidlyGaugeAdapter(entry, rpcUrl, tokens) };
+
+    case "on_chain_masterchef":
+      return { kind: "on_chain_masterchef", adapter: new MasterChefAdapter(entry, rpcUrl) };
+
+    case "none":
+      return { kind: "none" };
+
+    default:
+      throw DefiError.unsupported(`Unknown reward_strategy '${strategy}' on '${entry.slug}'`);
+  }
+}
+
+function inferRewardStrategy(entry: ProtocolEntry): NonNullable<ProtocolEntry["reward_strategy"]> {
+  // Hybra has its own GaugeManager system → tokenid-keyed earned()
+  if (entry.interface === "hybra" || entry.contracts?.["gauge_manager"]) {
+    return "on_chain_gauge_tokenid";
+  }
+  // Algebra eternal farming requires farming_center + eternal_farming
+  if (entry.contracts?.["farming_center"] && entry.contracts?.["eternal_farming"]) {
+    return "on_chain_farming_center";
+  }
+  // ve(3,3) gauges via voter
+  if (entry.contracts?.["voter"]) {
+    return "on_chain_gauge";
+  }
+  // MasterChef
+  if (entry.contracts?.["master_chef"] || entry.contracts?.["masterChef"]) {
+    return "on_chain_masterchef";
+  }
+  return "none";
+}
+
 /** Create a KittenSwapFarmingAdapter for Algebra eternal farming operations */
 export function createKittenSwapFarming(entry: ProtocolEntry, rpcUrl: string): KittenSwapFarmingAdapter {
   const farmingCenter = entry.contracts?.["farming_center"];
@@ -317,5 +418,7 @@ export function createKittenSwapFarming(entry: ProtocolEntry, rpcUrl: string): K
     throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'position_manager' contract address`);
   }
   const factory = entry.contracts?.["factory"] as Address | undefined;
-  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory);
+  const rewardToken = entry.contracts?.["reward_token"] as Address | undefined;
+  const bonusRewardToken = entry.contracts?.["bonus_reward_token"] as Address | undefined;
+  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory, rewardToken, bonusRewardToken);
 }

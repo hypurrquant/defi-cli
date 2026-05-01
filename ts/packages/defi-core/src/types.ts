@@ -135,6 +135,8 @@ export interface RemoveLiquidityParams {
   token_b: Address;
   liquidity: bigint;
   recipient: Address;
+  /** NFT tokenId for V3 / CL position managers (required for V3-style removes) */
+  token_id?: bigint;
 }
 
 // === Lending Types ===

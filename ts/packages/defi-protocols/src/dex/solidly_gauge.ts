@@ -18,15 +18,21 @@ const gaugeAbi = parseAbi([
   "function getReward(address account) external",
   "function getReward(address account, address[] tokens) external",
   "function getReward(uint256 tokenId) external",
+  // Ramses CL gauge factory (delegate target): tokenId-keyed multi-token claim
+  "function getReward(uint256 tokenId, address[] tokens) external",
   "function earned(address account) external view returns (uint256)",
   "function earned(address account, uint256 tokenId) external view returns (uint256)",
   "function earned(address token, address account) external view returns (uint256)",
   "function earned(uint256 tokenId) external view returns (uint256)",
+  // Ramses CL: token-first + tokenId (no account; account is ownerOf(tokenId) inferred by gauge)
+  "function earned(address token, uint256 tokenId) external view returns (uint256)",
   "function rewardRate() external view returns (uint256)",
   "function rewardToken() external view returns (address)",
   "function totalSupply() external view returns (uint256)",
   "function rewardsListLength() external view returns (uint256)",
   "function rewardData(address token) external view returns (uint256 periodFinish, uint256 rewardRate, uint256 lastUpdateTime, uint256 rewardPerTokenStored)",
+  // Ramses CL gauge factory exposes the canonical reward-token list
+  "function getRewardTokens() external view returns (address[])",
   "function nonfungiblePositionManager() external view returns (address)",
 ]);
 
@@ -104,6 +110,10 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
   private readonly clFactory: Address | undefined;
   private readonly v2Factory: Address | undefined;
   private readonly tokens: Address[] | undefined;
+  // CL gauges (Aerodrome Slipstream / Velodrome CL) take an LP NFT via deposit(tokenId);
+  // V2 gauges take an LP token amount via deposit(amount). Detect via uniswap_v3 + position_manager.
+  private readonly clNftMode: boolean;
+  private readonly positionManager: Address | undefined;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string, tokens?: Address[]) {
     this.protocolName = entry.name;
@@ -121,6 +131,8 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     this.tokens = tokens;
     this.clFactory = entry.contracts?.["cl_factory"] ?? entry.contracts?.["factory"];
     this.v2Factory = entry.contracts?.["pair_factory"] ?? entry.contracts?.["factory"];
+    this.positionManager = entry.contracts?.["position_manager"];
+    this.clNftMode = entry.interface === "uniswap_v3" && this.positionManager !== undefined;
   }
 
   name(): string {
@@ -514,6 +526,26 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
   // IGauge
 
   async buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx> {
+    // CL gauge (Aerodrome Slipstream / Velodrome CL): NFT-based deposit(tokenId) + NFT.approve pre-tx
+    if (this.clNftMode && tokenId !== undefined && this.positionManager) {
+      const nftAbi = parseAbi(["function approve(address to, uint256 tokenId) external"]);
+      const clGaugeAbi = parseAbi(["function deposit(uint256 tokenId) external"]);
+      const approveTx: DeFiTx = {
+        description: `[${this.protocolName}] Approve LP NFT #${tokenId} to gauge`,
+        to: this.positionManager,
+        data: encodeFunctionData({ abi: nftAbi, functionName: "approve", args: [gauge, tokenId] }),
+        value: 0n,
+        gas_estimate: 80_000,
+      };
+      return {
+        description: `[${this.protocolName}] Deposit LP NFT #${tokenId} to CL gauge`,
+        to: gauge,
+        data: encodeFunctionData({ abi: clGaugeAbi, functionName: "deposit", args: [tokenId] }),
+        value: 0n,
+        gas_estimate: 900_000,
+        pre_txs: [approveTx],
+      };
+    }
     if (tokenId !== undefined) {
       const data = encodeFunctionData({
         abi: gaugeAbi,
@@ -545,7 +577,18 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
     };
   }
 
-  async buildWithdraw(gauge: Address, amount: bigint): Promise<DeFiTx> {
+  async buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx> {
+    // CL gauge: withdraw(tokenId) returns the LP NFT to the user
+    if (this.clNftMode && tokenId !== undefined) {
+      const clGaugeAbi = parseAbi(["function withdraw(uint256 tokenId) external"]);
+      return {
+        description: `[${this.protocolName}] Withdraw LP NFT #${tokenId} from CL gauge`,
+        to: gauge,
+        data: encodeFunctionData({ abi: clGaugeAbi, functionName: "withdraw", args: [tokenId] }),
+        value: 0n,
+        gas_estimate: 600_000,
+      };
+    }
     const data = encodeFunctionData({
       abi: gaugeAbi,
       functionName: "withdraw",
@@ -665,21 +708,31 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
       };
     }
 
-    // Single-token gauge (NEST / standard): getReward() with no args
-    // Some gauges use getReward(account), but NEST-style uses getReward()
-    const data = encodeFunctionData({
+    // Single-token gauge: try getReward(account) first (Aerodrome / Velodrome / standard Solidly v2),
+    // fall back to no-arg getReward() if that simulates as revert (NEST-style).
+    const accountVariant = encodeFunctionData({
       abi: gaugeAbi,
       functionName: "getReward",
-      args: [],
+      args: [account],
     });
-    return {
-      description: `[${this.protocolName}] Claim gauge rewards`,
-      to: gauge, data, value: 0n, gas_estimate: 200_000,
-    };
+    try {
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      await client.call({ account, to: gauge, data: accountVariant });
+      return {
+        description: `[${this.protocolName}] Claim gauge rewards (getReward(account))`,
+        to: gauge, data: accountVariant, value: 0n, gas_estimate: 200_000,
+      };
+    } catch {
+      const noArg = encodeFunctionData({ abi: gaugeAbi, functionName: "getReward", args: [] });
+      return {
+        description: `[${this.protocolName}] Claim gauge rewards (getReward())`,
+        to: gauge, data: noArg, value: 0n, gas_estimate: 200_000,
+      };
+    }
   }
 
   /**
-   * Claim rewards for a CL gauge by NFT tokenId (Hybra V4 style).
+   * Claim rewards for a CL gauge by NFT tokenId (Hybra V4 style — single-arg getReward(tokenId)).
    */
   async buildClaimRewardsByTokenId(gauge: Address, tokenId: bigint): Promise<DeFiTx> {
     const data = encodeFunctionData({
@@ -694,6 +747,137 @@ export class SolidlyGaugeAdapter implements IGaugeSystem {
       value: 0n,
       gas_estimate: 300_000,
     };
+  }
+
+  /**
+   * Ramses-CL claim via NPM.getPeriodReward — the user-facing claim path.
+   * The gauge contract restricts `getReward*` to authorized claimers (voter + NPM only);
+   * EOAs must route through NPM, which calls into the gauge with msg.sender = NPM.
+   *
+   * ABI: getPeriodReward(uint256 period, uint256 tokenId, address[] tokens, address receiver)
+   * `period` defaults to current Solidly weekly epoch index (block.timestamp / 604800).
+   * `tokens` defaults to gauge.getRewardTokens() when `gauge` is provided.
+   *
+   * Verified 2026-04-29 on anvil fork: NPM.getPeriodReward(2938, 177068, [..., xRAM], wallet)
+   * delivered 71.11 xRAM after 1h emission warp; direct gauge.getReward(...) reverts
+   * with NOT_AUTHORIZED_CLAIMER for the same EOA.
+   */
+  async buildClaimRewardsViaNPMPeriodReward(
+    npm: Address,
+    tokenId: bigint,
+    receiver: Address,
+    opts?: { tokens?: Address[]; gauge?: Address; period?: bigint },
+  ): Promise<DeFiTx> {
+    let rewardTokens = opts?.tokens;
+    if (!rewardTokens || rewardTokens.length === 0) {
+      if (!opts?.gauge) {
+        throw DefiError.invalidParam(
+          "Ramses CL claim requires either `tokens` or `gauge` (for getRewardTokens lookup)",
+        );
+      }
+      if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required to discover reward tokens");
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      try {
+        rewardTokens = await client.readContract({
+          address: opts.gauge, abi: gaugeAbi, functionName: "getRewardTokens",
+        }) as Address[];
+      } catch {
+        throw DefiError.contractError(
+          `[${this.protocolName}] gauge.getRewardTokens() reverted — pass tokens[] explicitly`,
+        );
+      }
+    }
+    if (rewardTokens.length === 0) {
+      throw DefiError.contractError(`[${this.protocolName}] no reward tokens to claim`);
+    }
+    const epochSeconds = 604800n;
+    const period = opts?.period ?? (BigInt(Math.floor(Date.now() / 1000)) / epochSeconds);
+
+    const npmClaimAbi = parseAbi([
+      "function getPeriodReward(uint256 period, uint256 tokenId, address[] tokens, address receiver) external",
+    ]);
+    const data = encodeFunctionData({
+      abi: npmClaimAbi,
+      functionName: "getPeriodReward",
+      args: [period, tokenId, rewardTokens, receiver],
+    });
+    return {
+      description: `[${this.protocolName}] Claim via NPM.getPeriodReward(period=${period}, tokenId=${tokenId}, ${rewardTokens.length} tokens)`,
+      to: npm,
+      data,
+      value: 0n,
+      gas_estimate: 600_000,
+    };
+  }
+
+  /**
+   * @deprecated Direct gauge.getReward(tokenId, tokens[]) reverts with NOT_AUTHORIZED_CLAIMER
+   * for EOAs on Ramses CL. Use buildClaimRewardsViaNPMPeriodReward instead.
+   */
+  async buildClaimRewardsByCLTokenIdMulti(
+    gauge: Address,
+    tokenId: bigint,
+    tokens?: Address[],
+  ): Promise<DeFiTx> {
+    let rewardTokens = tokens;
+    if (!rewardTokens || rewardTokens.length === 0) {
+      if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required to discover reward tokens");
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      try {
+        rewardTokens = await client.readContract({
+          address: gauge, abi: gaugeAbi, functionName: "getRewardTokens",
+        }) as Address[];
+      } catch {
+        throw DefiError.contractError(
+          `[${this.protocolName}] gauge.getRewardTokens() reverted — pass tokens[] explicitly`,
+        );
+      }
+    }
+    if (rewardTokens.length === 0) {
+      throw DefiError.contractError(`[${this.protocolName}] no reward tokens to claim`);
+    }
+    const data = encodeFunctionData({
+      abi: gaugeAbi,
+      functionName: "getReward",
+      args: [tokenId, rewardTokens],
+    });
+    return {
+      description: `[${this.protocolName}] Claim CL gauge rewards for NFT #${tokenId} (${rewardTokens.length} tokens)`,
+      to: gauge,
+      data,
+      value: 0n,
+      gas_estimate: 400_000,
+    };
+  }
+
+  /**
+   * Ramses-CL-style pending rewards: earned(token, tokenId) per reward token from
+   * gauge.getRewardTokens(). Returns raw amounts; caller resolves USD value.
+   */
+  async getPendingRewardsByCLTokenIdMulti(
+    gauge: Address,
+    tokenId: bigint,
+  ): Promise<RewardInfo[]> {
+    if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    let rewardTokens: Address[];
+    try {
+      rewardTokens = await client.readContract({
+        address: gauge, abi: gaugeAbi, functionName: "getRewardTokens",
+      }) as Address[];
+    } catch {
+      return [];
+    }
+    const out: RewardInfo[] = [];
+    for (const token of rewardTokens) {
+      try {
+        const amount = await client.readContract({
+          address: gauge, abi: gaugeAbi, functionName: "earned", args: [token, tokenId],
+        }) as bigint;
+        out.push({ token, symbol: token.slice(0, 10), amount });
+      } catch { /* skip token-tokenId pair that reverts */ }
+    }
+    return out;
   }
 
   async getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]> {

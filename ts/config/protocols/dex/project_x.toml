@@ -2,10 +2,12 @@
 name = "Project X"
 slug = "project-x"
 category = "dex"
-interface = "uniswap_v4"
+interface = "uniswap_v3"
 chain = "hyperevm"
 native = true
-description = "Uniswap V3 fork on HyperEVM ($44M TVL)"
+verified = true
+reward_strategy = "lp_fee_only"
+description = "Uniswap V3 fork on HyperEVM ($44M TVL). factory.owner valid + NPM.factory ↔ factory + NPM.WETH9 = WHYPE verified 2026-04-29. No gauge/farming — LP collects trading fees via NPM.collect()."
 
 [protocol.contracts]
 router = "0x1EbDFC75FfE3ba3de61E7138a3E8706aC841Af9B"

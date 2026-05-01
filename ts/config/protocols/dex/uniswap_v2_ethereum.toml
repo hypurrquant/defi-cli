@@ -1,0 +1,14 @@
+[protocol]
+name = "Uniswap V2 Ethereum"
+slug = "uniswap-v2-ethereum"
+category = "dex"
+interface = "uniswap_v2"
+chain = "ethereum"
+native = false
+verified = true
+reward_strategy = "none"
+description = "Uniswap V2 on Ethereum mainnet. factory.allPairsLength=498K verified 2026-04-28; original V1 factory address corrected to V2 deployment."
+
+[protocol.contracts]
+router = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+factory = "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"

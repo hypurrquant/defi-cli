@@ -512,8 +512,43 @@ export class MerchantMoeLBAdapter {
   }
 
   /**
+   * Scan ±scanRange bins around the active bin and return the user's non-zero balance bin IDs.
+   * Critical: the rewarder may track pending rewards for bins OUTSIDE its current rewarded range
+   * (e.g. when the rewarded range shifts after a position was already in place). Always claim
+   * against the user's actual positions, not the rewarder's "current" range.
+   */
+  async findUserBinsWithBalance(pool: Address, user: Address, scanRange = 50): Promise<number[]> {
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient({ transport: http(rpcUrl) });
+    const activeId = await client.readContract({
+      address: pool, abi: lbPairAbi, functionName: "getActiveId",
+    }) as number;
+    const calls: Array<[Address, Hex]> = [];
+    const binIds: number[] = [];
+    for (let b = activeId - scanRange; b <= activeId + scanRange; b++) {
+      binIds.push(b);
+      calls.push([pool, encodeFunctionData({
+        abi: parseAbi(["function balanceOf(address account, uint256 id) view returns (uint256)"]),
+        functionName: "balanceOf",
+        args: [user, BigInt(b)],
+      })]);
+    }
+    const results = await multicallRead(rpcUrl, calls);
+    const owned: number[] = [];
+    for (let i = 0; i < binIds.length; i++) {
+      const data = results[i];
+      if (!data) continue;
+      // Decode uint256 — non-zero last 32 bytes means user has balance in this bin
+      const hex = data.slice(2).padStart(64, "0");
+      if (hex !== "0".repeat(64)) owned.push(binIds[i]!);
+    }
+    return owned;
+  }
+
+  /**
    * Build a claim rewards transaction for specific LB bins.
-   * If binIds is omitted, auto-detects from the rewarder's rewarded range.
+   * If binIds is omitted, auto-detects from the user's actual non-zero balance bins (active ±50 scan).
+   * This catches rewards accumulated in bins outside the rewarder's current rewarded range.
    */
   async buildClaimRewards(user: Address, pool: Address, binIds?: number[]): Promise<DeFiTx> {
     const rpcUrl = this.requireRpc();
@@ -530,18 +565,21 @@ export class MerchantMoeLBAdapter {
       throw new DefiError("CONTRACT_ERROR", `[${this.protocolName}] Pool ${pool} has no active rewarder`);
     }
 
-    // Auto-detect bins from rewarder range if not provided
     let resolvedBinIds = binIds;
     if (!resolvedBinIds || resolvedBinIds.length === 0) {
-      const range = await client.readContract({
-        address: rewarder,
-        abi: lbRewarderAbi,
-        functionName: "getRewardedRange",
-      }) as [bigint, bigint];
-      const min = Number(range[0]);
-      const max = Number(range[1]);
-      resolvedBinIds = [];
-      for (let b = min; b <= max; b++) resolvedBinIds.push(b);
+      // Prefer user's actual non-zero bins over rewarder's current range — the rewarder
+      // may track pending rewards across bins where the user was previously LP'd.
+      resolvedBinIds = await this.findUserBinsWithBalance(pool, user);
+      if (resolvedBinIds.length === 0) {
+        // Fallback: rewarder's current range (no user position case)
+        const range = await client.readContract({
+          address: rewarder, abi: lbRewarderAbi, functionName: "getRewardedRange",
+        }) as [bigint, bigint];
+        const min = Number(range[0]);
+        const max = Number(range[1]);
+        resolvedBinIds = [];
+        for (let b = min; b <= max; b++) resolvedBinIds.push(b);
+      }
     }
 
     const data = encodeFunctionData({

@@ -31,6 +31,9 @@ run.log
 /src/
 /tests/
 
+# AI tooling state
+.claude/
+
 # OMC / Playwright state
 .omc/
 .playwright-mcp/

@@ -14,3 +14,9 @@ export { KittenSwapFarmingAdapter } from "./kittenswap_farming.js";
 export type { IncentiveKey, FarmingPool } from "./kittenswap_farming.js";
 export { ThenaCLAdapter } from "./thena_cl.js";
 export { HybraGaugeAdapter } from "./hybra_gauge.js";
+export { NestOffChainAdapter } from "./nest_offchain.js";
+export type {
+  NestClaimStatus,
+  NestClaimTicket,
+  NestAprEstimateParams,
+} from "./nest_offchain.js";

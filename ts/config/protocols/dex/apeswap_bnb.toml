@@ -1,0 +1,14 @@
+[protocol]
+name = "ApeSwap"
+slug = "apeswap-bnb"
+category = "dex"
+interface = "uniswap_v2"
+chain = "bnb"
+native = false
+verified = true
+reward_strategy = "none"
+description = "ApeSwap V2 on BNB Chain. On-chain verified 2026-04-03."
+
+[protocol.contracts]
+router = "0xcF0feBd3f17CEf5b47b0cD257aCf6025c5BFf3b7"
+factory = "0x0841BD0B734E4F5853f0dD8d7Ea041c241fb0Da6"

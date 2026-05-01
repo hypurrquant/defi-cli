@@ -1,0 +1,14 @@
+[protocol]
+name = "BSCSwap"
+slug = "bscswap-bnb"
+category = "dex"
+interface = "uniswap_v2"
+chain = "bnb"
+native = false
+verified = true
+reward_strategy = "none"
+description = "BSCSwap V2 on BNB Chain. On-chain verified 2026-04-03."
+
+[protocol.contracts]
+router = "0xd954551853F55deb4Ae31407c423e67B1621424A"
+factory = "0xCe8fd65646F2a2a897755A1188C04ACe94D2B8D0"

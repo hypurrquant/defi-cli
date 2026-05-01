@@ -53,7 +53,6 @@
 | Slug | Name | Interface | Notes |
 |------|------|-----------|-------|
 | `aave-v3-mantle` | Aave V3 Mantle | aave_v3 | Official Aave V3 |
-| `lendle-mantle` | Lendle | aave_v3 | Mantle native lending |
 
 ### DEX Protocols
 

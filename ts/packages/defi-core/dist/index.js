@@ -250,6 +250,7 @@ var ChainConfig = class {
   native_token;
   wrapped_native;
   multicall3;
+  aggregators;
   effectiveRpcUrl() {
     const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
     return process.env[chainEnv] ?? process.env["HYPEREVM_RPC_URL"] ?? this.rpc_url;
@@ -410,7 +411,7 @@ var Registry = class _Registry {
   }
   getProtocolsForChain(chain, includeUnverified = false) {
     return this.protocols.filter(
-      (p) => p.chain.toLowerCase() === chain.toLowerCase() && (includeUnverified || p.verified !== false)
+      (p) => p.chain.toLowerCase() === chain.toLowerCase() && (includeUnverified || p.verified !== false) && p.is_active !== false
     );
   }
   resolveToken(chain, symbol) {

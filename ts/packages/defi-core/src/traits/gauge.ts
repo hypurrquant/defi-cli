@@ -8,12 +8,12 @@ export interface IGauge {
   resolveGauge?(pool: Address): Promise<Address>;
   /** Deposit LP tokens into gauge */
   buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx>;
-  /** Withdraw LP tokens or NFT from gauge */
-  buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
+  /** Withdraw LP tokens or NFT from gauge. opts.redeemType (Hybra-specific): 0=instant exit (penalty), 1=lock into 2-year veHYBR (default). */
+  buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint, opts?: { redeemType?: number }): Promise<DeFiTx>;
   /** Claim earned rewards from gauge */
   buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
-  /** Claim rewards for a CL gauge NFT position (Hybra V4 style) */
-  buildClaimRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<DeFiTx>;
+  /** Claim rewards for a CL gauge NFT position (Hybra V4 style). opts.redeemType (Hybra): 0=instant, 1=2yr lock (default). */
+  buildClaimRewardsByTokenId?(gauge: Address, tokenId: bigint, opts?: { redeemType?: number }): Promise<DeFiTx>;
   /** Get pending rewards for a user */
   getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
   /** Get pending rewards for a CL gauge NFT position */

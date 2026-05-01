@@ -321,10 +321,11 @@ server.tool(
     token_a: z.string().describe("First token symbol or address"),
     token_b: z.string().describe("Second token symbol or address"),
     liquidity: z.string().describe("Liquidity amount to remove in wei"),
+    token_id: z.string().optional().describe("NFT tokenId — required for V3/CL position-manager based protocols (uniswap_v3, algebra_v3, hybra)"),
     recipient: z.string().optional().describe("Recipient address for returned tokens"),
     broadcast: z.boolean().optional().describe("Set true to broadcast (default: false)"),
   },
-  async ({ chain, protocol, token_a, token_b, liquidity, recipient, broadcast }) => {
+  async ({ chain, protocol, token_a, token_b, liquidity, token_id, recipient, broadcast }) => {
     try {
       const chainName = chain ?? "hyperevm";
       const registry = getRegistry();
@@ -340,6 +341,7 @@ server.tool(
         token_b: tokenB,
         liquidity: BigInt(liquidity),
         recipient: recipientAddr,
+        token_id: token_id ? BigInt(token_id) : undefined,
       });
       const executor = makeExecutor(broadcast ?? false, chainConfig.effectiveRpcUrl(), chainConfig.explorer_url);
       const result = await executor.execute(tx);

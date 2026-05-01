@@ -1,0 +1,13 @@
+[protocol]
+name = "Morpho Blue Ethereum"
+slug = "morpho-blue-ethereum"
+category = "lending"
+interface = "morpho_blue"
+chain = "ethereum"
+native = false
+verified = true
+reward_strategy = "none"
+description = "Morpho Blue on Ethereum mainnet — permissionless lending primitive. owner() verified 2026-04-28."
+
+[protocol.contracts]
+morpho_blue = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"

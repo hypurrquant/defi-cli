@@ -8,10 +8,12 @@ import { requireChain, resolveTokenAddress, resolveWallet, errMsg, parseBigIntVa
 
 // ── Chain name mappings ──
 
-const CHAIN_NAMES: Record<string, { kyber?: string; openocean: string }> = {
-  hyperevm: { kyber: "hyperevm", openocean: "hyperevm" },
-  mantle:   { openocean: "mantle" },
-};
+// Aggregator chain slugs are now defined in chains.toml under `[chain.X.aggregators]`
+// and surfaced via ChainConfig.aggregators. This function preserves the legacy lookup
+// shape so the existing call sites stay readable.
+function getAggregatorSlugs(chainCfg: { aggregators?: { kyber?: string; openocean?: string; liquid?: string } }): { kyber?: string; openocean?: string; liquid?: string } {
+  return chainCfg.aggregators ?? {};
+}
 
 // ── KyberSwap ──
 
@@ -91,6 +93,91 @@ async function openoceanSwap(
   };
 }
 
+// ── LI.FI (multi-chain via chainId) ──
+//
+// API: GET https://li.quest/v1/quote — single same-chain swap or cross-chain bridge.
+// Supports most EVM chains (1, 42161, 8453, 56, 5000, …) via numeric chainId.
+const LIFI_API = "https://li.quest/v1";
+
+async function lifiQuote(
+  chainId: number,
+  fromToken: string,
+  toToken: string,
+  fromAmount: string,
+  fromAddress: string,
+  slippagePct: string,
+): Promise<{ to: string; data: string; value: string; outAmount: string }> {
+  const params = new URLSearchParams({
+    fromChain: String(chainId),
+    toChain: String(chainId),
+    fromToken,
+    toToken,
+    fromAmount,
+    fromAddress,
+    slippage: (Number(slippagePct) / 100).toFixed(4),
+  });
+  const url = `${LIFI_API}/quote?${params}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`LI.FI quote failed: ${res.status} ${await res.text()}`);
+  const json = await res.json() as Record<string, unknown>;
+  const txReq = json.transactionRequest as Record<string, unknown> | undefined;
+  if (!txReq) throw new Error("LI.FI: no transactionRequest in response");
+  const estimate = json.estimate as Record<string, unknown> | undefined;
+  return {
+    to: String(txReq.to),
+    data: String(txReq.data),
+    value: String(txReq.value ?? "0x0"),
+    outAmount: String(estimate?.toAmount ?? "0"),
+  };
+}
+
+// ── Relay (multi-chain via chainId) ──
+//
+// API: POST https://api.relay.link/quote — single-chain swap or cross-chain.
+// Returns a multi-step plan; we always execute the first item (same-chain swap = single step).
+const RELAY_API = "https://api.relay.link";
+
+async function relayQuote(
+  chainId: number,
+  fromToken: string,
+  toToken: string,
+  amount: string,
+  user: string,
+): Promise<{ to: string; data: string; value: string; outAmount: string }> {
+  const body = {
+    user,
+    originChainId: chainId,
+    destinationChainId: chainId,
+    originCurrency: fromToken,
+    destinationCurrency: toToken,
+    recipient: user,
+    tradeType: "EXACT_INPUT",
+    amount,
+  };
+  const res = await fetch(`${RELAY_API}/quote`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Relay quote failed: ${res.status} ${await res.text()}`);
+  const json = await res.json() as Record<string, unknown>;
+  const steps = json.steps as Array<Record<string, unknown>> | undefined;
+  // Relay returns multiple steps (approve + swap). The executor handles approval via
+  // the `approvals` array, so take the swap step (skipping any "approve" step).
+  const swapStep = steps?.find((s) => s.id !== "approve") ?? steps?.[steps.length - 1];
+  const items = swapStep?.items as Array<Record<string, unknown>> | undefined;
+  const txData = items?.[0]?.data as Record<string, unknown> | undefined;
+  if (!txData) throw new Error("Relay: no swap step in quote");
+  const details = json.details as Record<string, unknown> | undefined;
+  const currencyOut = details?.currencyOut as Record<string, unknown> | undefined;
+  return {
+    to: String(txData.to),
+    data: String(txData.data),
+    value: String(txData.value ?? "0x0"),
+    outAmount: String(currencyOut?.amount ?? "0"),
+  };
+}
+
 // ── LiquidSwap (HyperEVM only) ──
 
 const LIQD_API = "https://api.liqd.ag/v2";
@@ -127,11 +214,11 @@ export function registerSwap(
 ): void {
   parent
     .command("swap")
-    .description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap)")
+    .description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay)")
     .requiredOption("--from <token>", "Input token symbol or address")
     .requiredOption("--to <token>", "Output token symbol or address")
     .requiredOption("--amount <amount>", "Amount of input token in wei")
-    .option("--provider <name>", "Aggregator: kyber, openocean, liquid", "kyber")
+    .option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber")
     .option("--slippage <bps>", "Slippage tolerance in bps", "50")
     .action(async (opts) => {
       const executor = makeExecutor();
@@ -148,12 +235,13 @@ export function registerSwap(
       const wallet = resolveWallet();
 
       if (provider === "kyber") {
-        const chainNames = CHAIN_NAMES[chainName];
-        if (!chainNames?.kyber) {
-          printOutput({ error: `KyberSwap: unsupported chain '${chainName}'. Supported: hyperevm` }, getOpts());
+        const aggCfg = getAggregatorSlugs(registry.getChain(chainName));
+        if (!aggCfg.kyber) {
+          const supported = Array.from(registry.chains.keys()).filter((c) => registry.getChain(c).aggregators?.kyber).join(", ");
+          printOutput({ error: `KyberSwap: unsupported chain '${chainName}'. Supported: ${supported || "(none)"}` }, getOpts());
           return;
         }
-        const kyberChain = chainNames.kyber;
+        const kyberChain = aggCfg.kyber;
 
         try {
           const quoteData = await kyberGetQuote(kyberChain, fromAddr, toAddr, opts.amount as string);
@@ -195,12 +283,13 @@ export function registerSwap(
       }
 
       if (provider === "openocean") {
-        const chainNames = CHAIN_NAMES[chainName];
-        if (!chainNames) {
-          printOutput({ error: `OpenOcean: unsupported chain '${chainName}'. Supported: ${Object.keys(CHAIN_NAMES).join(", ")}` }, getOpts());
+        const aggCfg = getAggregatorSlugs(registry.getChain(chainName));
+        if (!aggCfg.openocean) {
+          const supported = Array.from(registry.chains.keys()).filter((c) => registry.getChain(c).aggregators?.openocean).join(", ");
+          printOutput({ error: `OpenOcean: unsupported chain '${chainName}'. Supported: ${supported || "(none)"}` }, getOpts());
           return;
         }
-        const ooChain = chainNames.openocean;
+        const ooChain = aggCfg.openocean;
         // OpenOcean amount is human-readable — convert wei to decimal
         const fromToken = (opts.from as string).startsWith("0x")
           ? registry.tokens.get(chainName)?.find(t => t.address.toLowerCase() === (opts.from as string).toLowerCase())
@@ -279,6 +368,43 @@ export function registerSwap(
         return;
       }
 
-      printOutput({ error: `Unknown provider '${opts.provider}'. Choose: kyber, openocean, liquid` }, getOpts());
+      if (provider === "lifi" || provider === "relay") {
+        const chainCfg = registry.getChain(chainName);
+        const chainId = chainCfg.chain_id;
+        if (!chainId) {
+          printOutput({ error: `${provider}: chain '${chainName}' has no chain_id in registry` }, getOpts());
+          return;
+        }
+        const slippagePct = (slippageBps / 100).toFixed(2);
+        try {
+          const route = provider === "lifi"
+            ? await lifiQuote(chainId, fromAddr, toAddr, opts.amount as string, wallet, slippagePct)
+            : await relayQuote(chainId, fromAddr, toAddr, opts.amount as string, wallet);
+          const tx = {
+            description: `${provider}: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
+            to: route.to as Address,
+            data: route.data as `0x${string}`,
+            value: parseBigIntValue(route.value),
+            approvals: [{ token: fromAddr as Address, spender: route.to as Address, amount: BigInt(opts.amount as string) }],
+          };
+          const result = await executor.execute(tx);
+          printOutput({
+            provider,
+            chain: chainName,
+            chain_id: chainId,
+            from_token: fromAddr,
+            to_token: toAddr,
+            amount_in: opts.amount,
+            amount_out: route.outAmount,
+            router: route.to,
+            ...result,
+          }, getOpts());
+        } catch (e) {
+          printOutput({ error: `${provider} error: ${errMsg(e)}` }, getOpts());
+        }
+        return;
+      }
+
+      printOutput({ error: `Unknown provider '${opts.provider}'. Choose: kyber, openocean, liquid, lifi, relay` }, getOpts());
     });
 }

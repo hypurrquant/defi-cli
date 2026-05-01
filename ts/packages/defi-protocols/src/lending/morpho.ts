@@ -31,6 +31,16 @@ const META_MORPHO_ABI = parseAbi([
   "function totalSupply() external view returns (uint256)",
 ]);
 
+const ERC4626_ABI = parseAbi([
+  "function asset() external view returns (address)",
+  "function deposit(uint256 assets, address receiver) external returns (uint256 shares)",
+  "function redeem(uint256 shares, address receiver, address owner) external returns (uint256 assets)",
+  "function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares)",
+  "function balanceOf(address owner) external view returns (uint256)",
+]);
+
+const MAX_UINT256 = (1n << 256n) - 1n;
+
 const IRM_ABI = parseAbi([
   "function borrowRateView((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee) market) external view returns (uint256)",
 ]);
@@ -86,6 +96,9 @@ export class MorphoBlueAdapter implements ILending {
   private readonly morpho: Address;
   private readonly defaultVault?: Address;
   private readonly rpcUrl?: string;
+  private readonly metaMorphoVaults: Address[];
+  private readonly metaMorphoVaultEntries: Array<{ key: string; addr: Address }>;
+  private vaultAssetMap: Map<string, Address> | null = null;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
@@ -96,6 +109,41 @@ export class MorphoBlueAdapter implements ILending {
     this.morpho = morpho;
     this.defaultVault =
       contracts["fehype"] ?? contracts["vault"] ?? contracts["feusdc"];
+    this.metaMorphoVaultEntries = Object.entries(contracts)
+      .filter(([key]) => /^fe[a-z0-9_]+$/i.test(key) || key === "vault")
+      .map(([key, addr]) => ({ key, addr }));
+    this.metaMorphoVaults = this.metaMorphoVaultEntries.map((e) => e.addr);
+  }
+
+  private async resolveVault(asset: Address, preferKey?: string): Promise<Address | null> {
+    if (this.metaMorphoVaultEntries.length === 0 || !this.rpcUrl) return null;
+    if (preferKey) {
+      const direct = this.metaMorphoVaultEntries.find((e) => e.key === preferKey);
+      if (direct) return direct.addr;
+    }
+    if (!this.vaultAssetMap) {
+      const calls = this.metaMorphoVaultEntries.map((e) => [
+        e.addr,
+        encodeFunctionData({ abi: ERC4626_ABI, functionName: "asset" }),
+      ]) as Array<[Address, Hex]>;
+      const results = await multicallRead(this.rpcUrl, calls).catch(() => []);
+      const map = new Map<string, { key: string; addr: Address }>();
+      for (let i = 0; i < results.length; i++) {
+        const data = results[i];
+        if (!data || data.length < 66) continue;
+        const a = (`0x${data.slice(26, 66)}`).toLowerCase();
+        const entry = this.metaMorphoVaultEntries[i] as { key: string; addr: Address };
+        const existing = map.get(a);
+        // Prefer canonical (shortest key) — avoids feusdt0_frontier silently overwriting feusdt0
+        if (!existing || entry.key.length < existing.key.length) {
+          map.set(a, entry);
+        }
+      }
+      const flatMap = new Map<string, Address>();
+      for (const [k, v] of map) flatMap.set(k, v.addr);
+      this.vaultAssetMap = flatMap;
+    }
+    return this.vaultAssetMap.get(asset.toLowerCase()) ?? null;
   }
 
   name(): string {
@@ -103,6 +151,22 @@ export class MorphoBlueAdapter implements ILending {
   }
 
   async buildSupply(params: SupplyParams): Promise<DeFiTx> {
+    const vault = await this.resolveVault(params.asset);
+    if (vault) {
+      const data = encodeFunctionData({
+        abi: ERC4626_ABI,
+        functionName: "deposit",
+        args: [params.amount, params.on_behalf_of],
+      });
+      return {
+        description: `[${this.protocolName}] Deposit ${params.amount} into MetaMorpho vault`,
+        to: vault,
+        data,
+        value: 0n,
+        gas_estimate: 400_000,
+        approvals: [{ token: params.asset, spender: vault, amount: params.amount }],
+      };
+    }
     const market = defaultMarketParams(params.asset);
     const data = encodeFunctionData({
       abi: MORPHO_ABI,
@@ -151,6 +215,34 @@ export class MorphoBlueAdapter implements ILending {
   }
 
   async buildWithdraw(params: WithdrawParams): Promise<DeFiTx> {
+    const vault = await this.resolveVault(params.asset);
+    if (vault) {
+      if (params.amount === MAX_UINT256) {
+        if (!this.rpcUrl) throw DefiError.rpcError("RPC required to fetch vault shares");
+        const [balRaw] = await multicallRead(this.rpcUrl, [
+          [vault, encodeFunctionData({ abi: ERC4626_ABI, functionName: "balanceOf", args: [params.to] })],
+        ]);
+        const shares = decodeU256(balRaw ?? null);
+        const data = encodeFunctionData({
+          abi: ERC4626_ABI,
+          functionName: "redeem",
+          args: [shares, params.to, params.to],
+        });
+        return {
+          description: `[${this.protocolName}] Redeem all shares (${shares}) from MetaMorpho vault`,
+          to: vault, data, value: 0n, gas_estimate: 400_000,
+        };
+      }
+      const data = encodeFunctionData({
+        abi: ERC4626_ABI,
+        functionName: "withdraw",
+        args: [params.amount, params.to, params.to],
+      });
+      return {
+        description: `[${this.protocolName}] Withdraw ${params.amount} assets from MetaMorpho vault`,
+        to: vault, data, value: 0n, gas_estimate: 400_000,
+      };
+    }
     const market = defaultMarketParams(params.asset);
     const data = encodeFunctionData({
       abi: MORPHO_ABI,

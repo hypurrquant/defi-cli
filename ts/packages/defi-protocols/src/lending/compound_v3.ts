@@ -55,6 +55,7 @@ export class CompoundV3Adapter implements ILending {
       data,
       value: 0n,
       gas_estimate: 300_000,
+      approvals: [{ token: params.asset, spender: this.comet, amount: params.amount }],
     };
   }
 
@@ -87,6 +88,7 @@ export class CompoundV3Adapter implements ILending {
       data,
       value: 0n,
       gas_estimate: 300_000,
+      approvals: [{ token: params.asset, spender: this.comet, amount: params.amount }],
     };
   }
 

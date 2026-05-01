@@ -336,6 +336,7 @@ var init_dist = __esm({
       native_token;
       wrapped_native;
       multicall3;
+      aggregators;
       effectiveRpcUrl() {
         const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
         return process.env[chainEnv] ?? process.env["HYPEREVM_RPC_URL"] ?? this.rpc_url;
@@ -438,7 +439,7 @@ var init_dist = __esm({
       }
       getProtocolsForChain(chain, includeUnverified = false) {
         return this.protocols.filter(
-          (p) => p.chain.toLowerCase() === chain.toLowerCase() && (includeUnverified || p.verified !== false)
+          (p) => p.chain.toLowerCase() === chain.toLowerCase() && (includeUnverified || p.verified !== false) && p.is_active !== false
         );
       }
       resolveToken(chain, symbol) {
@@ -500,6 +501,7 @@ __export(dist_exports2, {
   MasterChefAdapter: () => MasterChefAdapter,
   MerchantMoeLBAdapter: () => MerchantMoeLBAdapter,
   MorphoBlueAdapter: () => MorphoBlueAdapter,
+  NestOffChainAdapter: () => NestOffChainAdapter,
   PendleAdapter: () => PendleAdapter,
   RyskAdapter: () => RyskAdapter,
   SolidlyAdapter: () => SolidlyAdapter,
@@ -518,10 +520,12 @@ __export(dist_exports2, {
   createLiquidStaking: () => createLiquidStaking,
   createMasterChef: () => createMasterChef,
   createMerchantMoeLB: () => createMerchantMoeLB,
+  createNestOffChain: () => createNestOffChain,
   createNft: () => createNft,
   createOptions: () => createOptions,
   createOracleFromCdp: () => createOracleFromCdp,
   createOracleFromLending: () => createOracleFromLending,
+  createRewardReader: () => createRewardReader,
   createVault: () => createVault,
   createYieldSource: () => createYieldSource
 });
@@ -762,8 +766,8 @@ function encodeClaimReward(rewardToken, to) {
   return encodeFunctionData13({
     abi: farmingCenterAbi,
     functionName: "claimReward",
-    args: [rewardToken, to, 2n ** 128n - 1n]
-    // max uint128
+    args: [rewardToken, to, 2n ** 256n - 1n]
+    // max uint256 (KittenSwap variant uses uint256 amount, not uint128)
   });
 }
 function encodeMulticall(calls) {
@@ -1006,6 +1010,46 @@ function createOracleFromCdp(entry, _asset, rpcUrl) {
 function createMerchantMoeLB(entry, rpcUrl) {
   return new MerchantMoeLBAdapter(entry, rpcUrl);
 }
+function createNestOffChain(entry) {
+  return new NestOffChainAdapter(entry);
+}
+function createRewardReader(entry, rpcUrl, tokens) {
+  const strategy = entry.reward_strategy ?? inferRewardStrategy(entry);
+  switch (strategy) {
+    case "off_chain_api":
+      return { kind: "off_chain_api", adapter: new NestOffChainAdapter(entry) };
+    case "on_chain_farming_center":
+      if (!rpcUrl) throw DefiError.invalidParam("createRewardReader: rpcUrl required for on_chain_farming_center");
+      return { kind: "on_chain_farming_center", adapter: createKittenSwapFarming(entry, rpcUrl) };
+    case "on_chain_gauge_tokenid":
+      return { kind: "on_chain_gauge_tokenid", adapter: new HybraGaugeAdapter(entry, rpcUrl) };
+    case "on_chain_gauge":
+      return { kind: "on_chain_gauge", adapter: new SolidlyGaugeAdapter(entry, rpcUrl, tokens) };
+    case "auto_stake":
+      return { kind: "auto_stake", adapter: new SolidlyGaugeAdapter(entry, rpcUrl, tokens) };
+    case "on_chain_masterchef":
+      return { kind: "on_chain_masterchef", adapter: new MasterChefAdapter(entry, rpcUrl) };
+    case "none":
+      return { kind: "none" };
+    default:
+      throw DefiError.unsupported(`Unknown reward_strategy '${strategy}' on '${entry.slug}'`);
+  }
+}
+function inferRewardStrategy(entry) {
+  if (entry.interface === "hybra" || entry.contracts?.["gauge_manager"]) {
+    return "on_chain_gauge_tokenid";
+  }
+  if (entry.contracts?.["farming_center"] && entry.contracts?.["eternal_farming"]) {
+    return "on_chain_farming_center";
+  }
+  if (entry.contracts?.["voter"]) {
+    return "on_chain_gauge";
+  }
+  if (entry.contracts?.["master_chef"] || entry.contracts?.["masterChef"]) {
+    return "on_chain_masterchef";
+  }
+  return "none";
+}
 function createKittenSwapFarming(entry, rpcUrl) {
   const farmingCenter = entry.contracts?.["farming_center"];
   if (!farmingCenter) {
@@ -1020,12 +1064,15 @@ function createKittenSwapFarming(entry, rpcUrl) {
     throw new DefiError("CONTRACT_ERROR", `[${entry.name}] Missing 'position_manager' contract address`);
   }
   const factory = entry.contracts?.["factory"];
-  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory);
+  const rewardToken = entry.contracts?.["reward_token"];
+  const bonusRewardToken = entry.contracts?.["bonus_reward_token"];
+  return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory, rewardToken, bonusRewardToken);
 }
-var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, POOL_ABI, ERC20_ABI, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI2, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
+var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, slipstreamMintAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, algebraSharedPmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, DEFAULT_BASE_URL, FALLBACK_BASE_URL, NEST_TOKEN, NEST_DECIMALS, NestOffChainAdapter, POOL_ABI, ERC20_ABI, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI2, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, ERC4626_ABI, MAX_UINT256, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI2, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
 var init_dist2 = __esm({
   "../defi-protocols/dist/index.js"() {
     "use strict";
+    init_dist();
     init_dist();
     init_dist();
     init_dist();
@@ -1075,7 +1122,19 @@ var init_dist2 = __esm({
     ]);
     positionManagerAbi = parseAbi3([
       "struct MintParams { address token0; address token1; uint24 fee; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
-      "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+      "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+      "struct CollectParams { uint256 tokenId; address recipient; uint128 amount0Max; uint128 amount1Max; }",
+      "function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+      "struct DecreaseLiquidityParams { uint256 tokenId; uint128 liquidity; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }",
+      "function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+      "struct IncreaseLiquidityParams { uint256 tokenId; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }",
+      "function increaseLiquidity(IncreaseLiquidityParams calldata params) external payable returns (uint128 liquidity, uint256 amount0, uint256 amount1)",
+      "function positions(uint256 tokenId) external view returns (uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)",
+      "function multicall(bytes[] data) external payable returns (bytes[] memory results)"
+    ]);
+    slipstreamMintAbi = parseAbi3([
+      "struct SlipstreamMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
+      "function mint(SlipstreamMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
     ]);
     UniswapV3Adapter = class {
       protocolName;
@@ -1098,7 +1157,7 @@ var init_dist2 = __esm({
         this.factory = entry.contracts?.["factory"];
         this.fee = DEFAULT_FEE;
         this.rpcUrl = rpcUrl;
-        this.useTickSpacingQuoter = entry.contracts?.["pool_deployer"] !== void 0 || entry.contracts?.["gauge_factory"] !== void 0;
+        this.useTickSpacingQuoter = entry.cl_style === "slipstream" || entry.cl_style === "ramses" || entry.contracts?.["pool_deployer"] !== void 0 || entry.contracts?.["gauge_factory"] !== void 0;
       }
       name() {
         return this.protocolName;
@@ -1274,16 +1333,64 @@ var init_dist2 = __esm({
         const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
         const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
         const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
-        const data = encodeFunctionData3({
+        let thirdField = this.fee;
+        let tickLower = -887220;
+        let tickUpper = 887220;
+        if (params.pool && this.rpcUrl) {
+          const poolAbi2 = parseAbi3([
+            "function fee() view returns (uint24)",
+            "function tickSpacing() view returns (int24)",
+            "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, bool)"
+          ]);
+          const client = createPublicClient2({ transport: http2(this.rpcUrl) });
+          const [poolFee, poolTs, slot0] = await Promise.all([
+            client.readContract({ address: params.pool, abi: poolAbi2, functionName: "fee" }).catch(() => null),
+            client.readContract({ address: params.pool, abi: poolAbi2, functionName: "tickSpacing" }).catch(() => null),
+            client.readContract({ address: params.pool, abi: poolAbi2, functionName: "slot0" }).catch(() => null)
+          ]);
+          if (this.useTickSpacingQuoter && poolTs !== null) {
+            thirdField = poolTs;
+          } else if (poolFee !== null) {
+            thirdField = poolFee;
+          }
+          if (params.range_pct !== void 0 && slot0 && poolTs !== null) {
+            const currentTick = slot0[1];
+            const rangeTicks = Math.floor(params.range_pct * 100);
+            tickLower = Math.floor((currentTick - rangeTicks) / poolTs) * poolTs;
+            tickUpper = Math.ceil((currentTick + rangeTicks) / poolTs) * poolTs;
+          }
+        }
+        if (params.tick_lower !== void 0) tickLower = params.tick_lower;
+        if (params.tick_upper !== void 0) tickUpper = params.tick_upper;
+        const data = this.useTickSpacingQuoter ? encodeFunctionData3({
+          abi: slipstreamMintAbi,
+          functionName: "mint",
+          args: [
+            {
+              token0,
+              token1,
+              tickSpacing: thirdField,
+              tickLower,
+              tickUpper,
+              amount0Desired: amount0,
+              amount1Desired: amount1,
+              amount0Min: 0n,
+              amount1Min: 0n,
+              recipient: params.recipient,
+              deadline: BigInt("18446744073709551615"),
+              sqrtPriceX96: 0n
+            }
+          ]
+        }) : encodeFunctionData3({
           abi: positionManagerAbi,
           functionName: "mint",
           args: [
             {
               token0,
               token1,
-              fee: this.fee,
-              tickLower: -887220,
-              tickUpper: 887220,
+              fee: thirdField,
+              tickLower,
+              tickUpper,
               amount0Desired: amount0,
               amount1Desired: amount1,
               amount0Min: 0n,
@@ -1305,10 +1412,125 @@ var init_dist2 = __esm({
           ]
         };
       }
-      async buildRemoveLiquidity(_params) {
-        throw DefiError.unsupported(
-          `[${this.protocolName}] remove_liquidity requires tokenId \u2014 use NFT position manager directly`
-        );
+      async buildRemoveLiquidity(params) {
+        const pm = this.positionManager;
+        if (!pm) {
+          throw DefiError.contractError(
+            `[${this.protocolName}] Missing 'position_manager' for liquidity removal`
+          );
+        }
+        if (!params.token_id) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] V3 remove_liquidity requires --token-id (NFT positionId)`
+          );
+        }
+        const tokenId = params.token_id;
+        const liquidity = params.liquidity;
+        const MAX_UINT128 = (1n << 128n) - 1n;
+        const deadline = BigInt("18446744073709551615");
+        const decreaseData = encodeFunctionData3({
+          abi: positionManagerAbi,
+          functionName: "decreaseLiquidity",
+          args: [{ tokenId, liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+        });
+        const collectData = encodeFunctionData3({
+          abi: positionManagerAbi,
+          functionName: "collect",
+          args: [{ tokenId, recipient: params.recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }]
+        });
+        const data = encodeFunctionData3({
+          abi: positionManagerAbi,
+          functionName: "multicall",
+          args: [[decreaseData, collectData]]
+        });
+        return {
+          description: `[${this.protocolName}] Remove ${liquidity} liquidity from tokenId ${tokenId}`,
+          to: pm,
+          data,
+          value: 0n,
+          gas_estimate: 4e5
+        };
+      }
+      /**
+       * Collect accrued LP trading fees for a CL position via NPM.collect().
+       * Used as the reward path for V3 forks with reward_strategy = "lp_fee_only"
+       * (e.g., HyperSwap V3, Project X — no gauge/emissions, fees are the only reward).
+       */
+      async buildCollectFees(tokenId, recipient) {
+        const pm = this.positionManager;
+        if (!pm) {
+          throw DefiError.contractError(
+            `[${this.protocolName}] Missing 'position_manager' for fee collection`
+          );
+        }
+        const MAX_UINT128 = (1n << 128n) - 1n;
+        const data = encodeFunctionData3({
+          abi: positionManagerAbi,
+          functionName: "collect",
+          args: [{ tokenId, recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }]
+        });
+        return {
+          description: `[${this.protocolName}] Collect LP fees for tokenId ${tokenId}`,
+          to: pm,
+          data,
+          value: 0n,
+          gas_estimate: 2e5
+        };
+      }
+      /**
+       * Compound: collect accrued fees and immediately re-add them as liquidity to the same position.
+       * Flow: static-call collect to learn fee amounts → multicall([collect, increaseLiquidity]) on NPM.
+       * Requires existing token approvals on the NPM (set during initial mint).
+       * v1: V3 fee-only protocols (Project X, HyperSwap V3). Gauge protocols need swap routing first.
+       */
+      async buildCompound(tokenId, recipient, opts) {
+        const pm = this.positionManager;
+        if (!pm) {
+          throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager' for compound`);
+        }
+        if (!this.rpcUrl) throw DefiError.rpcError("RPC required to preview fees");
+        const MAX_UINT128 = (1n << 128n) - 1n;
+        const deadline = BigInt("18446744073709551615");
+        const slippageBps = BigInt(opts?.slippageBps ?? 50);
+        if (slippageBps > 10000n) {
+          throw DefiError.invalidParam(`[${this.protocolName}] slippageBps must be <= 10000 (got ${slippageBps})`);
+        }
+        const client = createPublicClient2({ transport: http2(this.rpcUrl) });
+        const sim = await client.simulateContract({
+          address: pm,
+          abi: positionManagerAbi,
+          functionName: "collect",
+          args: [{ tokenId, recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
+          account: recipient
+        });
+        const [amount0, amount1] = sim.result;
+        if (amount0 === 0n && amount1 === 0n) {
+          throw DefiError.invalidParam(`[${this.protocolName}] No fees to compound for tokenId ${tokenId}`);
+        }
+        const amount0Min = amount0 * (10000n - slippageBps) / 10000n;
+        const amount1Min = amount1 * (10000n - slippageBps) / 10000n;
+        const collectData = encodeFunctionData3({
+          abi: positionManagerAbi,
+          functionName: "collect",
+          args: [{ tokenId, recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }]
+        });
+        const increaseData = encodeFunctionData3({
+          abi: positionManagerAbi,
+          functionName: "increaseLiquidity",
+          args: [{ tokenId, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, deadline }]
+        });
+        const data = encodeFunctionData3({
+          abi: positionManagerAbi,
+          functionName: "multicall",
+          args: [[collectData, increaseData]]
+        });
+        return {
+          description: `[${this.protocolName}] Compound tokenId ${tokenId}: collect ${amount0}/${amount1} \u2192 increaseLiquidity (slippage ${slippageBps}bps)`,
+          to: pm,
+          data,
+          value: 0n,
+          gas_estimate: 5e5
+        };
       }
     };
     abi = parseAbi22([
@@ -1529,6 +1751,13 @@ var init_dist2 = __esm({
       "struct MintParams { address token0; address token1; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
       "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
     ]);
+    algebraSharedPmAbi = parseAbi32([
+      "struct DecreaseLiquidityParams { uint256 tokenId; uint128 liquidity; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }",
+      "function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+      "struct CollectParams { uint256 tokenId; address recipient; uint128 amount0Max; uint128 amount1Max; }",
+      "function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+      "function multicall(bytes[] data) external payable returns (bytes[] memory results)"
+    ]);
     AlgebraV3Adapter = class {
       protocolName;
       router;
@@ -1724,10 +1953,34 @@ var init_dist2 = __esm({
           approvals
         };
       }
-      async buildRemoveLiquidity(_params) {
-        throw DefiError.unsupported(
-          `[${this.protocolName}] remove_liquidity requires tokenId \u2014 use NFT position manager directly`
-        );
+      async buildRemoveLiquidity(params) {
+        const pm = this.positionManager;
+        if (!pm) throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager'`);
+        if (!params.token_id) throw DefiError.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+        const MAX_UINT128 = (1n << 128n) - 1n;
+        const deadline = BigInt("18446744073709551615");
+        const decreaseData = encodeFunctionData32({
+          abi: algebraSharedPmAbi,
+          functionName: "decreaseLiquidity",
+          args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+        });
+        const collectData = encodeFunctionData32({
+          abi: algebraSharedPmAbi,
+          functionName: "collect",
+          args: [{ tokenId: params.token_id, recipient: params.recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }]
+        });
+        const data = encodeFunctionData32({
+          abi: algebraSharedPmAbi,
+          functionName: "multicall",
+          args: [[decreaseData, collectData]]
+        });
+        return {
+          description: `[${this.protocolName}] Remove ${params.liquidity} liquidity from tokenId ${params.token_id}`,
+          to: pm,
+          data,
+          value: 0n,
+          gas_estimate: 4e5
+        };
       }
     };
     abi3 = parseAbi4([
@@ -2015,7 +2268,12 @@ var init_dist2 = __esm({
     };
     thenaPmAbi = parseAbi7([
       "struct MintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
-      "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+      "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+      "struct DecreaseLiquidityParams { uint256 tokenId; uint128 liquidity; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }",
+      "function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+      "struct CollectParams { uint256 tokenId; address recipient; uint128 amount0Max; uint128 amount1Max; }",
+      "function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+      "function multicall(bytes[] data) external payable returns (bytes[] memory results)"
     ]);
     thenaRouterAbi = parseAbi7([
       "struct ExactInputSingleParams { address tokenIn; address tokenOut; int24 tickSpacing; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96; }",
@@ -2158,8 +2416,34 @@ var init_dist2 = __esm({
           approvals
         };
       }
-      async buildRemoveLiquidity(_params) {
-        throw DefiError.unsupported(`[${this.protocolName}] remove_liquidity requires tokenId`);
+      async buildRemoveLiquidity(params) {
+        const pm = this.positionManager;
+        if (!pm) throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager'`);
+        if (!params.token_id) throw DefiError.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+        const MAX_UINT128 = (1n << 128n) - 1n;
+        const deadline = BigInt("18446744073709551615");
+        const decreaseData = encodeFunctionData7({
+          abi: thenaPmAbi,
+          functionName: "decreaseLiquidity",
+          args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+        });
+        const collectData = encodeFunctionData7({
+          abi: thenaPmAbi,
+          functionName: "collect",
+          args: [{ tokenId: params.token_id, recipient: params.recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }]
+        });
+        const data = encodeFunctionData7({
+          abi: thenaPmAbi,
+          functionName: "multicall",
+          args: [[decreaseData, collectData]]
+        });
+        return {
+          description: `[${this.protocolName}] Remove ${params.liquidity} liquidity from tokenId ${params.token_id}`,
+          to: pm,
+          data,
+          value: 0n,
+          gas_estimate: 4e5
+        };
       }
     };
     _addressDecodeAbi = parseAbi8(["function f() external view returns (address)"]);
@@ -2338,12 +2622,14 @@ var init_dist2 = __esm({
           pre_txs: [approveTx]
         };
       }
-      async buildWithdraw(gauge, _amount, tokenId) {
+      async buildWithdraw(gauge, _amount, tokenId, opts) {
         if (tokenId === void 0) throw new DefiError("CONTRACT_ERROR", "tokenId required for CL gauge withdraw");
+        const redeemType = opts?.redeemType ?? 1;
+        const warning = redeemType === 1 ? " \u2014 WARNING: redeemType=1 locks accumulated rewards into 2-year veHYBR NFT. Use --redeem-type 0 for instant exit (with penalty)." : "";
         return {
-          description: `[${this.protocolName}] Withdraw NFT #${tokenId} from gauge`,
+          description: `[${this.protocolName}] Withdraw NFT #${tokenId} from gauge (redeemType=${redeemType})${warning}`,
           to: gauge,
-          data: encodeFunctionData8({ abi: gaugeCLAbi, functionName: "withdraw", args: [tokenId, 1] }),
+          data: encodeFunctionData8({ abi: gaugeCLAbi, functionName: "withdraw", args: [tokenId, redeemType] }),
           value: 0n,
           gas_estimate: 1e6
         };
@@ -2352,15 +2638,15 @@ var init_dist2 = __esm({
       async buildClaimRewards(gauge, _account) {
         throw DefiError.unsupported(`[${this.protocolName}] Use buildClaimRewardsByTokenId for CL gauges`);
       }
-      async buildClaimRewardsByTokenId(gauge, tokenId) {
+      async buildClaimRewardsByTokenId(gauge, tokenId, opts) {
+        const redeemType = opts?.redeemType ?? 1;
         return {
-          description: `[${this.protocolName}] Claim rewards for NFT #${tokenId}`,
+          description: `[${this.protocolName}] Claim rewards for NFT #${tokenId} (redeemType=${redeemType})`,
           to: this.gaugeManager,
           data: encodeFunctionData8({
             abi: gaugeManagerAbi,
             functionName: "claimRewards",
-            args: [gauge, [tokenId], 1]
-            // redeemType=1
+            args: [gauge, [tokenId], redeemType]
           }),
           value: 0n,
           gas_estimate: 1e6
@@ -2505,15 +2791,21 @@ var init_dist2 = __esm({
       "function getReward(address account) external",
       "function getReward(address account, address[] tokens) external",
       "function getReward(uint256 tokenId) external",
+      // Ramses CL gauge factory (delegate target): tokenId-keyed multi-token claim
+      "function getReward(uint256 tokenId, address[] tokens) external",
       "function earned(address account) external view returns (uint256)",
       "function earned(address account, uint256 tokenId) external view returns (uint256)",
       "function earned(address token, address account) external view returns (uint256)",
       "function earned(uint256 tokenId) external view returns (uint256)",
+      // Ramses CL: token-first + tokenId (no account; account is ownerOf(tokenId) inferred by gauge)
+      "function earned(address token, uint256 tokenId) external view returns (uint256)",
       "function rewardRate() external view returns (uint256)",
       "function rewardToken() external view returns (address)",
       "function totalSupply() external view returns (uint256)",
       "function rewardsListLength() external view returns (uint256)",
       "function rewardData(address token) external view returns (uint256 periodFinish, uint256 rewardRate, uint256 lastUpdateTime, uint256 rewardPerTokenStored)",
+      // Ramses CL gauge factory exposes the canonical reward-token list
+      "function getRewardTokens() external view returns (address[])",
       "function nonfungiblePositionManager() external view returns (address)"
     ]);
     veAbi2 = parseAbi10([
@@ -2558,6 +2850,10 @@ var init_dist2 = __esm({
       clFactory;
       v2Factory;
       tokens;
+      // CL gauges (Aerodrome Slipstream / Velodrome CL) take an LP NFT via deposit(tokenId);
+      // V2 gauges take an LP token amount via deposit(amount). Detect via uniswap_v3 + position_manager.
+      clNftMode;
+      positionManager;
       constructor(entry, rpcUrl, tokens) {
         this.protocolName = entry.name;
         const voter = entry.contracts?.["voter"];
@@ -2574,6 +2870,8 @@ var init_dist2 = __esm({
         this.tokens = tokens;
         this.clFactory = entry.contracts?.["cl_factory"] ?? entry.contracts?.["factory"];
         this.v2Factory = entry.contracts?.["pair_factory"] ?? entry.contracts?.["factory"];
+        this.positionManager = entry.contracts?.["position_manager"];
+        this.clNftMode = entry.interface === "uniswap_v3" && this.positionManager !== void 0;
       }
       name() {
         return this.protocolName;
@@ -2908,6 +3206,25 @@ var init_dist2 = __esm({
       }
       // IGauge
       async buildDeposit(gauge, amount, tokenId, lpToken) {
+        if (this.clNftMode && tokenId !== void 0 && this.positionManager) {
+          const nftAbi = parseAbi10(["function approve(address to, uint256 tokenId) external"]);
+          const clGaugeAbi = parseAbi10(["function deposit(uint256 tokenId) external"]);
+          const approveTx = {
+            description: `[${this.protocolName}] Approve LP NFT #${tokenId} to gauge`,
+            to: this.positionManager,
+            data: encodeFunctionData10({ abi: nftAbi, functionName: "approve", args: [gauge, tokenId] }),
+            value: 0n,
+            gas_estimate: 8e4
+          };
+          return {
+            description: `[${this.protocolName}] Deposit LP NFT #${tokenId} to CL gauge`,
+            to: gauge,
+            data: encodeFunctionData10({ abi: clGaugeAbi, functionName: "deposit", args: [tokenId] }),
+            value: 0n,
+            gas_estimate: 9e5,
+            pre_txs: [approveTx]
+          };
+        }
         if (tokenId !== void 0) {
           const data2 = encodeFunctionData10({
             abi: gaugeAbi,
@@ -2937,7 +3254,17 @@ var init_dist2 = __esm({
           approvals: lpToken ? [{ token: lpToken, spender: gauge, amount }] : void 0
         };
       }
-      async buildWithdraw(gauge, amount) {
+      async buildWithdraw(gauge, amount, tokenId) {
+        if (this.clNftMode && tokenId !== void 0) {
+          const clGaugeAbi = parseAbi10(["function withdraw(uint256 tokenId) external"]);
+          return {
+            description: `[${this.protocolName}] Withdraw LP NFT #${tokenId} from CL gauge`,
+            to: gauge,
+            data: encodeFunctionData10({ abi: clGaugeAbi, functionName: "withdraw", args: [tokenId] }),
+            value: 0n,
+            gas_estimate: 6e5
+          };
+        }
         const data = encodeFunctionData10({
           abi: gaugeAbi,
           functionName: "withdraw",
@@ -3027,16 +3354,16 @@ var init_dist2 = __esm({
       }
       async buildClaimRewards(gauge, account) {
         if (!this.rpcUrl || !account) {
-          const data2 = encodeFunctionData10({
+          const data = encodeFunctionData10({
             abi: gaugeAbi,
             functionName: "getReward",
             args: [account ?? zeroAddress6]
           });
-          return { description: `[${this.protocolName}] Claim gauge rewards`, to: gauge, data: data2, value: 0n, gas_estimate: 2e5 };
+          return { description: `[${this.protocolName}] Claim gauge rewards`, to: gauge, data, value: 0n, gas_estimate: 2e5 };
         }
         const { tokens, multiToken } = await this.discoverRewardTokens(gauge);
         if (multiToken && tokens.length > 0) {
-          const data2 = encodeFunctionData10({
+          const data = encodeFunctionData10({
             abi: gaugeAbi,
             functionName: "getReward",
             args: [account, tokens]
@@ -3044,26 +3371,39 @@ var init_dist2 = __esm({
           return {
             description: `[${this.protocolName}] Claim gauge rewards (${tokens.length} tokens)`,
             to: gauge,
-            data: data2,
+            data,
             value: 0n,
             gas_estimate: 3e5
           };
         }
-        const data = encodeFunctionData10({
+        const accountVariant = encodeFunctionData10({
           abi: gaugeAbi,
           functionName: "getReward",
-          args: []
+          args: [account]
         });
-        return {
-          description: `[${this.protocolName}] Claim gauge rewards`,
-          to: gauge,
-          data,
-          value: 0n,
-          gas_estimate: 2e5
-        };
+        try {
+          const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+          await client.call({ account, to: gauge, data: accountVariant });
+          return {
+            description: `[${this.protocolName}] Claim gauge rewards (getReward(account))`,
+            to: gauge,
+            data: accountVariant,
+            value: 0n,
+            gas_estimate: 2e5
+          };
+        } catch {
+          const noArg = encodeFunctionData10({ abi: gaugeAbi, functionName: "getReward", args: [] });
+          return {
+            description: `[${this.protocolName}] Claim gauge rewards (getReward())`,
+            to: gauge,
+            data: noArg,
+            value: 0n,
+            gas_estimate: 2e5
+          };
+        }
       }
       /**
-       * Claim rewards for a CL gauge by NFT tokenId (Hybra V4 style).
+       * Claim rewards for a CL gauge by NFT tokenId (Hybra V4 style — single-arg getReward(tokenId)).
        */
       async buildClaimRewardsByTokenId(gauge, tokenId) {
         const data = encodeFunctionData10({
@@ -3078,6 +3418,131 @@ var init_dist2 = __esm({
           value: 0n,
           gas_estimate: 3e5
         };
+      }
+      /**
+       * Ramses-CL claim via NPM.getPeriodReward — the user-facing claim path.
+       * The gauge contract restricts `getReward*` to authorized claimers (voter + NPM only);
+       * EOAs must route through NPM, which calls into the gauge with msg.sender = NPM.
+       *
+       * ABI: getPeriodReward(uint256 period, uint256 tokenId, address[] tokens, address receiver)
+       * `period` defaults to current Solidly weekly epoch index (block.timestamp / 604800).
+       * `tokens` defaults to gauge.getRewardTokens() when `gauge` is provided.
+       *
+       * Verified 2026-04-29 on anvil fork: NPM.getPeriodReward(2938, 177068, [..., xRAM], wallet)
+       * delivered 71.11 xRAM after 1h emission warp; direct gauge.getReward(...) reverts
+       * with NOT_AUTHORIZED_CLAIMER for the same EOA.
+       */
+      async buildClaimRewardsViaNPMPeriodReward(npm, tokenId, receiver, opts) {
+        let rewardTokens = opts?.tokens;
+        if (!rewardTokens || rewardTokens.length === 0) {
+          if (!opts?.gauge) {
+            throw DefiError.invalidParam(
+              "Ramses CL claim requires either `tokens` or `gauge` (for getRewardTokens lookup)"
+            );
+          }
+          if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required to discover reward tokens");
+          const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+          try {
+            rewardTokens = await client.readContract({
+              address: opts.gauge,
+              abi: gaugeAbi,
+              functionName: "getRewardTokens"
+            });
+          } catch {
+            throw DefiError.contractError(
+              `[${this.protocolName}] gauge.getRewardTokens() reverted \u2014 pass tokens[] explicitly`
+            );
+          }
+        }
+        if (rewardTokens.length === 0) {
+          throw DefiError.contractError(`[${this.protocolName}] no reward tokens to claim`);
+        }
+        const epochSeconds = 604800n;
+        const period = opts?.period ?? BigInt(Math.floor(Date.now() / 1e3)) / epochSeconds;
+        const npmClaimAbi = parseAbi10([
+          "function getPeriodReward(uint256 period, uint256 tokenId, address[] tokens, address receiver) external"
+        ]);
+        const data = encodeFunctionData10({
+          abi: npmClaimAbi,
+          functionName: "getPeriodReward",
+          args: [period, tokenId, rewardTokens, receiver]
+        });
+        return {
+          description: `[${this.protocolName}] Claim via NPM.getPeriodReward(period=${period}, tokenId=${tokenId}, ${rewardTokens.length} tokens)`,
+          to: npm,
+          data,
+          value: 0n,
+          gas_estimate: 6e5
+        };
+      }
+      /**
+       * @deprecated Direct gauge.getReward(tokenId, tokens[]) reverts with NOT_AUTHORIZED_CLAIMER
+       * for EOAs on Ramses CL. Use buildClaimRewardsViaNPMPeriodReward instead.
+       */
+      async buildClaimRewardsByCLTokenIdMulti(gauge, tokenId, tokens) {
+        let rewardTokens = tokens;
+        if (!rewardTokens || rewardTokens.length === 0) {
+          if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required to discover reward tokens");
+          const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+          try {
+            rewardTokens = await client.readContract({
+              address: gauge,
+              abi: gaugeAbi,
+              functionName: "getRewardTokens"
+            });
+          } catch {
+            throw DefiError.contractError(
+              `[${this.protocolName}] gauge.getRewardTokens() reverted \u2014 pass tokens[] explicitly`
+            );
+          }
+        }
+        if (rewardTokens.length === 0) {
+          throw DefiError.contractError(`[${this.protocolName}] no reward tokens to claim`);
+        }
+        const data = encodeFunctionData10({
+          abi: gaugeAbi,
+          functionName: "getReward",
+          args: [tokenId, rewardTokens]
+        });
+        return {
+          description: `[${this.protocolName}] Claim CL gauge rewards for NFT #${tokenId} (${rewardTokens.length} tokens)`,
+          to: gauge,
+          data,
+          value: 0n,
+          gas_estimate: 4e5
+        };
+      }
+      /**
+       * Ramses-CL-style pending rewards: earned(token, tokenId) per reward token from
+       * gauge.getRewardTokens(). Returns raw amounts; caller resolves USD value.
+       */
+      async getPendingRewardsByCLTokenIdMulti(gauge, tokenId) {
+        if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
+        const client = createPublicClient6({ transport: http6(this.rpcUrl) });
+        let rewardTokens;
+        try {
+          rewardTokens = await client.readContract({
+            address: gauge,
+            abi: gaugeAbi,
+            functionName: "getRewardTokens"
+          });
+        } catch {
+          return [];
+        }
+        const out = [];
+        for (const token of rewardTokens) {
+          try {
+            const amount = await client.readContract({
+              address: gauge,
+              abi: gaugeAbi,
+              functionName: "earned",
+              args: [token, tokenId]
+            });
+            out.push({ token, symbol: token.slice(0, 10), amount });
+          } catch {
+          }
+        }
+        return out;
       }
       async getPendingRewards(gauge, user) {
         if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
@@ -3646,8 +4111,43 @@ var init_dist2 = __esm({
         ];
       }
       /**
+       * Scan ±scanRange bins around the active bin and return the user's non-zero balance bin IDs.
+       * Critical: the rewarder may track pending rewards for bins OUTSIDE its current rewarded range
+       * (e.g. when the rewarded range shifts after a position was already in place). Always claim
+       * against the user's actual positions, not the rewarder's "current" range.
+       */
+      async findUserBinsWithBalance(pool, user, scanRange = 50) {
+        const rpcUrl = this.requireRpc();
+        const client = createPublicClient8({ transport: http8(rpcUrl) });
+        const activeId = await client.readContract({
+          address: pool,
+          abi: lbPairAbi,
+          functionName: "getActiveId"
+        });
+        const calls = [];
+        const binIds = [];
+        for (let b = activeId - scanRange; b <= activeId + scanRange; b++) {
+          binIds.push(b);
+          calls.push([pool, encodeFunctionData12({
+            abi: parseAbi12(["function balanceOf(address account, uint256 id) view returns (uint256)"]),
+            functionName: "balanceOf",
+            args: [user, BigInt(b)]
+          })]);
+        }
+        const results = await multicallRead(rpcUrl, calls);
+        const owned = [];
+        for (let i = 0; i < binIds.length; i++) {
+          const data = results[i];
+          if (!data) continue;
+          const hex = data.slice(2).padStart(64, "0");
+          if (hex !== "0".repeat(64)) owned.push(binIds[i]);
+        }
+        return owned;
+      }
+      /**
        * Build a claim rewards transaction for specific LB bins.
-       * If binIds is omitted, auto-detects from the rewarder's rewarded range.
+       * If binIds is omitted, auto-detects from the user's actual non-zero balance bins (active ±50 scan).
+       * This catches rewards accumulated in bins outside the rewarder's current rewarded range.
        */
       async buildClaimRewards(user, pool, binIds) {
         const rpcUrl = this.requireRpc();
@@ -3663,15 +4163,18 @@ var init_dist2 = __esm({
         }
         let resolvedBinIds = binIds;
         if (!resolvedBinIds || resolvedBinIds.length === 0) {
-          const range = await client.readContract({
-            address: rewarder,
-            abi: lbRewarderAbi,
-            functionName: "getRewardedRange"
-          });
-          const min = Number(range[0]);
-          const max = Number(range[1]);
-          resolvedBinIds = [];
-          for (let b = min; b <= max; b++) resolvedBinIds.push(b);
+          resolvedBinIds = await this.findUserBinsWithBalance(pool, user);
+          if (resolvedBinIds.length === 0) {
+            const range = await client.readContract({
+              address: rewarder,
+              abi: lbRewarderAbi,
+              functionName: "getRewardedRange"
+            });
+            const min = Number(range[0]);
+            const max = Number(range[1]);
+            resolvedBinIds = [];
+            for (let b = min; b <= max; b++) resolvedBinIds.push(b);
+          }
         }
         const data = encodeFunctionData12({
           abi: lbRewarderAbi,
@@ -4082,7 +4585,7 @@ var init_dist2 = __esm({
       "function enterFarming((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
       "function exitFarming((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
       "function collectRewards((address rewardToken, address bonusRewardToken, address pool, uint256 nonce) key, uint256 tokenId) external",
-      "function claimReward(address rewardToken, address to, uint128 amountRequested) external returns (uint256 reward)"
+      "function claimReward(address rewardToken, address to, uint256 amountRequested) external returns (uint256 reward)"
     ]);
     positionManagerAbi2 = parseAbi13([
       "function approveForFarming(uint256 tokenId, bool approve, address farmingAddress) external",
@@ -4104,13 +4607,17 @@ var init_dist2 = __esm({
       positionManager;
       rpcUrl;
       factory;
-      constructor(protocolName, farmingCenter, eternalFarming, positionManager, rpcUrl, factory) {
+      rewardToken;
+      bonusRewardToken;
+      constructor(protocolName, farmingCenter, eternalFarming, positionManager, rpcUrl, factory, rewardToken = KITTEN_TOKEN, bonusRewardToken = WHYPE_TOKEN) {
         this.protocolName = protocolName;
         this.farmingCenter = farmingCenter;
         this.eternalFarming = eternalFarming;
         this.positionManager = positionManager;
         this.rpcUrl = rpcUrl;
         this.factory = factory;
+        this.rewardToken = rewardToken;
+        this.bonusRewardToken = bonusRewardToken;
       }
       name() {
         return this.protocolName;
@@ -4125,8 +4632,8 @@ var init_dist2 = __esm({
         const poolLc = pool.toLowerCase();
         if (nonceCache.has(poolLc)) {
           return {
-            rewardToken: KITTEN_TOKEN,
-            bonusRewardToken: WHYPE_TOKEN,
+            rewardToken: this.rewardToken,
+            bonusRewardToken: this.bonusRewardToken,
             pool,
             nonce: nonceCache.get(poolLc)
           };
@@ -4137,8 +4644,8 @@ var init_dist2 = __esm({
           const nonce = BigInt(n);
           nonces.push(nonce);
           const key = {
-            rewardToken: KITTEN_TOKEN,
-            bonusRewardToken: WHYPE_TOKEN,
+            rewardToken: this.rewardToken,
+            bonusRewardToken: this.bonusRewardToken,
             pool,
             nonce
           };
@@ -4173,8 +4680,8 @@ var init_dist2 = __esm({
               const nonce = nonces[i];
               nonceCache.set(poolLc, nonce);
               return {
-                rewardToken: KITTEN_TOKEN,
-                bonusRewardToken: WHYPE_TOKEN,
+                rewardToken: this.rewardToken,
+                bonusRewardToken: this.bonusRewardToken,
                 pool,
                 nonce
               };
@@ -4266,8 +4773,8 @@ var init_dist2 = __esm({
         }
         const calls = [
           encodeCollectRewards(key, tokenId),
-          encodeClaimReward(KITTEN_TOKEN, owner),
-          encodeClaimReward(WHYPE_TOKEN, owner)
+          encodeClaimReward(this.rewardToken, owner),
+          encodeClaimReward(this.bonusRewardToken, owner)
         ];
         return {
           description: `[${this.protocolName}] Collect + claim rewards for NFT #${tokenId} in pool ${pool}`,
@@ -4282,8 +4789,8 @@ var init_dist2 = __esm({
        */
       async buildClaimReward(owner) {
         const calls = [
-          encodeClaimReward(KITTEN_TOKEN, owner),
-          encodeClaimReward(WHYPE_TOKEN, owner)
+          encodeClaimReward(this.rewardToken, owner),
+          encodeClaimReward(this.bonusRewardToken, owner)
         ];
         return {
           description: `[${this.protocolName}] Claim KITTEN + WHYPE farming rewards to ${owner}`,
@@ -4352,8 +4859,8 @@ var init_dist2 = __esm({
         for (const pool of pools) {
           for (let n = 0; n <= MAX_NONCE_SCAN; n++) {
             const key = {
-              rewardToken: KITTEN_TOKEN,
-              bonusRewardToken: WHYPE_TOKEN,
+              rewardToken: this.rewardToken,
+              bonusRewardToken: this.bonusRewardToken,
               pool,
               nonce: BigInt(n)
             };
@@ -4400,8 +4907,8 @@ var init_dist2 = __esm({
                 const isActive = !deactivated;
                 if (!bestKey || isActive && !bestActive || isActive === bestActive && nonce > bestKey.nonce) {
                   bestKey = {
-                    rewardToken: KITTEN_TOKEN,
-                    bonusRewardToken: WHYPE_TOKEN,
+                    rewardToken: this.rewardToken,
+                    bonusRewardToken: this.bonusRewardToken,
                     pool,
                     nonce
                   };
@@ -4425,6 +4932,235 @@ var init_dist2 = __esm({
           }
         }
         return results;
+      }
+    };
+    DEFAULT_BASE_URL = "https://app.usenest.xyz/api/blaze";
+    FALLBACK_BASE_URL = "https://blaze.nest.aegas.it";
+    NEST_TOKEN = "0x07c57E32a3C29D5659bda1d3EFC2E7BF004E3035";
+    NEST_DECIMALS = 18;
+    NestOffChainAdapter = class {
+      baseUrl;
+      fallbackUrl;
+      voter;
+      constructor(entry) {
+        const voter = entry.contracts?.["voter"];
+        if (!voter) {
+          throw DefiError.contractError("Nest off-chain: missing 'voter' contract");
+        }
+        this.voter = voter;
+        this.baseUrl = process.env["NEST_API_URL"] ?? DEFAULT_BASE_URL;
+        this.fallbackUrl = FALLBACK_BASE_URL;
+      }
+      name() {
+        return "Nest";
+      }
+      /** Cumulative claimed + available NEST emissions for a wallet */
+      async getClaimStatus(wallet) {
+        const data = await this.fetchJson(
+          `/claim/claim-status?publicAddress=${wallet}`
+        );
+        const totalClaimedRaw = BigInt(data.totalClaimed);
+        const totalAvailableRaw = BigInt(data.totalAvailable);
+        const pendingRaw = totalAvailableRaw > totalClaimedRaw ? totalAvailableRaw - totalClaimedRaw : 0n;
+        return {
+          totalClaimedRaw,
+          totalAvailableRaw,
+          pendingRaw,
+          pendingFormatted: Number(pendingRaw) / 10 ** NEST_DECIMALS
+        };
+      }
+      /**
+       * Backend-signed claim ticket (or null when nothing to claim).
+       * Returns the raw ticket; `buildClaim()` is not yet implemented because the
+       * voter contract source is unverified — function selector 0xd6d7a454 takes
+       * 5 dynamic arrays we have not been able to disambiguate yet.
+       */
+      async getClaimTicket(wallet) {
+        const url = `${this.baseUrl}/claim/claim-data?publicAddress=${wallet}`;
+        const res = await fetch(url, this.requestInit());
+        const text = await res.text();
+        if (text.includes("no points to claim")) return null;
+        if (!res.ok) {
+          throw DefiError.providerError(`Nest claim-data ${res.status}: ${text.slice(0, 200)}`);
+        }
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          throw DefiError.providerError(`Nest claim-data: non-JSON response: ${text.slice(0, 200)}`);
+        }
+        return {
+          user: json.user,
+          amount: BigInt(json.amount),
+          timestamp: BigInt(json.timestamp),
+          day: json.day === null ? null : BigInt(json.day),
+          signature: json.signature.startsWith("0x") ? json.signature : `0x${json.signature}`
+        };
+      }
+      /** APR estimate (percent) for a CL position with given tick range and amounts */
+      async estimateLpApr(params) {
+        const qs = new URLSearchParams({
+          poolAddress: params.poolAddress,
+          minTick: String(params.minTick),
+          maxTick: String(params.maxTick),
+          token0Amount: params.token0Amount.toString(),
+          token1Amount: params.token1Amount.toString()
+        });
+        const data = await this.fetchJson(`/liquidity/apr/estimate?${qs}`);
+        const apr = Number(data.apr);
+        if (!Number.isFinite(apr)) {
+          throw DefiError.providerError(`Nest apr/estimate: invalid apr value '${data.apr}'`);
+        }
+        return apr;
+      }
+      /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
+      async getPendingRewards(user) {
+        const status = await this.getClaimStatus(user);
+        if (status.pendingRaw === 0n) return [];
+        return [{
+          token: NEST_TOKEN,
+          symbol: "NEST",
+          amount: status.pendingRaw
+        }];
+      }
+      /** Voter address used by aggregateClaim() — exposed for callers that build the tx themselves */
+      getVoterAddress() {
+        return this.voter;
+      }
+      /**
+       * Build a Nest voter claim transaction by reproducing the byte-level calldata
+       * pattern observed in successful onchain claims, swapping in the ticket's
+       * (amount, timestamp, signature) words.
+       *
+       * The voter implementation source is not verified, so we cannot derive a
+       * Solidity ABI for selector 0xd6d7a454. Instead, two known-successful claim
+       * transactions were diffed:
+       *
+       *   tx1: 0x99f35cfdb6fc3885ebe046c4625acc083e42d5afe6ca6962c6c81cd9006b99ba
+       *   tx2: 0x3e120ab95e9e0a9148cb8964993dd066b8a36363353fe727462231857724e7bb
+       *
+       * 31 of 34 calldata words are identical between the two; only words 21, 22,
+       * 25, 26, 27 differ — and those map exactly to the backend ticket's
+       * (amount, timestamp, sigR, sigS, sigVPadded). msg.sender is not encoded in
+       * calldata; voter binds the claim to the caller, so the ticket signature
+       * authorizes the EOA holding the wallet.
+       *
+       * Throws if no claim ticket is available.
+       */
+      async buildClaim(wallet) {
+        const ticket = await this.getClaimTicket(wallet);
+        if (!ticket) {
+          throw DefiError.invalidParam(`Nest: no claim ticket available for ${wallet}`);
+        }
+        const sigHex = ticket.signature.startsWith("0x") ? ticket.signature.slice(2) : ticket.signature;
+        if (sigHex.length !== 130) {
+          throw DefiError.providerError(`Nest: signature must be 65 bytes (130 hex chars), got ${sigHex.length}`);
+        }
+        const r = sigHex.slice(0, 64);
+        const s = sigHex.slice(64, 128);
+        const v = sigHex.slice(128, 130);
+        const vPadded = v + "0".repeat(62);
+        const amountHex = ticket.amount.toString(16).padStart(64, "0");
+        const timestampHex = ticket.timestamp.toString(16).padStart(64, "0");
+        const words = [
+          "0000000000000000000000000000000000000000000000000000000000000160",
+          // 0
+          "0000000000000000000000000000000000000000000000000000000000000180",
+          // 1
+          "0000000000000000000000000000000000000000000000000000000000000200",
+          // 2
+          "00000000000000000000000000000000000000000000000000000000000002a0",
+          // 3
+          "0000000000000000000000000000000000000000000000000000000000000380",
+          // 4
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 5
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 6
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 7
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 8
+          "0000000000000000000000000000000000000000000000000000000000000001",
+          // 9
+          "0000000000000000000000000000000000000000000000000000000000000001",
+          // 10
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 11 — empty array length
+          "0000000000000000000000000000000000000000000000000000000000000040",
+          // 12
+          "0000000000000000000000000000000000000000000000000000000000000060",
+          // 13
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 14
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 15
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 16
+          "0000000000000000000000000000000000000000000000000000000000000060",
+          // 17
+          "0000000000000000000000000000000000000000000000000000000000000080",
+          // 18
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 19
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 20
+          amountHex,
+          // 21 — ticket amount
+          timestampHex,
+          // 22 — ticket timestamp
+          "0000000000000000000000000000000000000000000000000000000000000060",
+          // 23 — sig offset
+          "0000000000000000000000000000000000000000000000000000000000000041",
+          // 24 — sig length (65)
+          r,
+          // 25 — sig r
+          s,
+          // 26 — sig s
+          vPadded,
+          // 27 — sig v + zero padding
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 28
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 29
+          "0000000000000000000000000000000000000000000000000000000000000001",
+          // 30
+          "0000000000000000000000000000000000000000000000000000000000000000",
+          // 31
+          "00000000000000000000000000000000000000000000000000000000000000a0",
+          // 32
+          "0000000000000000000000000000000000000000000000000000000000000000"
+          // 33
+        ];
+        const data = "0xd6d7a454" + words.join("");
+        return {
+          description: `[${this.name()}] Claim NEST emissions (${(Number(ticket.amount) / 1e18).toFixed(2)} NEST cumulative; backend-signed ts=${ticket.timestamp})`,
+          to: this.voter,
+          data,
+          value: 0n,
+          gas_estimate: 6e5
+        };
+      }
+      // ── internal ──
+      async fetchJson(path) {
+        const primary = `${this.baseUrl}${path.startsWith("/claim") ? path : path}`;
+        try {
+          const res = await fetch(primary, this.requestInit());
+          if (res.ok) return await res.json();
+          if (res.status >= 500) throw new Error(`upstream ${res.status}`);
+          throw DefiError.providerError(`Nest API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        } catch (e) {
+          if (this.baseUrl === this.fallbackUrl) throw e;
+          const fallback = `${this.fallbackUrl}${path}`;
+          const res = await fetch(fallback, this.requestInit());
+          if (!res.ok) {
+            throw DefiError.providerError(`Nest fallback ${res.status}: ${(await res.text()).slice(0, 200)}`);
+          }
+          return await res.json();
+        }
+      }
+      requestInit() {
+        return { headers: { "User-Agent": "defi-cli/0.5", "Accept": "application/json" } };
       }
     };
     POOL_ABI = parseAbi14([
@@ -4728,8 +5464,8 @@ var init_dist2 = __esm({
           throw DefiError.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
         });
         const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = result;
-        const MAX_UINT256 = 2n ** 256n - 1n;
-        const hf = healthFactor >= MAX_UINT256 ? Infinity : Number(healthFactor) / 1e18;
+        const MAX_UINT2562 = 2n ** 256n - 1n;
+        const hf = healthFactor >= MAX_UINT2562 ? Infinity : Number(healthFactor) / 1e18;
         const collateralUsd = u256ToF64(totalCollateralBase) / 1e8;
         const debtUsd = u256ToF64(totalDebtBase) / 1e8;
         const ltvBps = u256ToF64(ltv);
@@ -4893,8 +5629,8 @@ var init_dist2 = __esm({
           throw DefiError.rpcError(`[${this.protocolName}] getUserAccountData failed: ${e}`);
         });
         const [totalCollateralBase, totalDebtBase, , , ltv, healthFactor] = result;
-        const MAX_UINT256 = 2n ** 256n - 1n;
-        const hf = healthFactor >= MAX_UINT256 ? Infinity : Number(healthFactor) / 1e18;
+        const MAX_UINT2562 = 2n ** 256n - 1n;
+        const hf = healthFactor >= MAX_UINT2562 ? Infinity : Number(healthFactor) / 1e18;
         const collateralUsd = u256ToF642(totalCollateralBase) / 1e18;
         const debtUsd = u256ToF642(totalDebtBase) / 1e18;
         const ltvBps = u256ToF642(ltv);
@@ -5141,7 +5877,8 @@ var init_dist2 = __esm({
           to: this.comet,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: this.comet, amount: params.amount }]
         };
       }
       async buildBorrow(params) {
@@ -5169,7 +5906,8 @@ var init_dist2 = __esm({
           to: this.comet,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          approvals: [{ token: params.asset, spender: this.comet, amount: params.amount }]
         };
       }
       async buildWithdraw(params) {
@@ -5358,6 +6096,14 @@ var init_dist2 = __esm({
       "function totalAssets() external view returns (uint256)",
       "function totalSupply() external view returns (uint256)"
     ]);
+    ERC4626_ABI = parseAbi20([
+      "function asset() external view returns (address)",
+      "function deposit(uint256 assets, address receiver) external returns (uint256 shares)",
+      "function redeem(uint256 shares, address receiver, address owner) external returns (uint256 assets)",
+      "function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares)",
+      "function balanceOf(address owner) external view returns (uint256)"
+    ]);
+    MAX_UINT256 = (1n << 256n) - 1n;
     IRM_ABI = parseAbi20([
       "function borrowRateView((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee) market) external view returns (uint256)"
     ]);
@@ -5367,6 +6113,9 @@ var init_dist2 = __esm({
       morpho;
       defaultVault;
       rpcUrl;
+      metaMorphoVaults;
+      metaMorphoVaultEntries;
+      vaultAssetMap = null;
       constructor(entry, rpcUrl) {
         this.protocolName = entry.name;
         this.rpcUrl = rpcUrl;
@@ -5375,11 +6124,58 @@ var init_dist2 = __esm({
         if (!morpho) throw DefiError.contractError("Missing 'morpho_blue' contract address");
         this.morpho = morpho;
         this.defaultVault = contracts["fehype"] ?? contracts["vault"] ?? contracts["feusdc"];
+        this.metaMorphoVaultEntries = Object.entries(contracts).filter(([key]) => /^fe[a-z0-9_]+$/i.test(key) || key === "vault").map(([key, addr]) => ({ key, addr }));
+        this.metaMorphoVaults = this.metaMorphoVaultEntries.map((e) => e.addr);
+      }
+      async resolveVault(asset, preferKey) {
+        if (this.metaMorphoVaultEntries.length === 0 || !this.rpcUrl) return null;
+        if (preferKey) {
+          const direct = this.metaMorphoVaultEntries.find((e) => e.key === preferKey);
+          if (direct) return direct.addr;
+        }
+        if (!this.vaultAssetMap) {
+          const calls = this.metaMorphoVaultEntries.map((e) => [
+            e.addr,
+            encodeFunctionData19({ abi: ERC4626_ABI, functionName: "asset" })
+          ]);
+          const results = await multicallRead(this.rpcUrl, calls).catch(() => []);
+          const map = /* @__PURE__ */ new Map();
+          for (let i = 0; i < results.length; i++) {
+            const data = results[i];
+            if (!data || data.length < 66) continue;
+            const a = `0x${data.slice(26, 66)}`.toLowerCase();
+            const entry = this.metaMorphoVaultEntries[i];
+            const existing = map.get(a);
+            if (!existing || entry.key.length < existing.key.length) {
+              map.set(a, entry);
+            }
+          }
+          const flatMap = /* @__PURE__ */ new Map();
+          for (const [k, v] of map) flatMap.set(k, v.addr);
+          this.vaultAssetMap = flatMap;
+        }
+        return this.vaultAssetMap.get(asset.toLowerCase()) ?? null;
       }
       name() {
         return this.protocolName;
       }
       async buildSupply(params) {
+        const vault = await this.resolveVault(params.asset);
+        if (vault) {
+          const data2 = encodeFunctionData19({
+            abi: ERC4626_ABI,
+            functionName: "deposit",
+            args: [params.amount, params.on_behalf_of]
+          });
+          return {
+            description: `[${this.protocolName}] Deposit ${params.amount} into MetaMorpho vault`,
+            to: vault,
+            data: data2,
+            value: 0n,
+            gas_estimate: 4e5,
+            approvals: [{ token: params.asset, spender: vault, amount: params.amount }]
+          };
+        }
         const market = defaultMarketParams(params.asset);
         const data = encodeFunctionData19({
           abi: MORPHO_ABI,
@@ -5425,6 +6221,40 @@ var init_dist2 = __esm({
         };
       }
       async buildWithdraw(params) {
+        const vault = await this.resolveVault(params.asset);
+        if (vault) {
+          if (params.amount === MAX_UINT256) {
+            if (!this.rpcUrl) throw DefiError.rpcError("RPC required to fetch vault shares");
+            const [balRaw] = await multicallRead(this.rpcUrl, [
+              [vault, encodeFunctionData19({ abi: ERC4626_ABI, functionName: "balanceOf", args: [params.to] })]
+            ]);
+            const shares = decodeU256(balRaw ?? null);
+            const data3 = encodeFunctionData19({
+              abi: ERC4626_ABI,
+              functionName: "redeem",
+              args: [shares, params.to, params.to]
+            });
+            return {
+              description: `[${this.protocolName}] Redeem all shares (${shares}) from MetaMorpho vault`,
+              to: vault,
+              data: data3,
+              value: 0n,
+              gas_estimate: 4e5
+            };
+          }
+          const data2 = encodeFunctionData19({
+            abi: ERC4626_ABI,
+            functionName: "withdraw",
+            args: [params.amount, params.to, params.to]
+          });
+          return {
+            description: `[${this.protocolName}] Withdraw ${params.amount} assets from MetaMorpho vault`,
+            to: vault,
+            data: data2,
+            value: 0n,
+            gas_estimate: 4e5
+          };
+        }
         const market = defaultMarketParams(params.asset);
         const data = encodeFunctionData19({
           abi: MORPHO_ABI,
@@ -5743,7 +6573,7 @@ var init_dist2 = __esm({
         return results;
       }
     };
-    ERC4626_ABI = parseAbi23([
+    ERC4626_ABI2 = parseAbi23([
       "function asset() external view returns (address)",
       "function totalAssets() external view returns (uint256)",
       "function totalSupply() external view returns (uint256)",
@@ -5768,7 +6598,7 @@ var init_dist2 = __esm({
       }
       async buildDeposit(assets, receiver) {
         const data = encodeFunctionData21({
-          abi: ERC4626_ABI,
+          abi: ERC4626_ABI2,
           functionName: "deposit",
           args: [assets, receiver]
         });
@@ -5782,7 +6612,7 @@ var init_dist2 = __esm({
       }
       async buildWithdraw(assets, receiver, owner) {
         const data = encodeFunctionData21({
-          abi: ERC4626_ABI,
+          abi: ERC4626_ABI2,
           functionName: "withdraw",
           args: [assets, receiver, owner]
         });
@@ -5799,7 +6629,7 @@ var init_dist2 = __esm({
         const client = createPublicClient18({ transport: http18(this.rpcUrl) });
         return client.readContract({
           address: this.vaultAddress,
-          abi: ERC4626_ABI,
+          abi: ERC4626_ABI2,
           functionName: "totalAssets"
         }).catch((e) => {
           throw DefiError.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
@@ -5810,7 +6640,7 @@ var init_dist2 = __esm({
         const client = createPublicClient18({ transport: http18(this.rpcUrl) });
         return client.readContract({
           address: this.vaultAddress,
-          abi: ERC4626_ABI,
+          abi: ERC4626_ABI2,
           functionName: "convertToShares",
           args: [assets]
         }).catch((e) => {
@@ -5822,7 +6652,7 @@ var init_dist2 = __esm({
         const client = createPublicClient18({ transport: http18(this.rpcUrl) });
         return client.readContract({
           address: this.vaultAddress,
-          abi: ERC4626_ABI,
+          abi: ERC4626_ABI2,
           functionName: "convertToAssets",
           args: [shares]
         }).catch((e) => {
@@ -5833,13 +6663,13 @@ var init_dist2 = __esm({
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
         const client = createPublicClient18({ transport: http18(this.rpcUrl) });
         const [totalAssets, totalSupply, asset] = await Promise.all([
-          client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI, functionName: "totalAssets" }).catch((e) => {
+          client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI2, functionName: "totalAssets" }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
           }),
-          client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI, functionName: "totalSupply" }).catch((e) => {
+          client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI2, functionName: "totalSupply" }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] totalSupply failed: ${e}`);
           }),
-          client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI, functionName: "asset" }).catch((e) => {
+          client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI2, functionName: "asset" }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] asset failed: ${e}`);
           })
         ]);
@@ -6936,10 +7766,11 @@ server.tool(
     token_a: z.string().describe("First token symbol or address"),
     token_b: z.string().describe("Second token symbol or address"),
     liquidity: z.string().describe("Liquidity amount to remove in wei"),
+    token_id: z.string().optional().describe("NFT tokenId \u2014 required for V3/CL position-manager based protocols (uniswap_v3, algebra_v3, hybra)"),
     recipient: z.string().optional().describe("Recipient address for returned tokens"),
     broadcast: z.boolean().optional().describe("Set true to broadcast (default: false)")
   },
-  async ({ chain, protocol, token_a, token_b, liquidity, recipient, broadcast }) => {
+  async ({ chain, protocol, token_a, token_b, liquidity, token_id, recipient, broadcast }) => {
     try {
       const chainName = chain ?? "hyperevm";
       const registry = getRegistry();
@@ -6954,7 +7785,8 @@ server.tool(
         token_a: tokenA,
         token_b: tokenB,
         liquidity: BigInt(liquidity),
-        recipient: recipientAddr
+        recipient: recipientAddr,
+        token_id: token_id ? BigInt(token_id) : void 0
       });
       const executor = makeExecutor(broadcast ?? false, chainConfig.effectiveRpcUrl(), chainConfig.explorer_url);
       const result = await executor.execute(tx);

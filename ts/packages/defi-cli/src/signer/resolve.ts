@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { OwsEvmSigner } from "./ows-evm.js";
 
 /**
@@ -30,9 +31,6 @@ export function resolveWalletWithSigner(
   // 3. DEFI_PRIVATE_KEY -> derive address
   const pk = process.env["DEFI_PRIVATE_KEY"];
   if (pk) {
-    // Dynamic import to avoid top-level dependency on viem/accounts
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { privateKeyToAccount } = require("viem/accounts") as typeof import("viem/accounts");
     return { address: privateKeyToAccount(pk as `0x${string}`).address, signer: null };
   }
 

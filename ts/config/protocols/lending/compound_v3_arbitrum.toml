@@ -1,0 +1,16 @@
+[protocol]
+name = "Compound V3 Arbitrum"
+slug = "compound-v3-arbitrum"
+category = "lending"
+interface = "compound_v3"
+chain = "arbitrum"
+native = false
+verified = true
+reward_strategy = "none"
+description = "Compound V3 (Comet) on Arbitrum — 4 markets. baseToken() verified for USDC native, USDC.e bridged, WETH 2026-04-28."
+
+[protocol.contracts]
+comet_usdc = "0x9c4ec768c28520B50860ea7a15bd7213a9fF58bf"
+comet_usdc_e = "0xA5EDBDD9646f8dFF606d7448e414884C7d905dCA"
+comet_weth = "0x6f7D514bbD4aFf3BcD1140B7344b32f063dEe486"
+comet_usdt = "0xd98Be00b5D27fc98112BdE293e487f8D4cA57d07"

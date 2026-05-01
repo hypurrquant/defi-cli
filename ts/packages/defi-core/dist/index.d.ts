@@ -102,6 +102,8 @@ interface RemoveLiquidityParams {
     token_b: Address;
     liquidity: bigint;
     recipient: Address;
+    /** NFT tokenId for V3 / CL position managers (required for V3-style removes) */
+    token_id?: bigint;
 }
 interface SupplyParams {
     protocol: string;
@@ -485,6 +487,12 @@ interface IDex {
     quote(params: QuoteParams): Promise<QuoteResult>;
     buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx>;
     buildRemoveLiquidity(params: RemoveLiquidityParams): Promise<DeFiTx>;
+    /** Optional: collect accrued LP fees and re-add as liquidity (V3 fee-only protocols) */
+    buildCompound?(tokenId: bigint, recipient: Address, opts?: {
+        slippageBps?: number;
+    }): Promise<DeFiTx>;
+    /** Optional: collect LP fees only (V3 NPM.collect for fee-only / non-gauged positions) */
+    buildCollectFees?(tokenId: bigint, recipient: Address): Promise<DeFiTx>;
 }
 
 interface ILending {
@@ -504,12 +512,16 @@ interface IGauge {
     resolveGauge?(pool: Address): Promise<Address>;
     /** Deposit LP tokens into gauge */
     buildDeposit(gauge: Address, amount: bigint, tokenId?: bigint, lpToken?: Address): Promise<DeFiTx>;
-    /** Withdraw LP tokens or NFT from gauge */
-    buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint): Promise<DeFiTx>;
+    /** Withdraw LP tokens or NFT from gauge. opts.redeemType (Hybra-specific): 0=instant exit (penalty), 1=lock into 2-year veHYBR (default). */
+    buildWithdraw(gauge: Address, amount: bigint, tokenId?: bigint, opts?: {
+        redeemType?: number;
+    }): Promise<DeFiTx>;
     /** Claim earned rewards from gauge */
     buildClaimRewards(gauge: Address, account?: Address): Promise<DeFiTx>;
-    /** Claim rewards for a CL gauge NFT position (Hybra V4 style) */
-    buildClaimRewardsByTokenId?(gauge: Address, tokenId: bigint): Promise<DeFiTx>;
+    /** Claim rewards for a CL gauge NFT position (Hybra V4 style). opts.redeemType (Hybra): 0=instant, 1=2yr lock (default). */
+    buildClaimRewardsByTokenId?(gauge: Address, tokenId: bigint, opts?: {
+        redeemType?: number;
+    }): Promise<DeFiTx>;
     /** Get pending rewards for a user */
     getPendingRewards(gauge: Address, user: Address): Promise<RewardInfo[]>;
     /** Get pending rewards for a CL gauge NFT position */
@@ -627,6 +639,22 @@ interface INft {
     getBalance(owner: Address, collection: Address): Promise<bigint>;
 }
 
+/**
+ * Per-chain DEX aggregator slug map. Each entry is the chain identifier the
+ * aggregator's API expects:
+ *   - For per-chain-named aggregators (KyberSwap, OpenOcean, LiquidSwap), this is the
+ *     chain slug (e.g., "ethereum", "bsc", "base").
+ *   - For chainId-based aggregators (LI.FI, Relay), use "auto" — the adapter falls
+ *     back to `chain_id` numeric.
+ *   - Omit a key to mark the aggregator as unsupported on that chain.
+ */
+interface AggregatorSlugs {
+    kyber?: string;
+    openocean?: string;
+    liquid?: string;
+    lifi?: string;
+    relay?: string;
+}
 declare class ChainConfig {
     name: string;
     chain_id: number;
@@ -635,6 +663,7 @@ declare class ChainConfig {
     native_token: string;
     wrapped_native?: string;
     multicall3?: string;
+    aggregators?: AggregatorSlugs;
     effectiveRpcUrl(): string;
 }
 
@@ -672,6 +701,10 @@ interface PoolInfo {
     gauge?: Address;
     stable?: boolean;
 }
+/** How rewards are read for this protocol — informs which adapter the gauge layer uses */
+type RewardStrategy = "on_chain_gauge" | "on_chain_gauge_tokenid" | "on_chain_farming_center" | "on_chain_masterchef" | "auto_stake" | "lp_fee_only" | "off_chain_api" | "none";
+/** How native input (HYPE / ETH) is wrapped on this DEX (some forks use a non-standard pattern) */
+type NativeInputStyle = "algebra-native";
 interface ProtocolEntry {
     name: string;
     slug: string;
@@ -679,7 +712,26 @@ interface ProtocolEntry {
     interface: string;
     chain: string;
     native?: boolean;
+    /** Verified PASS via on-chain `cast call`. Setting to false hides the protocol (fail-closed). */
     verified?: boolean;
+    /**
+     * Whether this protocol should be exposed to runtime callers.
+     * Defaults to true. Setting to false hides it from getProtocolsForChain()
+     * even when verified=true (use this for protocols whose ABI/integration is incomplete).
+     */
+    is_active?: boolean;
+    /** Non-standard native-input wrapping flow — only set when adapter needs special handling */
+    native_input_style?: NativeInputStyle;
+    /** How rewards are computed/claimed — drives reward strategy dispatch in factory.createGauge */
+    reward_strategy?: RewardStrategy;
+    /**
+     * Concentrated-liquidity dialect for `interface = "uniswap_v3"` forks. Drives
+     * adapter mint encoding & quoter selection.
+     *   - undefined: standard Uniswap V3 (uint24 fee in MintParams)
+     *   - "slipstream": Aerodrome/Velodrome Slipstream (int24 tickSpacing + sqrtPriceX96, 12-field MintParams)
+     *   - "ramses": Ramses CL x(3,3) (auto-stake, tickSpacing-based quoter, NPM.getPeriodReward claim)
+     */
+    cl_style?: "slipstream" | "ramses";
     contracts?: Record<string, Address>;
     pools?: PoolInfo[];
     description?: string;
@@ -706,4 +758,4 @@ declare class Registry {
     resolvePool(protocolSlug: string, poolName: string): PoolInfo;
 }
 
-export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type GaugedPool, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type Slippage, type StakeParams, type StakingInfo, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };
+export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type AggregatorSlugs, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type GaugedPool, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type NativeInputStyle, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type RewardStrategy, type Slippage, type StakeParams, type StakingInfo, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };

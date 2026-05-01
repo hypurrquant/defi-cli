@@ -5,7 +5,9 @@ category = "dex"
 interface = "algebra_v3"
 chain = "hyperevm"
 native = true
-description = "Algebra V3 ve(3,3) MetaDEX on HyperEVM ($4M TVL)"
+is_active = false  # ve(3,3) gauges return rewardRate=0; emissions tracked off-chain via blaze.nest.aegas.it
+reward_strategy = "off_chain_api"
+description = "Algebra V3 ve(3,3) MetaDEX on HyperEVM ($4M TVL). Rewards via NestOffChainAdapter (usenest.xyz/api/blaze)."
 
 [protocol.contracts]
 # DEX

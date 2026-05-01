@@ -7,6 +7,13 @@ native_token = "HYPE"
 wrapped_native = "0x5555555555555555555555555555555555555555"
 multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
 
+[chain.hyperevm.aggregators]
+kyber = "hyperevm"
+openocean = "hyperevm"
+liquid = "hyperevm"
+lifi = "auto"
+relay = "auto"
+
 [chain.mantle]
 name = "Mantle"
 chain_id = 5000
@@ -15,6 +22,12 @@ explorer_url = "https://mantlescan.xyz"
 native_token = "MNT"
 wrapped_native = "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
 multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
+
+[chain.mantle.aggregators]
+openocean = "mantle"
+lifi = "auto"
+relay = "auto"
+
 [chain.base]
 name = "Base"
 chain_id = 8453
@@ -24,6 +37,11 @@ native_token = "ETH"
 wrapped_native = "0x4200000000000000000000000000000000000006"
 multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
 
+[chain.base.aggregators]
+kyber = "base"
+openocean = "base"
+lifi = "auto"
+relay = "auto"
 
 [chain.bnb]
 name = "BNB"
@@ -34,6 +52,11 @@ native_token = "BNB"
 wrapped_native = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
 multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
 
+[chain.bnb.aggregators]
+kyber = "bsc"
+openocean = "bsc"
+lifi = "auto"
+relay = "auto"
 
 [chain.monad]
 name = "Monad"
@@ -44,3 +67,35 @@ native_token = "MON"
 wrapped_native = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"
 multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
 
+# Monad: no aggregator support yet (early-stage mainnet)
+[chain.monad.aggregators]
+
+[chain.arbitrum]
+name = "Arbitrum"
+chain_id = 42161
+rpc_url = "https://arbitrum.drpc.org"
+explorer_url = "https://arbiscan.io"
+native_token = "ETH"
+wrapped_native = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
+multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
+
+[chain.arbitrum.aggregators]
+kyber = "arbitrum"
+openocean = "arbitrum"
+lifi = "auto"
+relay = "auto"
+
+[chain.ethereum]
+name = "Ethereum"
+chain_id = 1
+rpc_url = "https://eth.drpc.org"
+explorer_url = "https://etherscan.io"
+native_token = "ETH"
+wrapped_native = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
+
+[chain.ethereum.aggregators]
+kyber = "ethereum"
+openocean = "eth"
+lifi = "auto"
+relay = "auto"

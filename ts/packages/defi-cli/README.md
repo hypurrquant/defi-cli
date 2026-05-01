@@ -99,7 +99,6 @@ defi --json status
 | Protocol | Category | Interface |
 |----------|----------|-----------|
 | Aave V3 | Lending | Aave V3 |
-| Lendle | Lending | Aave V3 Fork |
 | Uniswap V3 | DEX | Uniswap V3 (CL) |
 | Merchant Moe | DEX | Uniswap V2 + Liquidity Book |
 

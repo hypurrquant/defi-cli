@@ -137,7 +137,8 @@ export class Registry {
     return this.protocols.filter(
       (p) =>
         p.chain.toLowerCase() === chain.toLowerCase() &&
-        (includeUnverified || p.verified !== false),
+        (includeUnverified || p.verified !== false) &&
+        p.is_active !== false,
     );
   }
 

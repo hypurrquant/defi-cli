@@ -34,6 +34,21 @@ const ramsesQuoterAbi = parseAbi([
 const positionManagerAbi = parseAbi([
   "struct MintParams { address token0; address token1; uint24 fee; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
   "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+  "struct CollectParams { uint256 tokenId; address recipient; uint128 amount0Max; uint128 amount1Max; }",
+  "function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+  "struct DecreaseLiquidityParams { uint256 tokenId; uint128 liquidity; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }",
+  "function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (uint256 amount0, uint256 amount1)",
+  "struct IncreaseLiquidityParams { uint256 tokenId; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }",
+  "function increaseLiquidity(IncreaseLiquidityParams calldata params) external payable returns (uint128 liquidity, uint256 amount0, uint256 amount1)",
+  "function positions(uint256 tokenId) external view returns (uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)",
+  "function multicall(bytes[] data) external payable returns (bytes[] memory results)",
+]);
+
+// Aerodrome Slipstream / Velodrome CL NPM mint — adds int24 tickSpacing (replaces fee)
+// AND uint160 sqrtPriceX96 (12th field) for pool initialization on-the-fly.
+const slipstreamMintAbi = parseAbi([
+  "struct SlipstreamMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
+  "function mint(SlipstreamMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
 ]);
 
 export class UniswapV3Adapter implements IDex {
@@ -58,8 +73,11 @@ export class UniswapV3Adapter implements IDex {
     this.factory = entry.contracts?.["factory"];
     this.fee = DEFAULT_FEE;
     this.rpcUrl = rpcUrl;
-    // Ramses CL and similar forks use tickSpacing-based pool identification
-    this.useTickSpacingQuoter = entry.contracts?.["pool_deployer"] !== undefined
+    // CL dialect: Slipstream/Ramses use tickSpacing in MintParams instead of fee.
+    // Prefer explicit `cl_style` config over the legacy heuristic of pool_deployer/gauge_factory.
+    this.useTickSpacingQuoter = entry.cl_style === "slipstream"
+      || entry.cl_style === "ramses"
+      || entry.contracts?.["pool_deployer"] !== undefined
       || entry.contracts?.["gauge_factory"] !== undefined;
   }
 
@@ -272,25 +290,83 @@ export class UniswapV3Adapter implements IDex {
     const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
     const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
 
-    const data = encodeFunctionData({
-      abi: positionManagerAbi,
-      functionName: "mint",
-      args: [
-        {
-          token0,
-          token1,
-          fee: this.fee,
-          tickLower: -887220,
-          tickUpper: 887220,
-          amount0Desired: amount0,
-          amount1Desired: amount1,
-          amount0Min: 0n,
-          amount1Min: 0n,
-          recipient: params.recipient,
-          deadline: BigInt("18446744073709551615"),
-        },
-      ],
-    });
+    // Default: full range, configured fee tier
+    let thirdField: number = this.fee;
+    let tickLower = -887220;
+    let tickUpper = 887220;
+
+    // When --pool provided + RPC, read pool's actual tickSpacing/fee + current tick.
+    // For Slipstream-style forks (useTickSpacingQuoter=true), MintParams' third field is tickSpacing, not fee.
+    if (params.pool && this.rpcUrl) {
+      const poolAbi = parseAbi([
+        "function fee() view returns (uint24)",
+        "function tickSpacing() view returns (int24)",
+        "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, bool)",
+      ]);
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const [poolFee, poolTs, slot0] = await Promise.all([
+        client.readContract({ address: params.pool, abi: poolAbi, functionName: "fee" }).catch(() => null) as Promise<number | null>,
+        client.readContract({ address: params.pool, abi: poolAbi, functionName: "tickSpacing" }).catch(() => null) as Promise<number | null>,
+        client.readContract({ address: params.pool, abi: poolAbi, functionName: "slot0" }).catch(() => null) as Promise<readonly [bigint, number, number, number, number, boolean] | null>,
+      ]);
+      if (this.useTickSpacingQuoter && poolTs !== null) {
+        thirdField = poolTs;
+      } else if (poolFee !== null) {
+        thirdField = poolFee;
+      }
+      // Compute concentrated range from --range_pct
+      if (params.range_pct !== undefined && slot0 && poolTs !== null) {
+        const currentTick = slot0[1];
+        // Approximation: 1 tick ≈ 0.01% (1.0001x). ±N% → ±N*100 ticks.
+        const rangeTicks = Math.floor(params.range_pct * 100);
+        tickLower = Math.floor((currentTick - rangeTicks) / poolTs) * poolTs;
+        tickUpper = Math.ceil((currentTick + rangeTicks) / poolTs) * poolTs;
+      }
+    }
+    // Explicit overrides
+    if (params.tick_lower !== undefined) tickLower = params.tick_lower;
+    if (params.tick_upper !== undefined) tickUpper = params.tick_upper;
+
+    const data = this.useTickSpacingQuoter
+      ? encodeFunctionData({
+          abi: slipstreamMintAbi,
+          functionName: "mint",
+          args: [
+            {
+              token0,
+              token1,
+              tickSpacing: thirdField,
+              tickLower,
+              tickUpper,
+              amount0Desired: amount0,
+              amount1Desired: amount1,
+              amount0Min: 0n,
+              amount1Min: 0n,
+              recipient: params.recipient,
+              deadline: BigInt("18446744073709551615"),
+              sqrtPriceX96: 0n,
+            },
+          ],
+        })
+      : encodeFunctionData({
+          abi: positionManagerAbi,
+          functionName: "mint",
+          args: [
+            {
+              token0,
+              token1,
+              fee: thirdField,
+              tickLower,
+              tickUpper,
+              amount0Desired: amount0,
+              amount1Desired: amount1,
+              amount0Min: 0n,
+              amount1Min: 0n,
+              recipient: params.recipient,
+              deadline: BigInt("18446744073709551615"),
+            },
+          ],
+        });
 
     return {
       description: `[${this.protocolName}] Add liquidity`,
@@ -305,9 +381,126 @@ export class UniswapV3Adapter implements IDex {
     };
   }
 
-  async buildRemoveLiquidity(_params: RemoveLiquidityParams): Promise<DeFiTx> {
-    throw DefiError.unsupported(
-      `[${this.protocolName}] remove_liquidity requires tokenId — use NFT position manager directly`,
-    );
+  async buildRemoveLiquidity(params: RemoveLiquidityParams): Promise<DeFiTx> {
+    const pm = this.positionManager;
+    if (!pm) {
+      throw DefiError.contractError(
+        `[${this.protocolName}] Missing 'position_manager' for liquidity removal`,
+      );
+    }
+    if (!params.token_id) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] V3 remove_liquidity requires --token-id (NFT positionId)`,
+      );
+    }
+    const tokenId = params.token_id;
+    const liquidity = params.liquidity;
+    const MAX_UINT128 = (1n << 128n) - 1n;
+    const deadline = BigInt("18446744073709551615");
+    const decreaseData = encodeFunctionData({
+      abi: positionManagerAbi,
+      functionName: "decreaseLiquidity",
+      args: [{ tokenId, liquidity, amount0Min: 0n, amount1Min: 0n, deadline }],
+    });
+    const collectData = encodeFunctionData({
+      abi: positionManagerAbi,
+      functionName: "collect",
+      args: [{ tokenId, recipient: params.recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
+    });
+    const data = encodeFunctionData({
+      abi: positionManagerAbi,
+      functionName: "multicall",
+      args: [[decreaseData, collectData]],
+    });
+    return {
+      description: `[${this.protocolName}] Remove ${liquidity} liquidity from tokenId ${tokenId}`,
+      to: pm,
+      data,
+      value: 0n,
+      gas_estimate: 400_000,
+    };
+  }
+
+  /**
+   * Collect accrued LP trading fees for a CL position via NPM.collect().
+   * Used as the reward path for V3 forks with reward_strategy = "lp_fee_only"
+   * (e.g., HyperSwap V3, Project X — no gauge/emissions, fees are the only reward).
+   */
+  async buildCollectFees(tokenId: bigint, recipient: Address): Promise<DeFiTx> {
+    const pm = this.positionManager;
+    if (!pm) {
+      throw DefiError.contractError(
+        `[${this.protocolName}] Missing 'position_manager' for fee collection`,
+      );
+    }
+    const MAX_UINT128 = (1n << 128n) - 1n;
+    const data = encodeFunctionData({
+      abi: positionManagerAbi,
+      functionName: "collect",
+      args: [{ tokenId, recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
+    });
+    return {
+      description: `[${this.protocolName}] Collect LP fees for tokenId ${tokenId}`,
+      to: pm,
+      data,
+      value: 0n,
+      gas_estimate: 200_000,
+    };
+  }
+
+  /**
+   * Compound: collect accrued fees and immediately re-add them as liquidity to the same position.
+   * Flow: static-call collect to learn fee amounts → multicall([collect, increaseLiquidity]) on NPM.
+   * Requires existing token approvals on the NPM (set during initial mint).
+   * v1: V3 fee-only protocols (Project X, HyperSwap V3). Gauge protocols need swap routing first.
+   */
+  async buildCompound(tokenId: bigint, recipient: Address, opts?: { slippageBps?: number }): Promise<DeFiTx> {
+    const pm = this.positionManager;
+    if (!pm) {
+      throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager' for compound`);
+    }
+    if (!this.rpcUrl) throw DefiError.rpcError("RPC required to preview fees");
+    const MAX_UINT128 = (1n << 128n) - 1n;
+    const deadline = BigInt("18446744073709551615");
+    const slippageBps = BigInt(opts?.slippageBps ?? 50); // default 0.5%
+    if (slippageBps > 10000n) {
+      throw DefiError.invalidParam(`[${this.protocolName}] slippageBps must be <= 10000 (got ${slippageBps})`);
+    }
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    const sim = await client.simulateContract({
+      address: pm,
+      abi: positionManagerAbi,
+      functionName: "collect",
+      args: [{ tokenId, recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
+      account: recipient,
+    });
+    const [amount0, amount1] = sim.result as readonly [bigint, bigint];
+    if (amount0 === 0n && amount1 === 0n) {
+      throw DefiError.invalidParam(`[${this.protocolName}] No fees to compound for tokenId ${tokenId}`);
+    }
+    const amount0Min = (amount0 * (10000n - slippageBps)) / 10000n;
+    const amount1Min = (amount1 * (10000n - slippageBps)) / 10000n;
+    const collectData = encodeFunctionData({
+      abi: positionManagerAbi,
+      functionName: "collect",
+      args: [{ tokenId, recipient, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
+    });
+    const increaseData = encodeFunctionData({
+      abi: positionManagerAbi,
+      functionName: "increaseLiquidity",
+      args: [{ tokenId, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, deadline }],
+    });
+    const data = encodeFunctionData({
+      abi: positionManagerAbi,
+      functionName: "multicall",
+      args: [[collectData, increaseData]],
+    });
+    return {
+      description: `[${this.protocolName}] Compound tokenId ${tokenId}: collect ${amount0}/${amount1} → increaseLiquidity (slippage ${slippageBps}bps)`,
+      to: pm,
+      data,
+      value: 0n,
+      gas_estimate: 500_000,
+    };
   }
 }
