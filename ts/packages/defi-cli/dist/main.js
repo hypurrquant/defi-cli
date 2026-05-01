@@ -8930,7 +8930,6 @@ function registerLP(parent, getOpts, makeExecutor2) {
         gas_estimate: 8e4
       };
       const tx = await lbAdapter.buildRemoveLiquidity({
-        pool: opts.pool,
         tokenX,
         tokenY,
         binStep,
