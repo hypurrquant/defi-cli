@@ -36,6 +36,14 @@ export class Executor {
   }
 
   /**
+   * EIP-1559 max-fee formula: `baseFee * 1.25 + priorityFee`.
+   * Extracted as a static so the math is unit-testable without mocking viem.
+   */
+  static computeMaxFee(baseFeePerGas: bigint, priorityFee: bigint): bigint {
+    return (baseFeePerGas * 125n) / 100n + priorityFee;
+  }
+
+  /**
    * Check allowance for a single token/spender pair and send an approve tx if needed.
    * Only called in broadcast mode (not dry-run).
    */
@@ -189,8 +197,7 @@ export class Executor {
       try {
         const block = await client.getBlock({ blockTag: "latest" });
         if (block.baseFeePerGas !== null && block.baseFeePerGas !== undefined) {
-          const maxFee = (block.baseFeePerGas * 125n) / 100n + priorityFee;
-          return [maxFee, priorityFee];
+          return [Executor.computeMaxFee(block.baseFeePerGas, priorityFee), priorityFee];
         }
       } catch { /* fall through to gas-price path */ }
 

@@ -12,7 +12,7 @@ const CCTP_FEE_API = "https://iris-api.circle.com/v2/burn/USDC/fees";
 // Bridge destinations beyond the source-chain registry.
 // These chains are not registered for source operations (lending/LP/swap) but
 // are valid CCTP/LI.FI/deBridge destinations.
-const DEST_CHAIN_META: Record<string, { chain_id: number; name: string }> = {
+export const DEST_CHAIN_META: Record<string, { chain_id: number; name: string }> = {
   ethereum: { chain_id: 1, name: "Ethereum" },
   optimism: { chain_id: 10, name: "Optimism" },
   polygon: { chain_id: 137, name: "Polygon" },
@@ -22,7 +22,7 @@ const DEST_CHAIN_META: Record<string, { chain_id: number; name: string }> = {
   zksync: { chain_id: 324, name: "zkSync" },
 };
 
-function resolveDestChain(registry: Registry, slug: string): { chain_id: number; name: string } {
+export function resolveDestChain(registry: Registry, slug: string): { chain_id: number; name: string } {
   try {
     const c = registry.getChain(slug);
     return { chain_id: c.chain_id, name: c.name };
@@ -131,7 +131,29 @@ const CCTP_USDC_ADDRESSES: Record<string, string> = {
   polygon: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
 };
 
-async function getCctpFeeEstimate(
+/**
+ * CCTP min-fee guard (v1.0.7). When the burn amount cannot cover the protocol
+ * fee, return a structured error envelope instead of letting the depositForBurn
+ * path return a negative `estimated_output`. Returns `null` when the amount is
+ * sufficient.
+ */
+export function cctpMinFeeGuard(
+  amountWei: bigint,
+  maxFeeSubunits: bigint,
+  feeUsdc: number,
+): { error: string; minimum_amount_wei: string; minimum_amount_usdc: number } | null {
+  if (amountWei <= maxFeeSubunits) {
+    const amountUsdc = Number(amountWei) / 1e6;
+    return {
+      error: `CCTP: amount ${amountWei.toString()} (${amountUsdc} USDC) is below the minimum bridge fee of ${maxFeeSubunits} (${feeUsdc} USDC). Increase --amount.`,
+      minimum_amount_wei: maxFeeSubunits.toString(),
+      minimum_amount_usdc: feeUsdc,
+    };
+  }
+  return null;
+}
+
+export async function getCctpFeeEstimate(
   srcDomain: number,
   dstDomain: number,
   amountUsdc: number,
@@ -247,12 +269,9 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode): void
 
           // Reject when the burn amount cannot cover the protocol fee — otherwise
           // we'd return negative output and the depositForBurn would revert.
-          if (BigInt(opts.amount) <= maxFeeSubunits) {
-            printOutput({
-              error: `CCTP: amount ${opts.amount} (${amountUsdc} USDC) is below the minimum bridge fee of ${maxFeeSubunits} (${fee} USDC). Increase --amount.`,
-              minimum_amount_wei: maxFeeSubunits.toString(),
-              minimum_amount_usdc: fee,
-            }, getOpts());
+          const guardErr = cctpMinFeeGuard(BigInt(opts.amount), maxFeeSubunits, fee);
+          if (guardErr) {
+            printOutput(guardErr, getOpts());
             return;
           }
 

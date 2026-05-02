@@ -7338,6 +7338,13 @@ var Executor = class _Executor {
     return gas * GAS_BUFFER_BPS / 10000n;
   }
   /**
+   * EIP-1559 max-fee formula: `baseFee * 1.25 + priorityFee`.
+   * Extracted as a static so the math is unit-testable without mocking viem.
+   */
+  static computeMaxFee(baseFeePerGas, priorityFee) {
+    return baseFeePerGas * 125n / 100n + priorityFee;
+  }
+  /**
    * Check allowance for a single token/spender pair and send an approve tx if needed.
    * Only called in broadcast mode (not dry-run).
    */
@@ -7457,8 +7464,7 @@ var Executor = class _Executor {
       try {
         const block = await client.getBlock({ blockTag: "latest" });
         if (block.baseFeePerGas !== null && block.baseFeePerGas !== void 0) {
-          const maxFee = block.baseFeePerGas * 125n / 100n + priorityFee;
-          return [maxFee, priorityFee];
+          return [_Executor.computeMaxFee(block.baseFeePerGas, priorityFee), priorityFee];
         }
       } catch {
       }
@@ -11223,6 +11229,17 @@ var CCTP_USDC_ADDRESSES = {
   base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   polygon: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
 };
+function cctpMinFeeGuard(amountWei, maxFeeSubunits, feeUsdc) {
+  if (amountWei <= maxFeeSubunits) {
+    const amountUsdc = Number(amountWei) / 1e6;
+    return {
+      error: `CCTP: amount ${amountWei.toString()} (${amountUsdc} USDC) is below the minimum bridge fee of ${maxFeeSubunits} (${feeUsdc} USDC). Increase --amount.`,
+      minimum_amount_wei: maxFeeSubunits.toString(),
+      minimum_amount_usdc: feeUsdc
+    };
+  }
+  return null;
+}
 async function getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc) {
   try {
     const res = await fetch(`${CCTP_FEE_API}/${srcDomain}/${dstDomain}`);
@@ -11311,12 +11328,9 @@ function registerBridge(parent, getOpts) {
         }
         const amountUsdc = Number(BigInt(opts.amount)) / 1e6;
         const { fee, maxFeeSubunits } = await getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc);
-        if (BigInt(opts.amount) <= maxFeeSubunits) {
-          printOutput({
-            error: `CCTP: amount ${opts.amount} (${amountUsdc} USDC) is below the minimum bridge fee of ${maxFeeSubunits} (${fee} USDC). Increase --amount.`,
-            minimum_amount_wei: maxFeeSubunits.toString(),
-            minimum_amount_usdc: fee
-          }, getOpts());
+        const guardErr = cctpMinFeeGuard(BigInt(opts.amount), maxFeeSubunits, fee);
+        if (guardErr) {
+          printOutput(guardErr, getOpts());
           return;
         }
         const recipientPadded = `0x${"0".repeat(24)}${recipient.replace("0x", "").toLowerCase()}`;

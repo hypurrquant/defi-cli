@@ -40,26 +40,44 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check & build
-        run: pnpm build
+        run: pnpm -r build
 
       - name: Lint
         run: pnpm -r lint
 
       - name: Unit tests
-        run: pnpm test || true
+        # Failures must fail CI — `|| true` muted real regressions before.
+        run: pnpm -r test
 
       - name: Package smoke test
         run: |
           cd packages/defi-cli
           pnpm pack
           TARBALL=$(ls hypurrquant-defi-cli-*.tgz)
-          tar -tzf "$TARBALL" | grep 'dist/main.js'
-          tar -tzf "$TARBALL" | grep 'config/chains.toml'
+          # Verify publish artifact contains expected files. v1.0.2 shipped a
+          # stale config snapshot (only 2 chains); a smoke check on the
+          # tarball would have caught it pre-publish.
+          tar -tzf "$TARBALL" | grep -q 'package/dist/main.js'
+          tar -tzf "$TARBALL" | grep -q 'package/dist/mcp-server.js'
+          tar -tzf "$TARBALL" | grep -q 'package/config/chains.toml'
+          # Sanity: chains.toml must list all 5 source chains.
+          chain_count=$(tar -xzOf "$TARBALL" package/config/chains.toml | grep -cE '^\[chain\.(hyperevm|mantle|base|bnb|monad)\]')
+          test "$chain_count" = "5" || (echo "Expected 5 source chains in shipped chains.toml, got $chain_count" && exit 1)
+          # Install the tarball into a fresh dir and exercise both --version
+          # and --help to confirm the bin entry resolves.
           mkdir -p /tmp/smoke-test
           cd /tmp/smoke-test
           npm init -y > /dev/null 2>&1
           npm install "$GITHUB_WORKSPACE/ts/packages/defi-cli/$TARBALL" > /dev/null 2>&1
-          npx defi --help
+          npx defi --version
+          npx defi --help 2>&1 | grep -qE '[0-9]+ chains · [0-9]+ protocols' \
+            || (echo "Banner missing dynamic chain/protocol count" && exit 1)
+          # Each source chain's status must return JSON with at least one
+          # protocol — guards against v1.0.3-class stale-config regressions.
+          for c in hyperevm mantle base bnb monad; do
+            npx defi --json --chain $c status | grep -q '"slug":' \
+              || (echo "no protocols for $c — config likely stale" && exit 1)
+          done
 
   release:
     name: GitHub Release
