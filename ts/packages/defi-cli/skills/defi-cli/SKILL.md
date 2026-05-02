@@ -5,7 +5,7 @@ allowed-tools: "Bash(defi:*), Bash(npx defi-cli:*), Bash(npx -y defi-cli:*)"
 license: MIT
 metadata:
   author: hypurrquant
-  version: "1.0.0"
+  version: "1.0.11"
 ---
 
 # defi-cli Agent Guide
@@ -58,6 +58,29 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 | `monad` | Monad | 143 | 🟡 staged |
 
 🟢 = mainnet broadcast verified | 🟡 = configs verified, awaiting funded broadcast
+
+## References
+
+- **`references/protocols.md`** — full protocol slug catalog per chain (39 protocols across 5 chains)
+- **`references/commands.md`** — every CLI command with flags, dry-run shape, and JSON envelope notes
+
+## Scripts (`scripts/`)
+
+Copy-paste runnable usage recipes. Each script honours `DEFI_CMD` (override the binary name, e.g. `DEFI_CMD="npx -y -p @hypurrquant/defi-cli@latest defi"`) and emits JSON on stdout, status on stderr.
+
+| Script | What it does | Invocation |
+|---|---|---|
+| `preflight.sh` | Verify install + wallet env | `bash preflight.sh` |
+| `yield-scan.sh` | Best supply APY across all chains | `ASSET=USDC bash yield-scan.sh` |
+| `lp-emission-discover.sh` | Active emission pools sorted by APR | `bash lp-emission-discover.sh mantle merchantmoe-mantle` |
+| `swap-quote.sh` | Compare every supported aggregator (dry-run) | `CHAIN=base FROM=WETH TO=USDC AMOUNT=10000000000000000 bash swap-quote.sh` |
+| `bridge-quote.sh` | Compare LI.FI / deBridge / CCTP (dry-run) | `FROM_CHAIN=base TO_CHAIN=arbitrum TOKEN=USDC AMOUNT=100000000 bash bridge-quote.sh` |
+| `lending-supply-flow.sh` | yield → rates → position → dry-run supply | `CHAIN=hyperevm PROTOCOL=hyperlend ASSET=USDC AMOUNT=1000000 bash lending-supply-flow.sh` |
+| `lp-claim-all.sh` | List all LP positions + claim CLI hints | `WALLET=0xABC… bash lp-claim-all.sh mantle` |
+| `portfolio-snapshot.sh` | Snapshot + PnL for a wallet | `WALLET=0xABC… bash portfolio-snapshot.sh hyperevm` |
+| `wallet-status.sh` | Resolved wallet + native balance per chain | `bash wallet-status.sh` |
+
+All `*-quote.sh` and `lending-supply-flow.sh` scripts are **dry-run only** — they never touch `--broadcast`. Add `--broadcast` to the printed CLI yourself after user confirmation.
 
 ## Protocol Slugs by Chain
 
@@ -166,6 +189,19 @@ Bridge **source** must be a supported chain (hyperevm/mantle/base/bnb/monad). Br
 | `No fees to compound` | V3 position has no accumulated fees yet — wait for swaps to cross range |
 | `No pools found` | protocol may be inactive on this chain or discover branch missing config |
 | `DEFI_WALLET_ADDRESS not set` | set env var or pass `--address` |
+| `tokenId X has zero liquidity` | NFT position already removed; verify with `lp positions` |
+| `failed_probes[]` in yield output | RPC transport failure (not "asset unsupported"); set `<CHAIN>_RPC_URL` and retry |
+| `WARNING: no wallet configured` on stderr | dry-run preview using placeholder `0x000…001`; do **NOT** pass `--broadcast` until wallet is set |
+
+## Recent Behaviour Notes (v1.0.5 → v1.0.11 + post-release fixes)
+
+- **`lp remove` (V3 / Slipstream / Hybra / Algebra)** — pass only `--token-id`; `--token-a/--token-b/--liquidity` are optional. Liquidity is read from `NPM.positions(tokenId)` automatically.
+- **`schema <action>`** accepts hyphenated names (`schema lending-supply` ≡ `schema lending.supply`).
+- **`yield optimize` / `yield compare`** distinguishes "no opportunities" from "RPC failed" — failure surfaces a `failed_probes[]` envelope with per-protocol reason and a hint to set `<CHAIN>_RPC_URL`.
+- **`portfolio show` / `snapshot`** prices each asset via its own oracle (ERC20s no longer mispriced at the native rate) and includes the native gas-token balance in `total_value_usd`.
+- **`wallet address`** with no wallet returns `{ "address": null, "source": "none" }` (machine-parseable; the legacy `"(not set)"` sentinel is gone).
+- **`bridge --provider cctp`** below the protocol min-fee returns a structured error envelope with `minimum_amount_wei` / `minimum_amount_usdc` (no broadcast attempt).
+- **`setup`** masks API keys when displaying RPC URLs and suppresses key-echo when prompting for a private key; only `http://`/`https://` URLs are accepted.
 
 ## Examples
 

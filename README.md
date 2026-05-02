@@ -28,7 +28,53 @@ node packages/defi-cli/dist/main.js
 pnpm -C packages/defi-cli link --global
 ```
 
-Requires Node.js >= 20 and pnpm.
+Or from npm:
+
+```bash
+npm install -g @hypurrquant/defi-cli@latest
+defi --version
+# or one-shot
+npx -y @hypurrquant/defi-cli@latest --json status
+```
+
+Requires Node.js >= 20 and pnpm (for the source build).
+
+## AI Agent Skill (Claude Code / SDK)
+
+The npm package ships a Claude-compatible skill at `skills/defi-cli/` that gives an agent inline guidance for every command, dry-run safety rules, and ready-to-run usage scripts. After `npm install -g @hypurrquant/defi-cli@latest`:
+
+```bash
+# Find the bundled skill folder
+SKILL_SRC="$(npm root -g)/@hypurrquant/defi-cli/skills/defi-cli"
+
+# Install for the current user (Claude Code, Claude Agent SDK, claude.ai)
+mkdir -p ~/.claude/skills
+ln -sfn "$SKILL_SRC" ~/.claude/skills/defi-cli
+
+# Or per-project (overrides the global install for this repo only)
+mkdir -p .claude/skills
+ln -sfn "$SKILL_SRC" .claude/skills/defi-cli
+```
+
+Verify with `ls ~/.claude/skills/defi-cli/SKILL.md`. The skill auto-activates when the user prompt mentions any of the trigger keywords (chain names, protocol slugs, "swap", "lending", "bridge", "yield", etc.).
+
+The skill bundles:
+
+- `SKILL.md` — agent-facing usage guide (rules, workflows, error recovery, recent-fix notes for v1.0.5–v1.0.11)
+- `references/protocols.md` — full slug catalog per chain
+- `references/commands.md` — every CLI command with flags and JSON envelope shapes
+- `scripts/` — copy-paste runnable recipes:
+  - `preflight.sh` — install + wallet env check
+  - `yield-scan.sh` — best supply APY across all chains
+  - `lp-emission-discover.sh` — active emission pools sorted by APR
+  - `swap-quote.sh` — compare every supported aggregator (dry-run)
+  - `bridge-quote.sh` — compare LI.FI / deBridge / CCTP (dry-run)
+  - `lending-supply-flow.sh` — yield → rates → position → dry-run supply
+  - `lp-claim-all.sh` — list LP positions + print claim CLI hints
+  - `portfolio-snapshot.sh` — snapshot + PnL for a wallet
+  - `wallet-status.sh` — resolved wallet + native balance per chain
+
+The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integration over CLI invocation. See `mcp-config.example.json` for the JSON entry to drop into `~/.claude/settings.json` or `.mcp.json`.
 
 ## Supported Chains
 

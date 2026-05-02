@@ -1,208 +1,247 @@
 ---
 name: defi-cli
-description: DeFi protocol interaction across 11 EVM chains. Scan exploits, swap tokens, bridge assets, track whales, check lending rates, and manage positions. Use when user asks about DeFi prices, yields, whale wallets, cross-chain bridging, token swaps, lending rates, or exploit detection. Supports Ethereum, Mantle, Arbitrum, Base, BNB, Polygon, Avalanche, Optimism, Scroll, Linea, HyperEVM.
+description: "Multi-chain DeFi operations CLI for HyperEVM, Mantle, Base, BNB, Monad. Use when user asks to: supply/withdraw from lending, swap tokens via aggregator, add/remove/claim LP, bridge assets, manage LP autopilot, claim emission rewards, compound positions, compare APYs, check prices, track portfolio, or mentions defi-cli, HyperEVM, Mantle, Base, Aerodrome, Merchant Moe, KittenSwap, Ramses, Uniswap, Aave, Compound, Morpho, KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay."
+allowed-tools: "Bash(defi:*), Bash(npx defi-cli:*), Bash(npx -y defi-cli:*)"
 license: MIT
-compatibility: Requires Rust toolchain and internet access for on-chain RPC queries. Works with Claude Code, Claude.ai, and API.
 metadata:
-  author: HypurrQuant
-  version: 0.2.0
-  mcp-server: defi-mcp
+  author: hypurrquant
+  version: "1.0.11"
 ---
 
-# DeFi CLI
+# defi-cli Agent Guide
 
-Multi-chain DeFi toolkit for AI agents. Query on-chain data, scan for exploits, get swap quotes, bridge assets, and track whale positions across 11 EVM chains with 108 protocols.
+Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, yield comparison.
 
-## Setup
+**5 chains · 39 protocols · 5 DEX aggregators**
 
-### Option 1: MCP Server (Recommended)
+## Rules
 
-The MCP server gives you direct tool access. Install and configure:
+1. **Always use `--json`** on every command.
+2. **Always use `--dry-run`** (default) before any mutating transaction. Only add `--broadcast` after user confirms.
+3. **Always use `--chain`** for transaction commands. Query commands (`yield scan`, `status`) scan all chains by default.
+4. **NEVER broadcast without user confirmation.**
+5. **NEVER read private key files or `~/.` config files.**
+6. **Amounts are in wei** (18 decimals for native/WETH, 6 for USDC/USDT). Use `BigInt(humanAmount * 10**decimals)` to convert.
 
-```bash
-# Build from source
-git clone https://github.com/hypurrquant/defi-cli.git
-cd defi-cli
-cargo build --release --bin defi-mcp
-```
-
-Add to your MCP config (`~/.claude/settings.json` or project `.mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "defi": {
-      "command": "/path/to/defi-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-This exposes 18 tools: `defi_status`, `defi_scan`, `defi_scan_all`, `defi_swap_quote`, `defi_bridge_quote`, `defi_whales`, `defi_positions`, `defi_yield_compare`, `defi_lending_rates`, `defi_lending_position`, `defi_price`, `defi_dex_swap`, `defi_lending_supply`, `defi_lending_borrow`, `defi_token_approve`, `defi_staking_info`, `defi_portfolio`, `defi_list_protocols`.
-
-### Option 2: CLI Binary
+## Install
 
 ```bash
-cargo build --release --bin defi
-# Use via Bash tool
+defi --version 2>/dev/null            # check if installed
+npm install -g @hypurrquant/defi-cli@latest
+# or
+npx -y @hypurrquant/defi-cli@latest --json status
 ```
 
-## Available Tools (MCP)
+Use `defi` if global install works, otherwise `npx -y -p @hypurrquant/defi-cli@latest defi` as prefix.
 
-### Read-Only (Safe, No Confirmation Needed)
+## Global Flags
 
-**defi_status** — Get chain info, protocols, and tokens
-```
-Input: { "chain": "mantle" }
-Output: { chain, chain_id, protocols[], tokens[], summary }
-```
+`--json` (required) | `--chain <chain>` (hyperevm, mantle, base, bnb, monad) | `--dry-run` (default, safe) | `--broadcast` (executes tx) | `--fields <f1,f2>` | `--ndjson`
 
-**defi_scan** — Detect oracle divergence, stablecoin depeg, exchange rate anomalies on one chain
-```
-Input: { "chain": "mantle", "oracle_threshold": 5.0 }
-Output: { alerts[], scan_duration_ms, data: { oracle_prices, dex_prices, stablecoin_pegs } }
-```
+**Wallet**: set `DEFI_WALLET_ADDRESS` env for read queries. Set `DEFI_PRIVATE_KEY` for tx signing. Or use `DEFI_WALLET_ADDRESS=ows:<name>` after `defi ows create <name>` for encrypted vault.
 
-**defi_scan_all** — Scan ALL 11 chains in parallel (~1 second)
-```
-Input: { "patterns": "oracle,stable" }
-Output: { total_alerts, chains_scanned, chains: [{ chain, alerts[] }] }
+## Environment
+
+```bash
+export DEFI_WALLET_ADDRESS=0xYourAddress
+export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 ```
 
-**defi_swap_quote** — Best-price swap quote via ODOS aggregator (routes through all DEXes)
+## Chains
+
+| Alias | Chain | Chain ID | Status |
+|-------|-------|----------|--------|
+| `hyperevm` | HyperEVM | 999 | 🟢 production |
+| `mantle` | Mantle | 5000 | 🟢 production |
+| `base` | Base | 8453 | 🟢 production |
+| `bnb` | BNB Chain | 56 | 🟡 staged |
+| `monad` | Monad | 143 | 🟡 staged |
+
+🟢 = mainnet broadcast verified | 🟡 = configs verified, awaiting funded broadcast
+
+## References
+
+- **`references/protocols.md`** — full protocol slug catalog per chain (39 protocols across 5 chains)
+- **`references/commands.md`** — every CLI command with flags, dry-run shape, and JSON envelope notes
+
+## Scripts (`scripts/`)
+
+Copy-paste runnable usage recipes. Each script honours `DEFI_CMD` (override the binary name, e.g. `DEFI_CMD="npx -y -p @hypurrquant/defi-cli@latest defi"`) and emits JSON on stdout, status on stderr.
+
+| Script | What it does | Invocation |
+|---|---|---|
+| `preflight.sh` | Verify install + wallet env | `bash preflight.sh` |
+| `yield-scan.sh` | Best supply APY across all chains | `ASSET=USDC bash yield-scan.sh` |
+| `lp-emission-discover.sh` | Active emission pools sorted by APR | `bash lp-emission-discover.sh mantle merchantmoe-mantle` |
+| `swap-quote.sh` | Compare every supported aggregator (dry-run) | `CHAIN=base FROM=WETH TO=USDC AMOUNT=10000000000000000 bash swap-quote.sh` |
+| `bridge-quote.sh` | Compare LI.FI / deBridge / CCTP (dry-run) | `FROM_CHAIN=base TO_CHAIN=arbitrum TOKEN=USDC AMOUNT=100000000 bash bridge-quote.sh` |
+| `lending-supply-flow.sh` | yield → rates → position → dry-run supply | `CHAIN=hyperevm PROTOCOL=hyperlend ASSET=USDC AMOUNT=1000000 bash lending-supply-flow.sh` |
+| `lp-claim-all.sh` | List all LP positions + claim CLI hints | `WALLET=0xABC… bash lp-claim-all.sh mantle` |
+| `portfolio-snapshot.sh` | Snapshot + PnL for a wallet | `WALLET=0xABC… bash portfolio-snapshot.sh hyperevm` |
+| `wallet-status.sh` | Resolved wallet + native balance per chain | `bash wallet-status.sh` |
+
+All `*-quote.sh` and `lending-supply-flow.sh` scripts are **dry-run only** — they never touch `--broadcast`. Add `--broadcast` to the printed CLI yourself after user confirmation.
+
+## Protocol Slugs by Chain
+
+For full protocol list see `references/protocols.md`. High-level summary:
+
+### HyperEVM (11)
+**Lending**: `hyperlend`, `hypurrfi`, `felix-morpho` · **DEX**: `project-x`, `hyperswap`, `curve-hyperevm`, `ramses-cl`, `ramses-hl`, `kittenswap`, `hybra`, `nest`
+
+### Mantle (3)
+**Lending**: `aave-v3-mantle` · **DEX**: `uniswap-v3-mantle`, `merchantmoe-mantle` (LB + MOE emission)
+
+### Base (5)
+**Lending**: `aave-v3-base`, `compound-v3-base` · **DEX**: `uniswap-v3-base`, `aerodrome-base` (V2 + AERO), `aerodrome-cl` (Slipstream + AERO)
+
+### BNB (16)
+**Lending**: `aave-v3-bnb`, `kinza-bnb`, `venus-bnb`, `venus-flux-bnb` · **DEX**: `pancakeswap-v3-bnb` (+ MasterChef CAKE), `pancakeswap-v2-bnb`, `uniswap-v3-bnb`, `thena-v1`, `thena-fusion`, `biswap-bnb`, `apeswap-bnb`, `bakeryswap-bnb`, `bscswap-bnb`, `babydogeswap-bnb`, `fstswap-bnb` · **Vault**: `beefy-bnb`
+
+### Monad (4)
+`uniswap-v2-monad`, `uniswap-v3-monad`, `traderjoe-monad` (LB), `morpho-blue-monad`
+
+## DEX Aggregator Providers
+
+| Provider | Supported chains | Notes |
+|----------|------------------|-------|
+| KyberSwap | hyperevm, base, bnb | Default for HyperEVM |
+| OpenOcean | hyperevm, mantle, base, bnb | Universal fallback |
+| LiquidSwap | hyperevm | HyperEVM-native (LiquidLaunch) |
+| LI.FI | all source chains via chainId | Cross-chain swaps too |
+| Relay | all source chains via chainId | Multi-step routes (auto skip approve step) |
+
+## Core Workflow: Lending
+
 ```
-Input: { "chain": "mantle", "from": "USDC", "to": "WMNT", "amount": 1000 }
-Output: { amount_out, effective_price, price_impact_pct, aggregator }
+1. defi --json yield scan --asset USDC                                          # compare APYs across all chains
+2. defi --json --chain hyperevm lending position --protocol hyperlend           # check position
+3. defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000   # dry-run
+4. [show result to user, get confirmation]
+5. defi --json --chain hyperevm lending supply --protocol hyperlend --asset USDC --amount 1000000000 --broadcast
+6. defi --json --chain hyperevm lending position --protocol hyperlend           # verify
 ```
 
-**defi_bridge_quote** — Cross-chain bridge quote via LI.FI
-```
-Input: { "from_chain": "mantle", "to_chain": "ethereum", "token": "USDC", "amount": 1000 }
-Output: { amount_out, fee_usd, gas_usd, total_cost_usd, bridge, estimated_time_sec }
-```
+## Core Workflow: DEX Aggregator Swap
 
-**defi_whales** — Find top token holders on a chain (free API for ETH, AVAX, OP, Mantle)
 ```
-Input: { "chain": "mantle", "token": "WETH", "top": 10 }
-Output: { holders: [{ rank, address, balance }] }
+1. defi --json --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei>   # dry-run via LI.FI
+2. [confirm with user]
+3. defi --json --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei> --broadcast
 ```
 
-**defi_positions** — Scan wallet positions across all chains in parallel (~1.5s for 11 chains)
-```
-Input: { "address": "0x...", "chains": "mantle,ethereum" }
-Output: { total_value_usd, chains: [{ chain, token_balances[], lending_positions[] }] }
-```
+## Core Workflow: LP with Emission Claim (Merchant Moe LB)
 
-**defi_yield_compare** — Compare lending yields across protocols on a chain
 ```
-Input: { "chain": "mantle", "asset": "USDC" }
-Output: { rates: [{ protocol, supply_apy, borrow_variable_apy }], best_supply }
-```
-
-**defi_lending_rates** — Get rates for a specific protocol and asset
-```
-Input: { "chain": "mantle", "protocol": "aave-v3-mantle", "asset": "USDC" }
-Output: { supply_apy, borrow_variable_apy, utilization }
+1. defi --json --chain mantle lp discover --protocol merchantmoe-mantle --emission-only   # active emission pools sorted by APR
+2. defi --json --chain mantle lp add --protocol merchantmoe-mantle --token-a WMNT --token-b USDT0 \
+     --amount-a <wei> --amount-b <wei> --pool 0x... --num-bins 3 --broadcast
+3. defi --json --chain mantle lp positions --protocol merchantmoe-mantle           # see active positions + pending MOE
+4. defi --json --chain mantle lp claim --protocol merchantmoe-mantle --pool 0x... --broadcast   # auto-detects user's actual bins
+5. defi --json --chain mantle lp remove --protocol merchantmoe-mantle --token-a WMNT --token-b USDT0 \
+     --pool 0x... --bins <bin1>,<bin2> --broadcast
 ```
 
-**defi_price** — Query asset price from oracles
-```
-Input: { "chain": "mantle", "asset": "WETH" }
-Output: { sources: [{ source, price }] }
-```
+## Core Workflow: LP with NFT Gauge (Aerodrome Slipstream / Hybra V4)
 
-**defi_list_protocols** — List all protocols, filter by chain and category
 ```
-Input: { "chain": "mantle", "category": "lending" }
-Output: { protocols[], count }
+1. defi --json --chain base lp farm --protocol aerodrome-cl --token-a WETH --token-b USDC \
+     --amount-a <wei> --amount-b <wei> --range 5 --pool 0x... --broadcast      # mint + auto-stake
+2. defi --json --chain base lp claim --protocol aerodrome-cl --gauge 0x... --token-id <id> --broadcast   # claim AERO
+3. defi --json --chain base lp remove --protocol aerodrome-cl --token-a WETH --token-b USDC \
+     --liquidity <amount> --token-id <id> --gauge 0x... --broadcast       # auto-unstake + remove
 ```
 
-### Transaction Building (Dry-Run by Default)
+## Core Workflow: V3 Fee Auto-Compound
 
-**defi_dex_swap** — Build a DEX swap transaction
 ```
-Input: { "chain": "hyperevm", "protocol": "hyperswap-v3", "token_in": "WHYPE", "token_out": "USDC", "amount": "100" }
-```
-
-**defi_lending_supply** — Build a lending supply transaction
-```
-Input: { "chain": "mantle", "protocol": "aave-v3-mantle", "asset": "USDC", "amount": "1000" }
+1. defi --json --chain base lp compound --protocol uniswap-v3-base --token-id <id> --slippage 50  # static-call detects fees
+2. [if fees > 0, confirm and re-run with --broadcast]
+3. defi --json --chain base lp compound --protocol uniswap-v3-base --token-id <id> --broadcast
 ```
 
-**defi_lending_borrow** — Build a lending borrow transaction
+## Core Workflow: Cross-chain Bridge
+
+Bridge **source** must be a supported chain (hyperevm/mantle/base/bnb/monad). Bridge **destination** can be any chain LI.FI/deBridge route to, or any CCTP V2 chain (ethereum, arbitrum, optimism, polygon, avalanche, base).
+
 ```
-Input: { "chain": "mantle", "protocol": "aave-v3-mantle", "asset": "USDC", "amount": "500" }
+1. defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider lifi   # dry-run
+2. [confirm cost + ETA]
+3. defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider lifi --broadcast
 ```
 
-**defi_token_approve** — Build a token approval transaction
+## Core Workflow: Yield Comparison
+
 ```
-Input: { "chain": "mantle", "token": "USDC", "spender": "0x...", "amount": "max" }
+1. defi --json yield scan --asset USDC                                  # all chains, all protocols
+2. defi --json --chain mantle yield compare --asset USDT                # one chain only
+3. defi --json yield optimize --asset USDC --amount 100000000           # auto-strategy with diversification
 ```
-
-## Supported Chains
-
-All tools accept a `chain` parameter. Default: `hyperevm`.
-
-| Chain | ID | Protocols | Key DEX | Key Lending |
-|-------|-----|-----------|---------|-------------|
-| hyperevm | 999 | 22 | HyperSwap | HyperLend |
-| mantle | 5000 | 8 | Merchant Moe, Agni | Aave V3, Lendle |
-| ethereum | 1 | 8 | Uniswap V2/V3 | Aave V3, Compound, Spark |
-| arbitrum | 42161 | 10 | Camelot, Uniswap | Aave V3 |
-| base | 8453 | 11 | Aerodrome, Uniswap | Aave V3 |
-| bnb | 56 | 16 | PancakeSwap | Aave V3, Venus |
-| polygon | 137 | 8 | QuickSwap, Uniswap | Aave V3 |
-| avalanche | 43114 | 6 | TraderJoe, Pangolin | Aave V3, Benqi |
-| optimism | 10 | 6 | Velodrome, Uniswap | Aave V3 |
-| scroll | 534352 | 5 | SushiSwap | Aave V3 |
-| linea | 59144 | 8 | Lynex, Nile | Aave V3, Mendi |
-
-## Common Workflows
-
-### Find best yield for USDC
-
-1. Call `defi_yield_compare` for each chain with `asset: "USDC"`
-2. Compare `supply_apy` across results
-3. Recommend the highest yield with chain and protocol name
-
-### Track a whale
-
-1. Call `defi_whales` with token and chain to find top holders
-2. Call `defi_positions` with the whale's address to see their full portfolio
-3. Report holdings and lending positions
-
-### Detect exploits
-
-1. Call `defi_scan_all` to scan all 11 chains simultaneously
-2. Review alerts for oracle divergence (price mismatch between oracle and DEX)
-3. Report any alerts with severity and recommended action
-
-### Get swap quote
-
-1. Call `defi_swap_quote` with chain, from/to tokens, and amount
-2. Report the output amount, price impact, and aggregator used
-3. For execution: build TX via `defi_dex_swap` with specific protocol
-
-### Bridge assets
-
-1. Call `defi_bridge_quote` with source/destination chains and amount
-2. Report the received amount, total cost, estimated time, and bridge used
 
 ## Error Handling
 
-If a tool returns an error:
+| Error | Action |
+|-------|--------|
+| `Chain not found: X` | use one of: hyperevm, mantle, base, bnb, monad |
+| `Protocol not found: X` | run `defi --json status` to list valid slugs for the chain |
+| `KyberSwap: unsupported chain` | use openocean, lifi, or relay |
+| `AMOUNT_TOO_LOW` (Relay) | increase amount or switch provider |
+| `No fees to compound` | V3 position has no accumulated fees yet — wait for swaps to cross range |
+| `No pools found` | protocol may be inactive on this chain or discover branch missing config |
+| `DEFI_WALLET_ADDRESS not set` | set env var or pass `--address` |
+| `tokenId X has zero liquidity` | NFT position already removed; verify with `lp positions` |
+| `failed_probes[]` in yield output | RPC transport failure (not "asset unsupported"); set `<CHAIN>_RPC_URL` and retry |
+| `WARNING: no wallet configured` on stderr | dry-run preview using placeholder `0x000…001`; do **NOT** pass `--broadcast` until wallet is set |
 
-- **"Chain not found"**: Check chain name spelling. Use lowercase: `mantle`, `ethereum`, `bnb`
-- **"Token not found"**: Check token symbol. Use uppercase: `USDC`, `WETH`, `WMNT`
-- **"Protocol not found"**: Use the slug from `defi_list_protocols`
-- **"RPC error"**: Chain RPC may be temporarily down. Retry or try a different chain
-- **"Explorer API error"**: Whale tracking uses routescan (free for ETH, AVAX, OP, Mantle). Other chains need `ETHERSCAN_API_KEY`
+## Recent Behaviour Notes (v1.0.5 → v1.0.11 + post-release fixes)
 
-## Limitations
+- **`lp remove` (V3 / Slipstream / Hybra / Algebra)** — pass only `--token-id`; `--token-a/--token-b/--liquidity` are optional. Liquidity is read from `NPM.positions(tokenId)` automatically.
+- **`schema <action>`** accepts hyphenated names (`schema lending-supply` ≡ `schema lending.supply`).
+- **`yield optimize` / `yield compare`** distinguishes "no opportunities" from "RPC failed" — failure surfaces a `failed_probes[]` envelope with per-protocol reason and a hint to set `<CHAIN>_RPC_URL`.
+- **`portfolio show` / `snapshot`** prices each asset via its own oracle (ERC20s no longer mispriced at the native rate) and includes the native gas-token balance in `total_value_usd`.
+- **`wallet address`** with no wallet returns `{ "address": null, "source": "none" }` (machine-parseable; the legacy `"(not set)"` sentinel is gone).
+- **`bridge --provider cctp`** below the protocol min-fee returns a structured error envelope with `minimum_amount_wei` / `minimum_amount_usdc` (no broadcast attempt).
+- **`setup`** masks API keys when displaying RPC URLs and suppresses key-echo when prompting for a private key; only `http://`/`https://` URLs are accepted.
 
-- Swap quotes via ODOS: 9/11 chains (not Scroll)
-- Bridge quotes via LI.FI: 10/11 chains
-- Whale tracking (free): 4/11 chains (ETH, AVAX, OP, Mantle). Others need API key
-- Transaction execution requires `DEFI_PRIVATE_KEY` and `--broadcast` flag
-- Exchange rate monitoring only on Compound V2 forks (Venus, Sonne)
+## Examples
+
+**"What are the best USDC lending rates across all chains?"**
+```bash
+defi --json yield scan --asset USDC
+```
+
+**"Add LP to WMNT/USDT0 on Mantle and earn MOE"**
+```bash
+defi --json --chain mantle lp add --protocol merchantmoe-mantle --token-a WMNT --token-b USDT0 \
+  --amount-a 1000000000000000000 --amount-b 600000 --pool 0x03BeafC0d25BB553fCa274301832419C05269987 --num-bins 3 --broadcast
+```
+
+**"Show all my LP positions and pending rewards on Mantle"**
+```bash
+defi --json --chain mantle lp positions --protocol merchantmoe-mantle
+```
+
+**"Claim AERO from my Aerodrome Slipstream NFT"**
+```bash
+defi --json --chain base lp claim --protocol aerodrome-cl --gauge 0xF33a96b5932D9E9B9A0eDA447AbD8C9d48d2e0c8 --token-id <id> --broadcast
+```
+
+**"Swap 1 ETH to USDC on Base via best route"**
+```bash
+defi --json --chain base swap --provider kyber --from WETH --to USDC --amount 1000000000000000000
+```
+
+**"Bridge 100 USDC from Base to Arbitrum via CCTP"**
+```bash
+defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider cctp --broadcast
+```
+
+**"Check my portfolio on Base"**
+```bash
+defi --json --chain base portfolio show --address 0xYourAddress
+```
+
+**"Find all Aerodrome Slipstream emission pools sorted by APR"**
+```bash
+defi --json --chain base lp discover --protocol aerodrome-cl --emission-only
+```
