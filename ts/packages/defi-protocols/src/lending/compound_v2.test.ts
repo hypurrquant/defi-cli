@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { decodeFunctionData, parseAbi } from "viem";
 import type { Address } from "viem";
 import type { ProtocolEntry } from "@hypurrquant/defi-core";
-import { ProtocolCategory } from "@hypurrquant/defi-core";
+import { InterestRateMode, ProtocolCategory } from "@hypurrquant/defi-core";
 
 const VUSDT = "0xfD5840Cd36d94D7229439859C0112a4185BC0255" as Address;
 const VUSDC = "0xecA88125a5ADbe82614ffC12D0DB554E2e2867C8" as Address;
@@ -117,7 +117,7 @@ describe("CompoundV2Adapter — v1.0.8 builder regressions", () => {
       protocol: "Venus",
       asset: USDC_UNDERLYING,
       amount: 750_000n,
-      interest_rate_mode: 2,
+      interest_rate_mode: InterestRateMode.Variable,
       on_behalf_of: "0x000000000000000000000000000000000000dEaD" as Address,
     });
     expect(tx.to).toBe(VUSDC);
@@ -155,7 +155,7 @@ describe("CompoundV2Adapter — v1.0.8 builder regressions", () => {
       protocol: "Venus",
       asset: USDT_UNDERLYING,
       amount: 250_000n,
-      interest_rate_mode: 2,
+      interest_rate_mode: InterestRateMode.Variable,
       on_behalf_of: "0x000000000000000000000000000000000000dEaD" as Address,
     });
     expect(tx.approvals?.[0]?.token).toBe(USDT_UNDERLYING);
