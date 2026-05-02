@@ -2080,12 +2080,16 @@ var init_dist2 = __esm({
           functionName: "add_liquidity",
           args: [[params.amount_a, params.amount_b], 0n]
         });
+        const approvals = [];
+        if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: this.router, amount: params.amount_a });
+        if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: this.router, amount: params.amount_b });
         return {
           description: `[${this.protocolName}] Curve add liquidity`,
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 4e5
+          gas_estimate: 4e5,
+          approvals
         };
       }
       async buildRemoveLiquidity(params) {

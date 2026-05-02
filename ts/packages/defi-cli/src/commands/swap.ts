@@ -308,12 +308,23 @@ export function registerSwap(
             wallet,
           );
 
+          // Native gas tokens are paid via tx.value, not pulled by the router,
+          // so attaching an approvals[] entry would just trigger a doomed
+          // allowance() probe in dry-run / a no-op approve in broadcast.
+          // The executor's sentinel-skip is a safety net; suppressing the
+          // entry here keeps dry-run output honest about what actually moves.
+          const fromLower = (fromAddr as string).toLowerCase();
+          const isNativeInput =
+            fromLower === "0x0000000000000000000000000000000000000000" ||
+            fromLower === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
           const tx = {
             description: `OpenOcean: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
             to: swap.to as Address,
             data: swap.data as `0x${string}`,
             value: parseBigIntValue(swap.value),
-            approvals: [{ token: fromAddr as Address, spender: swap.to as Address, amount: BigInt(opts.amount as string) }],
+            ...(isNativeInput
+              ? {}
+              : { approvals: [{ token: fromAddr as Address, spender: swap.to as Address, amount: BigInt(opts.amount as string) }] }),
           };
 
           const result = await executor.execute(tx);

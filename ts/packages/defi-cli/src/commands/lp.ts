@@ -63,7 +63,7 @@ function buildCmd(parts: Array<[string, string | undefined, string]>): string {
  * (or `<placeholder>` for unknown values).
  */
 function buildPipelineSteps(
-  p: { slug: string; reward_strategy?: string },
+  p: { slug: string; reward_strategy?: string; interface?: string },
   input: PipelineInput = {},
 ): PipelineStep[] {
   const slug = p.slug;
@@ -97,6 +97,15 @@ function buildPipelineSteps(
     ["--protocol", slug, "slug"],
     ["--gauge", input.gauge, "gauge-from-voter.gaugeForPool"],
   ]);
+  // Ramses CL auto_stake (uniswap_v3 interface): claim path goes through
+  // NPM.getPeriodReward which needs the position tokenId in addition to the
+  // gauge address. Earlier pipeline output omitted --token-id so the printed
+  // copy-paste command failed at the CLI before reaching the on-chain call.
+  const claimAutoStakeNftGauge = () => `defi ${chainFlag}lp claim ` + buildCmd([
+    ["--protocol", slug, "slug"],
+    ["--gauge", input.gauge, "gauge-from-voter.gaugeForPool"],
+    ["--token-id", input.tokenId, "token-id-from-mint-result"],
+  ]);
 
   switch (p.reward_strategy) {
     case "lp_fee_only":
@@ -122,11 +131,27 @@ function buildPipelineSteps(
         { step: "stake", function: "gauge.deposit(amount)", cli_command: baseFarm },
         { step: "claim", function: "gauge.earned(token, account) → gauge.getReward(account, tokens[])", cli_command: claimWithGauge() },
       ];
-    case "auto_stake":
+    case "auto_stake": {
+      // Ramses CL pattern (uniswap_v3 + auto_stake): claim must go through
+      // NPM.getPeriodReward(currentEpoch, tokenId, tokens[], receiver) because
+      // gauge.getReward* reverts NOT_AUTHORIZED_CLAIMER for EOAs. Pipeline
+      // must include --token-id alongside --gauge so the printed command
+      // matches the actual `lp claim` requirements.
+      const isNftAutoStake = p.interface === "uniswap_v3";
       return [
         { step: "mint", function: "Router.addLiquidity / NPM.mint", note: "LP automatically receives x(3,3) emissions — no separate stake step", cli_command: baseAdd },
-        { step: "claim", function: "gauge.getReward(account, tokens[])", note: "Multi-token reward (xRAM + WHYPE on Ramses HL)", cli_command: claimWithGauge() },
+        {
+          step: "claim",
+          function: isNftAutoStake
+            ? "NPM.getPeriodReward(currentEpoch, tokenId, tokens[], receiver)"
+            : "gauge.getReward(account, tokens[])",
+          note: isNftAutoStake
+            ? "Ramses CL: claim via NPM with --token-id; gauge.getReward* reverts NOT_AUTHORIZED_CLAIMER for EOAs"
+            : "Multi-token reward (xRAM + WHYPE on Ramses HL)",
+          cli_command: isNftAutoStake ? claimAutoStakeNftGauge() : claimWithGauge(),
+        },
       ];
+    }
     case "on_chain_masterchef":
       return [
         { step: "mint", function: "NPM.mint or pool.mint", cli_command: baseAdd },
@@ -1108,9 +1133,12 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
   lp.command("remove")
     .description("Auto-unstake (if staked) and remove liquidity from a pool")
     .requiredOption("--protocol <protocol>", "Protocol slug")
-    .requiredOption("--token-a <token>", "First token symbol or address")
-    .requiredOption("--token-b <token>", "Second token symbol or address")
-    .requiredOption("--liquidity <amount>", "Liquidity amount to remove in wei")
+    // V2 / Curve / LB removes need pair + liquidity; V3 / CL NFT-based removes
+    // only need --token-id (position info is on-chain via NPM.positions). Mark
+    // these as optional and validate per-protocol below.
+    .option("--token-a <token>", "First token symbol or address (required for V2/Curve/LB)")
+    .option("--token-b <token>", "Second token symbol or address (required for V2/Curve/LB)")
+    .option("--liquidity <amount>", "Liquidity amount to remove in wei (required for V2/Curve/LB)")
     .option("--pool <address>", "Pool address (needed to resolve gauge)")
     .option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)")
     .option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)")
@@ -1133,6 +1161,13 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
         if (!opts.pool) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book — pass --pool <addr>)`);
         if (!opts.bins) throw new Error("--bins <id1,id2,...> is required for Merchant Moe LB remove");
+        // LB always needs both legs of the pair to derive the (tokenX, tokenY)
+        // sort order; the relaxed commander spec lets these be omitted, so
+        // validate explicitly with an actionable message instead of crashing
+        // on `opts.tokenA.startsWith` two lines down.
+        if (!opts.tokenA || !opts.tokenB) {
+          throw new Error(`--token-a and --token-b are required for ${protocol.name} (Liquidity Book) remove`);
+        }
         const lbAdapter = createMerchantMoeLB(protocol, rpcUrl);
         const tokenA = opts.tokenA.startsWith("0x")
           ? (opts.tokenA as Address)
@@ -1177,12 +1212,37 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         return;
       }
 
-      const tokenA = opts.tokenA.startsWith("0x")
-        ? (opts.tokenA as Address)
-        : registry.resolveToken(chainName, opts.tokenA).address as Address;
-      const tokenB = opts.tokenB.startsWith("0x")
-        ? (opts.tokenB as Address)
-        : registry.resolveToken(chainName, opts.tokenB).address as Address;
+      // V3/CL NFT-based remove uses --token-id and reads position info from
+      // NPM.positions on-chain; --token-a/--token-b/--liquidity are then
+      // unused. Other protocols still need the pair + liquidity, so validate
+      // here once instead of forcing them as commander-level requiredOption.
+      // Gate on the protocol interface so a stray --token-id passed to a V2
+      // protocol doesn't accidentally bypass --token-a/--token-b/--liquidity
+      // validation and fall through to the V3 zero-liquidity error path.
+      const NFT_REMOVE_IFACES = new Set(["uniswap_v3", "algebra_v3", "thena_cl", "hybra"]);
+      const isNftRemove = !!opts.tokenId && NFT_REMOVE_IFACES.has(iface);
+      if (!isNftRemove) {
+        const missing: string[] = [];
+        if (!opts.tokenA) missing.push("--token-a");
+        if (!opts.tokenB) missing.push("--token-b");
+        if (!opts.liquidity) missing.push("--liquidity");
+        if (missing.length > 0) {
+          printOutput({
+            error: `${missing.join(", ")} required for ${protocol.name} remove (or pass --token-id for V3/CL NFT-based remove).`,
+          }, getOpts());
+          return;
+        }
+      }
+      const tokenA: Address | undefined = opts.tokenA
+        ? (opts.tokenA.startsWith("0x")
+          ? (opts.tokenA as Address)
+          : registry.resolveToken(chainName, opts.tokenA).address as Address)
+        : undefined;
+      const tokenB: Address | undefined = opts.tokenB
+        ? (opts.tokenB.startsWith("0x")
+          ? (opts.tokenB as Address)
+          : registry.resolveToken(chainName, opts.tokenB).address as Address)
+        : undefined;
 
       // Step 1: Unstake if applicable
       const poolAddr = opts.pool ? (opts.pool as Address) : undefined;
@@ -1238,8 +1298,11 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
           if (iface === "hybra" && (!wOpts || wOpts.redeemType === 1)) {
             process.stderr.write("WARNING: Hybra default redeemType=1 locks rewards into 2-year veHYBR NFT. Pass --redeem-type 0 for instant exit (with penalty).\n");
           }
+          // NFT-mode gauges (V3/CL) read amount from NPM.positions(tokenId);
+          // --liquidity is unused on those paths so default to 0n instead of
+          // throwing on BigInt(undefined).
           const withdrawTx = await (gaugeAdapter as { buildWithdraw: (g: Address, a: bigint, t?: bigint, o?: { redeemType?: number }) => Promise<unknown> })
-            .buildWithdraw(gaugeAddr, BigInt(opts.liquidity), tokenId, wOpts) as Awaited<ReturnType<typeof gaugeAdapter.buildWithdraw>>;
+            .buildWithdraw(gaugeAddr, opts.liquidity ? BigInt(opts.liquidity) : 0n, tokenId, wOpts) as Awaited<ReturnType<typeof gaugeAdapter.buildWithdraw>>;
           const withdrawResult = await executor.execute(withdrawTx);
           printOutput({ step: "unstake_gauge", ...withdrawResult }, getOpts());
           if (withdrawResult.status !== "confirmed" && withdrawResult.status !== "simulated") {
@@ -1257,11 +1320,40 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       // Step 2: Remove liquidity
       process.stderr.write("Step 2/2: Removing liquidity...\n");
       const dexAdapter = createDex(protocol, rpcUrl);
+      // V3/CL NFT-based remove: when --liquidity is omitted (typical UX),
+      // read the position's liquidity from NPM.positions(tokenId) so the
+      // adapter's decreaseLiquidity actually targets the full position
+      // instead of being a no-op decrease(0) + collect.
+      let removeLiquidity: bigint = opts.liquidity ? BigInt(opts.liquidity) : 0n;
+      if (isNftRemove && removeLiquidity === 0n) {
+        const npm = protocol.contracts?.["position_manager"] as Address | undefined;
+        if (npm) {
+          // Use the shared detectV3Liquidity helper so Ramses-CL's
+          // non-standard positions layout (no nonce/operator) and the
+          // standard Uniswap-V3 layout are both handled — same probe used
+          // by `lp positions`.
+          const c = createPublicClient({ transport: http(rpcUrl) });
+          const pos = await detectV3Liquidity(c, npm, BigInt(opts.tokenId));
+          if (pos) {
+            removeLiquidity = pos.liquidity;
+            process.stderr.write(`  Read live liquidity ${removeLiquidity} from NPM.positions(${opts.tokenId}).\n`);
+          }
+        }
+      }
+      if (isNftRemove && removeLiquidity === 0n) {
+        // Surface this rather than producing a no-op decreaseLiquidity(0) +
+        // collect that wastes gas and gives the user no signal.
+        printOutput({
+          error: `tokenId ${opts.tokenId} has zero liquidity (already removed?). Pass --liquidity explicitly to override, or pick a different tokenId.`,
+        }, getOpts());
+        return;
+      }
+      const ZERO = "0x0000000000000000000000000000000000000000" as Address;
       const removeTx = await dexAdapter.buildRemoveLiquidity({
         protocol: protocol.name,
-        token_a: tokenA,
-        token_b: tokenB,
-        liquidity: BigInt(opts.liquidity),
+        token_a: tokenA ?? ZERO,
+        token_b: tokenB ?? ZERO,
+        liquidity: removeLiquidity,
         recipient,
         token_id: opts.tokenId ? BigInt(opts.tokenId) : undefined,
       });

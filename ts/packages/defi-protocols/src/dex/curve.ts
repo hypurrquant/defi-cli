@@ -64,12 +64,19 @@ export class CurveStableSwapAdapter implements IDex {
   }
 
   async buildAddLiquidity(params: AddLiquidityParams): Promise<DeFiTx> {
-    // Add liquidity to a 2-token Curve pool
+    // Add liquidity to a 2-token Curve pool. Both tokens are pulled from the
+    // caller, so emit approvals[] entries so the executor can auto-approve in
+    // broadcast mode (skipping zero-amount entries — caller may pass
+    // single-sided deposits with one leg = 0).
     const data = encodeFunctionData({
       abi: poolAbi,
       functionName: "add_liquidity",
       args: [[params.amount_a, params.amount_b], 0n],
     });
+
+    const approvals: NonNullable<DeFiTx["approvals"]> = [];
+    if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: this.router, amount: params.amount_a });
+    if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: this.router, amount: params.amount_b });
 
     return {
       description: `[${this.protocolName}] Curve add liquidity`,
@@ -77,6 +84,7 @@ export class CurveStableSwapAdapter implements IDex {
       data,
       value: 0n,
       gas_estimate: 400_000,
+      approvals,
     };
   }
 

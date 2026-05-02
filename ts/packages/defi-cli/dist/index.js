@@ -1968,12 +1968,16 @@ var init_dist2 = __esm({
           functionName: "add_liquidity",
           args: [[params.amount_a, params.amount_b], 0n]
         });
+        const approvals = [];
+        if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: this.router, amount: params.amount_a });
+        if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: this.router, amount: params.amount_b });
         return {
           description: `[${this.protocolName}] Curve add liquidity`,
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 4e5
+          gas_estimate: 4e5,
+          approvals
         };
       }
       async buildRemoveLiquidity(params) {
@@ -8474,6 +8478,11 @@ function buildPipelineSteps(p, input = {}) {
     ["--protocol", slug, "slug"],
     ["--gauge", input.gauge, "gauge-from-voter.gaugeForPool"]
   ]);
+  const claimAutoStakeNftGauge = () => `defi ${chainFlag}lp claim ` + buildCmd([
+    ["--protocol", slug, "slug"],
+    ["--gauge", input.gauge, "gauge-from-voter.gaugeForPool"],
+    ["--token-id", input.tokenId, "token-id-from-mint-result"]
+  ]);
   switch (p.reward_strategy) {
     case "lp_fee_only":
       return [
@@ -8498,11 +8507,18 @@ function buildPipelineSteps(p, input = {}) {
         { step: "stake", function: "gauge.deposit(amount)", cli_command: baseFarm },
         { step: "claim", function: "gauge.earned(token, account) \u2192 gauge.getReward(account, tokens[])", cli_command: claimWithGauge() }
       ];
-    case "auto_stake":
+    case "auto_stake": {
+      const isNftAutoStake = p.interface === "uniswap_v3";
       return [
         { step: "mint", function: "Router.addLiquidity / NPM.mint", note: "LP automatically receives x(3,3) emissions \u2014 no separate stake step", cli_command: baseAdd },
-        { step: "claim", function: "gauge.getReward(account, tokens[])", note: "Multi-token reward (xRAM + WHYPE on Ramses HL)", cli_command: claimWithGauge() }
+        {
+          step: "claim",
+          function: isNftAutoStake ? "NPM.getPeriodReward(currentEpoch, tokenId, tokens[], receiver)" : "gauge.getReward(account, tokens[])",
+          note: isNftAutoStake ? "Ramses CL: claim via NPM with --token-id; gauge.getReward* reverts NOT_AUTHORIZED_CLAIMER for EOAs" : "Multi-token reward (xRAM + WHYPE on Ramses HL)",
+          cli_command: isNftAutoStake ? claimAutoStakeNftGauge() : claimWithGauge()
+        }
       ];
+    }
     case "on_chain_masterchef":
       return [
         { step: "mint", function: "NPM.mint or pool.mint", cli_command: baseAdd },
@@ -9213,7 +9229,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       note: "Plan output. Run each cli_command sequentially. After the mint step, broadcast mode prints `details.minted_token_id` \u2014 feed that into the next step's --token-id."
     }, getOpts());
   });
-  lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--liquidity <amount>", "Liquidity amount to remove in wei").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default \u2014 WARNING: long lock)").option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw").option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)").action(async (opts) => {
+  lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").option("--token-a <token>", "First token symbol or address (required for V2/Curve/LB)").option("--token-b <token>", "Second token symbol or address (required for V2/Curve/LB)").option("--liquidity <amount>", "Liquidity amount to remove in wei (required for V2/Curve/LB)").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default \u2014 WARNING: long lock)").option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw").option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -9229,6 +9245,9 @@ function registerLP(parent, getOpts, makeExecutor2) {
     if (iface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
       if (!opts.pool) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book \u2014 pass --pool <addr>)`);
       if (!opts.bins) throw new Error("--bins <id1,id2,...> is required for Merchant Moe LB remove");
+      if (!opts.tokenA || !opts.tokenB) {
+        throw new Error(`--token-a and --token-b are required for ${protocol.name} (Liquidity Book) remove`);
+      }
       const lbAdapter = createMerchantMoeLB(protocol, rpcUrl);
       const tokenA2 = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
       const tokenB2 = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
@@ -9271,8 +9290,22 @@ function registerLP(parent, getOpts, makeExecutor2) {
       printOutput({ step: "lb_remove", ...result }, getOpts());
       return;
     }
-    const tokenA = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
-    const tokenB = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
+    const NFT_REMOVE_IFACES = /* @__PURE__ */ new Set(["uniswap_v3", "algebra_v3", "thena_cl", "hybra"]);
+    const isNftRemove = !!opts.tokenId && NFT_REMOVE_IFACES.has(iface);
+    if (!isNftRemove) {
+      const missing = [];
+      if (!opts.tokenA) missing.push("--token-a");
+      if (!opts.tokenB) missing.push("--token-b");
+      if (!opts.liquidity) missing.push("--liquidity");
+      if (missing.length > 0) {
+        printOutput({
+          error: `${missing.join(", ")} required for ${protocol.name} remove (or pass --token-id for V3/CL NFT-based remove).`
+        }, getOpts());
+        return;
+      }
+    }
+    const tokenA = opts.tokenA ? opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address : void 0;
+    const tokenB = opts.tokenB ? opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address : void 0;
     const poolAddr = opts.pool ? opts.pool : void 0;
     let didUnstake = false;
     if (iface === "algebra_v3" && protocol.contracts?.["farming_center"] && opts.tokenId && poolAddr) {
@@ -9322,7 +9355,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
         if (iface === "hybra" && (!wOpts || wOpts.redeemType === 1)) {
           process.stderr.write("WARNING: Hybra default redeemType=1 locks rewards into 2-year veHYBR NFT. Pass --redeem-type 0 for instant exit (with penalty).\n");
         }
-        const withdrawTx = await gaugeAdapter.buildWithdraw(gaugeAddr, BigInt(opts.liquidity), tokenId, wOpts);
+        const withdrawTx = await gaugeAdapter.buildWithdraw(gaugeAddr, opts.liquidity ? BigInt(opts.liquidity) : 0n, tokenId, wOpts);
         const withdrawResult = await executor.execute(withdrawTx);
         printOutput({ step: "unstake_gauge", ...withdrawResult }, getOpts());
         if (withdrawResult.status !== "confirmed" && withdrawResult.status !== "simulated") {
@@ -9337,11 +9370,31 @@ function registerLP(parent, getOpts, makeExecutor2) {
     }
     process.stderr.write("Step 2/2: Removing liquidity...\n");
     const dexAdapter = createDex(protocol, rpcUrl);
+    let removeLiquidity = opts.liquidity ? BigInt(opts.liquidity) : 0n;
+    if (isNftRemove && removeLiquidity === 0n) {
+      const npm = protocol.contracts?.["position_manager"];
+      if (npm) {
+        const c = createPublicClient23({ transport: http23(rpcUrl) });
+        const pos = await detectV3Liquidity(c, npm, BigInt(opts.tokenId));
+        if (pos) {
+          removeLiquidity = pos.liquidity;
+          process.stderr.write(`  Read live liquidity ${removeLiquidity} from NPM.positions(${opts.tokenId}).
+`);
+        }
+      }
+    }
+    if (isNftRemove && removeLiquidity === 0n) {
+      printOutput({
+        error: `tokenId ${opts.tokenId} has zero liquidity (already removed?). Pass --liquidity explicitly to override, or pick a different tokenId.`
+      }, getOpts());
+      return;
+    }
+    const ZERO = "0x0000000000000000000000000000000000000000";
     const removeTx = await dexAdapter.buildRemoveLiquidity({
       protocol: protocol.name,
-      token_a: tokenA,
-      token_b: tokenB,
-      liquidity: BigInt(opts.liquidity),
+      token_a: tokenA ?? ZERO,
+      token_b: tokenB ?? ZERO,
+      liquidity: removeLiquidity,
       recipient,
       token_id: opts.tokenId ? BigInt(opts.tokenId) : void 0
     });
@@ -11718,12 +11771,14 @@ function registerSwap(parent, getOpts, makeExecutor2) {
           slippagePct,
           wallet
         );
+        const fromLower = fromAddr.toLowerCase();
+        const isNativeInput = fromLower === "0x0000000000000000000000000000000000000000" || fromLower === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
         const tx = {
           description: `OpenOcean: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
           to: swap.to,
           data: swap.data,
           value: parseBigIntValue(swap.value),
-          approvals: [{ token: fromAddr, spender: swap.to, amount: BigInt(opts.amount) }]
+          ...isNativeInput ? {} : { approvals: [{ token: fromAddr, spender: swap.to, amount: BigInt(opts.amount) }] }
         };
         const result = await executor.execute(tx);
         printOutput({
