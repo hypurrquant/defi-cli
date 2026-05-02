@@ -8282,7 +8282,8 @@ function handleSchema(params) {
 function registerSchema(parent, getOpts) {
   parent.command("schema [command]").description("Output JSON schema for a command (agent-friendly)").option("--all", "Show all schemas").action(async (command, opts) => {
     const mode = getOpts();
-    const action = opts.all ? "all" : command ?? "all";
+    const raw = opts.all ? "all" : command ?? "all";
+    const action = raw.replace(/-/g, ".");
     const params = { action };
     const schema = handleSchema(params);
     printOutput(schema, mode);
@@ -9827,7 +9828,8 @@ function resolveAsset(registry, chain, asset) {
 }
 async function collectLendingRates(registry, chainName, rpc, assetAddr) {
   const protos = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending);
-  const results = [];
+  const rates = [];
+  const errors = [];
   let first = true;
   for (const proto of protos) {
     if (!first) {
@@ -9836,19 +9838,22 @@ async function collectLendingRates(registry, chainName, rpc, assetAddr) {
     first = false;
     try {
       const lending = createLending(proto, rpc);
-      const rates = await lending.getRates(assetAddr);
-      results.push(rates);
+      const r = await lending.getRates(assetAddr);
+      rates.push(r);
     } catch (err) {
       process.stderr.write(`Warning: ${proto.name} rates unavailable: ${err}
 `);
+      errors.push({ protocol: proto.name, type: "lending_supply", reason: errMsg(err) });
     }
   }
-  return results;
+  return { rates, errors };
 }
 async function collectAllYields(registry, chainName, rpc, asset, assetAddr) {
   const opportunities = [];
-  const lendingRates = await collectLendingRates(registry, chainName, rpc, assetAddr);
-  for (const r of lendingRates) {
+  const errors = [];
+  const lendingResult = await collectLendingRates(registry, chainName, rpc, assetAddr);
+  errors.push(...lendingResult.errors);
+  for (const r of lendingResult.rates) {
     if (r.supply_apy > 0) {
       opportunities.push({
         protocol: r.protocol,
@@ -9874,7 +9879,8 @@ async function collectAllYields(registry, chainName, rpc, asset, assetAddr) {
             utilization: rates.utilization
           });
         }
-      } catch {
+      } catch (e) {
+        errors.push({ protocol: proto.name, type: "morpho_vault", reason: errMsg(e) });
       }
     }
   }
@@ -9890,7 +9896,8 @@ async function collectAllYields(registry, chainName, rpc, asset, assetAddr) {
           apy: info.apy ?? 0,
           total_assets: info.total_assets.toString()
         });
-      } catch {
+      } catch (e) {
+        errors.push({ protocol: proto.name, type: "vault", reason: errMsg(e) });
       }
     }
   }
@@ -9899,7 +9906,7 @@ async function collectAllYields(registry, chainName, rpc, asset, assetAddr) {
     const ba = b["apy"] ?? 0;
     return ba - aa;
   });
-  return opportunities;
+  return { opportunities, errors };
 }
 async function runYieldScan(registry, asset, output) {
   const t0 = Date.now();
@@ -10041,10 +10048,13 @@ function registerYield(parent, getOpts, makeExecutor2) {
       const chain = registry.getChain(chainName);
       const rpc = chain.effectiveRpcUrl();
       const assetAddr = resolveAsset(registry, chainName, opts.asset);
-      const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+      const { rates: results, errors: ratesErrors } = await collectLendingRates(registry, chainName, rpc, assetAddr);
       if (results.length === 0) {
         printOutput(
-          { error: `No lending rate data available for asset '${opts.asset}'` },
+          ratesErrors.length > 0 ? {
+            error: `Could not collect lending rates for '${opts.asset}': ${ratesErrors.length} probe(s) failed (likely RPC throttling). Retry, or set ${chainName.toUpperCase()}_RPC_URL.`,
+            failed_probes: ratesErrors
+          } : { error: `No lending rate data available for asset '${opts.asset}'` },
           getOpts()
         );
         process.exit(1);
@@ -10286,9 +10296,16 @@ function registerYield(parent, getOpts, makeExecutor2) {
       const assetAddr = resolveAsset(registry, chainName, asset);
       const strategy = opts.strategy ?? "auto";
       if (strategy === "auto") {
-        const opportunities = await collectAllYields(registry, chainName, rpc, asset, assetAddr);
+        const { opportunities, errors } = await collectAllYields(registry, chainName, rpc, asset, assetAddr);
         if (opportunities.length === 0) {
-          printOutput({ error: `No yield opportunities found for '${asset}'` }, getOpts());
+          if (errors.length > 0) {
+            printOutput({
+              error: `Could not collect yield data for '${asset}': ${errors.length} probe(s) failed (likely RPC throttling or transport error). Retry, or set a private RPC URL via ${chainName.toUpperCase()}_RPC_URL.`,
+              failed_probes: errors
+            }, getOpts());
+          } else {
+            printOutput({ error: `No yield opportunities found for '${asset}'` }, getOpts());
+          }
           process.exit(1);
           return;
         }
@@ -10318,9 +10335,12 @@ function registerYield(parent, getOpts, makeExecutor2) {
           getOpts()
         );
       } else if (strategy === "best-supply") {
-        const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+        const { rates: results, errors: rErr } = await collectLendingRates(registry, chainName, rpc, assetAddr);
         if (results.length === 0) {
-          printOutput({ error: `No lending rate data available for asset '${asset}'` }, getOpts());
+          printOutput(
+            rErr.length > 0 ? { error: `Could not collect lending rates for '${asset}': ${rErr.length} probe(s) failed (RPC throttling likely).`, failed_probes: rErr } : { error: `No lending rate data available for asset '${asset}'` },
+            getOpts()
+          );
           process.exit(1);
           return;
         }
@@ -10343,9 +10363,12 @@ function registerYield(parent, getOpts, makeExecutor2) {
           getOpts()
         );
       } else if (strategy === "leverage-loop") {
-        const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+        const { rates: results, errors: lErr } = await collectLendingRates(registry, chainName, rpc, assetAddr);
         if (results.length === 0) {
-          printOutput({ error: `No lending rate data available for asset '${asset}'` }, getOpts());
+          printOutput(
+            lErr.length > 0 ? { error: `Could not collect lending rates for '${asset}': ${lErr.length} probe(s) failed (RPC throttling likely).`, failed_probes: lErr } : { error: `No lending rate data available for asset '${asset}'` },
+            getOpts()
+          );
           process.exit(1);
           return;
         }
@@ -10409,14 +10432,14 @@ function registerYield(parent, getOpts, makeExecutor2) {
 
 // src/commands/portfolio.ts
 init_dist();
-import { encodeFunctionData as encodeFunctionData29, parseAbi as parseAbi33 } from "viem";
+import { createPublicClient as createPublicClient25, encodeFunctionData as encodeFunctionData29, http as http25, parseAbi as parseAbi33 } from "viem";
 
 // src/portfolio-tracker.ts
 init_dist();
 import { mkdirSync, writeFileSync, readdirSync as readdirSync2, readFileSync as readFileSync3, existsSync as existsSync2 } from "fs";
 import { homedir } from "os";
 import { resolve as resolve3 } from "path";
-import { encodeFunctionData as encodeFunctionData28, parseAbi as parseAbi31 } from "viem";
+import { createPublicClient as createPublicClient24, encodeFunctionData as encodeFunctionData28, http as http24, parseAbi as parseAbi31 } from "viem";
 var ERC20_ABI4 = parseAbi31([
   "function balanceOf(address owner) external view returns (uint256)"
 ]);
@@ -10467,7 +10490,16 @@ async function takeSnapshot(chainName, wallet, registry) {
   const oracleEntry = registry.getProtocolsForChain(chainName).find((p) => p.interface === "aave_v3" && p.contracts?.["oracle"]);
   const oracleAddr = oracleEntry?.contracts?.["oracle"];
   const wrappedNative = chain.wrapped_native ?? "0x5555555555555555555555555555555555555555";
+  const priceTokens = [];
   if (oracleAddr) {
+    for (const t of tokenEntries) {
+      calls.push([
+        oracleAddr,
+        encodeFunctionData28({ abi: ORACLE_ABI4, functionName: "getAssetPrice", args: [t.address] })
+      ]);
+      callLabels.push(`price:${t.address}`);
+      priceTokens.push(t.address);
+    }
     calls.push([
       oracleAddr,
       encodeFunctionData28({ abi: ORACLE_ABI4, functionName: "getAssetPrice", args: [wrappedNative] })
@@ -10478,10 +10510,19 @@ async function takeSnapshot(chainName, wallet, registry) {
   if (calls.length > 0) {
     results = await multicallRead(rpc, calls);
   }
+  const balanceCount = tokenEntries.length;
+  const lendingCount = lendingProtocols.length;
+  const priceStartIdx = balanceCount + lendingCount;
   let nativePriceUsd = 0;
+  const priceByToken = /* @__PURE__ */ new Map();
   if (oracleAddr) {
-    const priceData = results[results.length - 1] ?? null;
-    nativePriceUsd = Number(decodeU256Word(priceData)) / 1e8;
+    for (let i = 0; i < priceTokens.length; i++) {
+      const priceData = results[priceStartIdx + i] ?? null;
+      const px = Number(decodeU256Word(priceData)) / 1e8;
+      if (px > 0) priceByToken.set(priceTokens[i].toLowerCase(), px);
+    }
+    const nativePriceData = results[priceStartIdx + priceTokens.length] ?? null;
+    nativePriceUsd = Number(decodeU256Word(nativePriceData)) / 1e8;
   }
   let idx = 0;
   const tokens = [];
@@ -10491,8 +10532,20 @@ async function takeSnapshot(chainName, wallet, registry) {
     const balance = decodeU256Word(results[idx] ?? null);
     const balF64 = Number(balance) / 10 ** entry.decimals;
     const symbolUpper = entry.symbol.toUpperCase();
-    const priceUsd = symbolUpper.includes("USD") ? 1 : nativePriceUsd;
-    const valueUsd = balF64 * priceUsd;
+    const tokenAddrLower = entry.address.toLowerCase();
+    let priceUsd;
+    let valueUsd;
+    if (symbolUpper.includes("USD")) {
+      priceUsd = 1;
+      valueUsd = balF64;
+    } else if (tokenAddrLower === wrappedNative.toLowerCase()) {
+      priceUsd = nativePriceUsd;
+      valueUsd = balF64 * nativePriceUsd;
+    } else {
+      const px = priceByToken.get(tokenAddrLower);
+      priceUsd = px ?? 0;
+      valueUsd = px && px > 0 ? balF64 * px : 0;
+    }
     totalValueUsd += valueUsd;
     tokens.push({
       token: entry.address,
@@ -10532,6 +10585,23 @@ async function takeSnapshot(chainName, wallet, registry) {
       }
     }
     idx++;
+  }
+  try {
+    const client = createPublicClient24({ transport: http24(rpc) });
+    const nativeBalance = await client.getBalance({ address: user });
+    if (nativeBalance > 0n) {
+      const nativeF64 = Number(nativeBalance) / 1e18;
+      const nativeValueUsd = nativeF64 * nativePriceUsd;
+      totalValueUsd += nativeValueUsd;
+      tokens.push({
+        token: wrappedNative,
+        symbol: chain.native_token ?? "NATIVE",
+        balance: nativeBalance,
+        value_usd: nativeValueUsd,
+        price_usd: nativePriceUsd
+      });
+    }
+  } catch {
   }
   return {
     timestamp: Date.now(),
@@ -10650,6 +10720,10 @@ function registerPortfolio(parent, getOpts) {
     const calls = [];
     const callLabels = [];
     const tokenSymbols = (registry.tokens.get(chainName) ?? []).map((t) => t.symbol);
+    const tokenAddrsByCallIdx = [];
+    const oracleEntry = registry.getProtocolsForChain(chainName).find((p) => p.interface === "aave_v3" && p.contracts?.["oracle"]);
+    const oracleAddr = oracleEntry?.contracts?.["oracle"];
+    const wrappedNative = chain.wrapped_native ?? "0x5555555555555555555555555555555555555555";
     for (const symbol of tokenSymbols) {
       let entry;
       try {
@@ -10663,6 +10737,7 @@ function registerPortfolio(parent, getOpts) {
         encodeFunctionData29({ abi: ERC20_ABI5, functionName: "balanceOf", args: [user] })
       ]);
       callLabels.push(`balance:${symbol}`);
+      tokenAddrsByCallIdx.push(entry.address);
     }
     const lendingProtocols = registry.getProtocolsForChain(chainName).filter((p) => p.category === ProtocolCategory.Lending && p.interface === "aave_v3").filter((p) => p.contracts?.["pool"]);
     for (const p of lendingProtocols) {
@@ -10672,10 +10747,16 @@ function registerPortfolio(parent, getOpts) {
       ]);
       callLabels.push(`lending:${p.name}`);
     }
-    const oracleEntry = registry.getProtocolsForChain(chainName).find((p) => p.interface === "aave_v3" && p.contracts?.["oracle"]);
-    const oracleAddr = oracleEntry?.contracts?.["oracle"];
-    const wrappedNative = chain.wrapped_native ?? "0x5555555555555555555555555555555555555555";
+    const priceTokens = [];
     if (oracleAddr) {
+      for (const tokenAddr of tokenAddrsByCallIdx) {
+        calls.push([
+          oracleAddr,
+          encodeFunctionData29({ abi: ORACLE_ABI5, functionName: "getAssetPrice", args: [tokenAddr] })
+        ]);
+        callLabels.push(`price:${tokenAddr}`);
+        priceTokens.push(tokenAddr);
+      }
       calls.push([
         oracleAddr,
         encodeFunctionData29({ abi: ORACLE_ABI5, functionName: "getAssetPrice", args: [wrappedNative] })
@@ -10700,10 +10781,19 @@ function registerPortfolio(parent, getOpts) {
       printOutput({ error: `Multicall failed: ${errMsg(e)}` }, mode);
       return;
     }
+    const balanceCallCount = tokenAddrsByCallIdx.length;
+    const lendingCallCount = lendingProtocols.length;
+    const priceStartIdx = balanceCallCount + lendingCallCount;
     let nativePriceUsd = 0;
+    const priceByToken = /* @__PURE__ */ new Map();
     if (oracleAddr) {
-      const priceData = results[results.length - 1] ?? null;
-      nativePriceUsd = Number(decodeU2562(priceData)) / 1e8;
+      for (let i = 0; i < priceTokens.length; i++) {
+        const priceData = results[priceStartIdx + i] ?? null;
+        const px = Number(decodeU2562(priceData)) / 1e8;
+        if (px > 0) priceByToken.set(priceTokens[i].toLowerCase(), px);
+      }
+      const nativePriceData = results[priceStartIdx + priceTokens.length] ?? null;
+      nativePriceUsd = Number(decodeU2562(nativePriceData)) / 1e8;
     }
     let totalValueUsd = 0;
     let idx = 0;
@@ -10722,12 +10812,21 @@ function registerPortfolio(parent, getOpts) {
         const decimals = entry.decimals;
         const balF64 = Number(balance) / 10 ** decimals;
         const symbolUpper = symbol.toUpperCase();
-        const valueUsd = symbolUpper.includes("USD") || symbolUpper.includes("usd") ? balF64 : balF64 * nativePriceUsd;
-        totalValueUsd += valueUsd;
+        const tokenAddrLower = entry.address.toLowerCase();
+        let valueUsd;
+        if (symbolUpper.includes("USD")) {
+          valueUsd = balF64;
+        } else if (tokenAddrLower === wrappedNative.toLowerCase()) {
+          valueUsd = balF64 * nativePriceUsd;
+        } else {
+          const px = priceByToken.get(tokenAddrLower);
+          valueUsd = px && px > 0 ? balF64 * px : null;
+        }
+        if (valueUsd !== null) totalValueUsd += valueUsd;
         tokenBalances.push({
           symbol,
           balance: balF64.toFixed(4),
-          value_usd: valueUsd.toFixed(2)
+          value_usd: valueUsd !== null ? valueUsd.toFixed(2) : null
         });
       }
       idx++;
@@ -10757,11 +10856,23 @@ function registerPortfolio(parent, getOpts) {
       }
       idx++;
     }
+    let nativeBalance = 0n;
+    let nativeValueUsd = 0;
+    try {
+      const client = createPublicClient25({ transport: http25(rpc) });
+      nativeBalance = await client.getBalance({ address: user });
+      const nativeF64 = Number(nativeBalance) / 1e18;
+      nativeValueUsd = nativeF64 * nativePriceUsd;
+      if (nativeBalance > 0n) totalValueUsd += nativeValueUsd;
+    } catch {
+    }
     printOutput(
       {
         address: user,
         chain: chain.name,
         native_price_usd: nativePriceUsd.toFixed(2),
+        native_balance: (Number(nativeBalance) / 1e18).toFixed(6),
+        native_value_usd: nativeValueUsd.toFixed(2),
         total_value_usd: totalValueUsd.toFixed(2),
         token_balances: tokenBalances,
         lending_positions: lendingPositions
@@ -11027,7 +11138,7 @@ function registerPrice(parent, getOpts) {
 
 // src/commands/wallet.ts
 init_dist();
-import { createPublicClient as createPublicClient24, http as http24, formatEther } from "viem";
+import { createPublicClient as createPublicClient26, http as http26, formatEther } from "viem";
 function registerWallet(parent, getOpts) {
   const wallet = parent.command("wallet").description("Wallet management");
   wallet.command("balance").description("Show native token balance").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
@@ -11040,7 +11151,7 @@ function registerWallet(parent, getOpts) {
     }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient24({ transport: http24(chain.effectiveRpcUrl()) });
+    const client = createPublicClient26({ transport: http26(chain.effectiveRpcUrl()) });
     const balance = await client.getBalance({ address: addr });
     printOutput({
       chain: chain.name,
@@ -11058,7 +11169,7 @@ function registerWallet(parent, getOpts) {
 
 // src/commands/token.ts
 init_dist();
-import { createPublicClient as createPublicClient25, http as http25, maxUint256 } from "viem";
+import { createPublicClient as createPublicClient27, http as http27, maxUint256 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
@@ -11071,7 +11182,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
+    const client = createPublicClient27({ transport: http27(chain.effectiveRpcUrl()) });
     const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
     const [balance, symbol, decimals] = await Promise.all([
       client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [owner] }),
@@ -11107,7 +11218,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     }
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
-    const client = createPublicClient25({ transport: http25(chain.effectiveRpcUrl()) });
+    const client = createPublicClient27({ transport: http27(chain.effectiveRpcUrl()) });
     const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
     const allowance = await client.readContract({
       address: tokenAddr,
@@ -11855,11 +11966,11 @@ function registerSetup(program2) {
 // src/commands/ows.ts
 import pc3 from "picocolors";
 init_dist();
-import { createPublicClient as createPublicClient26, http as http26, formatEther as formatEther2 } from "viem";
+import { createPublicClient as createPublicClient28, http as http28, formatEther as formatEther2 } from "viem";
 async function getEvmBalance(address, chainName) {
   const registry = Registry.loadEmbedded();
   const chain = registry.getChain(chainName);
-  const client = createPublicClient26({ transport: http26(chain.effectiveRpcUrl()) });
+  const client = createPublicClient28({ transport: http28(chain.effectiveRpcUrl()) });
   const balance = await client.getBalance({ address });
   return {
     native_token: chain.native_token,

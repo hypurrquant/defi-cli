@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, readdirSync, readFileSync, existsSync } from 
 import { homedir } from "os";
 import { resolve } from "path";
 import type { Address, Hex } from "viem";
-import { encodeFunctionData, parseAbi } from "viem";
+import { createPublicClient, encodeFunctionData, http, parseAbi } from "viem";
 import { Registry, ProtocolCategory, multicallRead } from "@hypurrquant/defi-core";
 import type { PortfolioSnapshot, TokenBalance, DefiPosition, PortfolioPnL, TokenChange } from "@hypurrquant/defi-core";
 
@@ -72,14 +72,26 @@ export async function takeSnapshot(
     callLabels.push(`lending:${p.name}`);
   }
 
-  // 3. Native price from oracle
+  // 3. Per-token oracle prices + native price.
+  // Pricing every non-USD token at the wrapped-native price (the previous
+  // behaviour) wildly mis-valued non-native ERC20s like RAM/KITTEN. Match
+  // portfolio show: ask the oracle per asset, fall back to null when the
+  // oracle has no entry.
   const oracleEntry = registry
     .getProtocolsForChain(chainName)
     .find((p) => p.interface === "aave_v3" && p.contracts?.["oracle"]);
   const oracleAddr = oracleEntry?.contracts?.["oracle"] as Address | undefined;
   const wrappedNative = (chain.wrapped_native ?? "0x5555555555555555555555555555555555555555") as Address;
-
+  const priceTokens: Address[] = [];
   if (oracleAddr) {
+    for (const t of tokenEntries) {
+      calls.push([
+        oracleAddr,
+        encodeFunctionData({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [t.address] }),
+      ]);
+      callLabels.push(`price:${t.address}`);
+      priceTokens.push(t.address);
+    }
     calls.push([
       oracleAddr,
       encodeFunctionData({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [wrappedNative] }),
@@ -92,11 +104,21 @@ export async function takeSnapshot(
     results = await multicallRead(rpc, calls);
   }
 
-  // Native price
+  // Decode per-token prices and native price (sit at the tail of results[]).
+  const balanceCount = tokenEntries.length;
+  const lendingCount = lendingProtocols.length;
+  const priceStartIdx = balanceCount + lendingCount;
+
   let nativePriceUsd = 0;
+  const priceByToken = new Map<string, number>();
   if (oracleAddr) {
-    const priceData = results[results.length - 1] ?? null;
-    nativePriceUsd = Number(decodeU256Word(priceData)) / 1e8;
+    for (let i = 0; i < priceTokens.length; i++) {
+      const priceData = results[priceStartIdx + i] ?? null;
+      const px = Number(decodeU256Word(priceData)) / 1e8;
+      if (px > 0) priceByToken.set(priceTokens[i].toLowerCase(), px);
+    }
+    const nativePriceData = results[priceStartIdx + priceTokens.length] ?? null;
+    nativePriceUsd = Number(decodeU256Word(nativePriceData)) / 1e8;
   }
 
   let idx = 0;
@@ -109,9 +131,22 @@ export async function takeSnapshot(
     const balance = decodeU256Word(results[idx] ?? null);
     const balF64 = Number(balance) / 10 ** entry.decimals;
     const symbolUpper = entry.symbol.toUpperCase();
-    const priceUsd =
-      symbolUpper.includes("USD") ? 1 : nativePriceUsd;
-    const valueUsd = balF64 * priceUsd;
+    const tokenAddrLower = entry.address.toLowerCase();
+    let priceUsd: number;
+    let valueUsd: number;
+    if (symbolUpper.includes("USD")) {
+      priceUsd = 1;
+      valueUsd = balF64;
+    } else if (tokenAddrLower === wrappedNative.toLowerCase()) {
+      priceUsd = nativePriceUsd;
+      valueUsd = balF64 * nativePriceUsd;
+    } else {
+      const px = priceByToken.get(tokenAddrLower);
+      // Snapshot schema requires a number; use 0 for "no oracle entry" so the
+      // snapshot omits the value from the total without breaking the type.
+      priceUsd = px ?? 0;
+      valueUsd = px && px > 0 ? balF64 * px : 0;
+    }
     totalValueUsd += valueUsd;
     tokens.push({
       token: entry.address,
@@ -153,6 +188,32 @@ export async function takeSnapshot(
       }
     }
     idx++;
+  }
+
+  // Native gas-token balance — snapshot total previously omitted it, so the
+  // saved value drifted from `portfolio show`. Best-effort read; on RPC error
+  // we keep the existing total without breaking the snapshot.
+  try {
+    const client = createPublicClient({ transport: http(rpc) });
+    const nativeBalance = await client.getBalance({ address: user });
+    if (nativeBalance > 0n) {
+      const nativeF64 = Number(nativeBalance) / 1e18;
+      const nativeValueUsd = nativeF64 * nativePriceUsd;
+      totalValueUsd += nativeValueUsd;
+      // Synthesise a TokenBalance entry so snapshots/PnL reports surface the
+      // native gas balance the same way they surface ERC20s. Using the
+      // wrapped-native address as the canonical key keeps cross-snapshot
+      // diffs consistent.
+      tokens.push({
+        token: wrappedNative,
+        symbol: chain.native_token ?? "NATIVE",
+        balance: nativeBalance,
+        value_usd: nativeValueUsd,
+        price_usd: nativePriceUsd,
+      });
+    }
+  } catch {
+    // Snapshot proceeds without native balance on RPC failure.
   }
 
   return {

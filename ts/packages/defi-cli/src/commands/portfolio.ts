@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { Address, Hex } from "viem";
-import { encodeFunctionData, parseAbi } from "viem";
+import { createPublicClient, encodeFunctionData, http, parseAbi } from "viem";
 import { Registry, ProtocolCategory, multicallRead } from "@hypurrquant/defi-core";
 import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
@@ -62,8 +62,20 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
       const calls: Array<[Address, Hex]> = [];
       const callLabels: string[] = [];
 
-      // 1. Token balances
+      // 1. Token balances + per-asset oracle prices.
+      // We collect ERC20 balances and (when an oracle is configured) the
+      // matching getAssetPrice for each token in one multicall round-trip,
+      // because pricing every non-USD token at the *native* asset's price
+      // (the previous behaviour) wildly mis-valued positions like RAM/KITTEN
+      // — RAM ≈ $0.01 was being reported as ≈$41/RAM (HYPE price).
       const tokenSymbols: string[] = (registry.tokens.get(chainName) ?? []).map((t) => t.symbol);
+      const tokenAddrsByCallIdx: Address[] = []; // address per balance call (parallel array)
+
+      const oracleEntry = registry
+        .getProtocolsForChain(chainName)
+        .find((p) => p.interface === "aave_v3" && p.contracts?.["oracle"]);
+      const oracleAddr = oracleEntry?.contracts?.["oracle"] as Address | undefined;
+      const wrappedNative = (chain.wrapped_native ?? "0x5555555555555555555555555555555555555555") as Address;
 
       for (const symbol of tokenSymbols) {
         let entry;
@@ -78,6 +90,7 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
           encodeFunctionData({ abi: ERC20_ABI, functionName: "balanceOf", args: [user] }),
         ]);
         callLabels.push(`balance:${symbol}`);
+        tokenAddrsByCallIdx.push(entry.address as Address);
       }
 
       // 2. Lending positions — aave_v3 pools
@@ -94,14 +107,18 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
         callLabels.push(`lending:${p.name}`);
       }
 
-      // 3. Native token price from first available oracle
-      const oracleEntry = registry
-        .getProtocolsForChain(chainName)
-        .find((p) => p.interface === "aave_v3" && p.contracts?.["oracle"]);
-      const oracleAddr = oracleEntry?.contracts?.["oracle"] as Address | undefined;
-      const wrappedNative = (chain.wrapped_native ?? "0x5555555555555555555555555555555555555555") as Address;
-
+      // 3. Per-token oracle prices + wrapped-native price.
+      // The wrapped-native price is also used as the native gas-token price.
+      const priceTokens: Address[] = [];
       if (oracleAddr) {
+        for (const tokenAddr of tokenAddrsByCallIdx) {
+          calls.push([
+            oracleAddr,
+            encodeFunctionData({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [tokenAddr] }),
+          ]);
+          callLabels.push(`price:${tokenAddr}`);
+          priceTokens.push(tokenAddr);
+        }
         calls.push([
           oracleAddr,
           encodeFunctionData({ abi: ORACLE_ABI, functionName: "getAssetPrice", args: [wrappedNative] }),
@@ -129,11 +146,23 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
         return;
       }
 
-      // Get native price (last call if oracle present)
+      // Per-token oracle prices and the native price live at the tail of the
+      // results array (after balances + lending data). Decode the native
+      // price first, then build a lookup map of tokenAddr → priceUsd.
+      const balanceCallCount = tokenAddrsByCallIdx.length;
+      const lendingCallCount = lendingProtocols.length;
+      const priceStartIdx = balanceCallCount + lendingCallCount;
+
       let nativePriceUsd = 0;
+      const priceByToken = new Map<string, number>();
       if (oracleAddr) {
-        const priceData = results[results.length - 1] ?? null;
-        nativePriceUsd = Number(decodeU256(priceData)) / 1e8;
+        for (let i = 0; i < priceTokens.length; i++) {
+          const priceData = results[priceStartIdx + i] ?? null;
+          const px = Number(decodeU256(priceData)) / 1e8;
+          if (px > 0) priceByToken.set(priceTokens[i].toLowerCase(), px);
+        }
+        const nativePriceData = results[priceStartIdx + priceTokens.length] ?? null;
+        nativePriceUsd = Number(decodeU256(nativePriceData)) / 1e8;
       }
 
       let totalValueUsd = 0;
@@ -156,15 +185,27 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
           const decimals = entry.decimals;
           const balF64 = Number(balance) / 10 ** decimals;
           const symbolUpper = symbol.toUpperCase();
-          const valueUsd =
-            symbolUpper.includes("USD") || symbolUpper.includes("usd")
-              ? balF64
-              : balF64 * nativePriceUsd;
-          totalValueUsd += valueUsd;
+          // Pricing precedence:
+          //   1. USD-symbol stablecoins → 1:1 (covers USDC/USDT/USDe/USDH/etc.).
+          //   2. Wrapped-native token → use the native price we already fetched.
+          //   3. Any other token → use the per-asset oracle price if available;
+          //      otherwise null (omit from total) instead of pretending the
+          //      token trades at the native asset's price.
+          const tokenAddrLower = (entry.address as Address).toLowerCase();
+          let valueUsd: number | null;
+          if (symbolUpper.includes("USD")) {
+            valueUsd = balF64;
+          } else if (tokenAddrLower === wrappedNative.toLowerCase()) {
+            valueUsd = balF64 * nativePriceUsd;
+          } else {
+            const px = priceByToken.get(tokenAddrLower);
+            valueUsd = px && px > 0 ? balF64 * px : null;
+          }
+          if (valueUsd !== null) totalValueUsd += valueUsd;
           tokenBalances.push({
             symbol,
             balance: balF64.toFixed(4),
-            value_usd: valueUsd.toFixed(2),
+            value_usd: valueUsd !== null ? valueUsd.toFixed(2) : null,
           });
         }
         idx++;
@@ -197,11 +238,29 @@ export function registerPortfolio(parent: Command, getOpts: () => OutputMode): v
         idx++;
       }
 
+      // Native gas-token balance — separate eth_getBalance round-trip so the
+      // total reflects the wallet's actual on-chain net worth rather than just
+      // the ERC20 + lending slice.
+      let nativeBalance = 0n;
+      let nativeValueUsd = 0;
+      try {
+        const client = createPublicClient({ transport: http(rpc) });
+        nativeBalance = await client.getBalance({ address: user });
+        const nativeF64 = Number(nativeBalance) / 1e18;
+        nativeValueUsd = nativeF64 * nativePriceUsd;
+        if (nativeBalance > 0n) totalValueUsd += nativeValueUsd;
+      } catch {
+        // Native balance is best-effort; an RPC hiccup here shouldn't fail
+        // the whole portfolio query.
+      }
+
       printOutput(
         {
           address: user,
           chain: chain.name,
           native_price_usd: nativePriceUsd.toFixed(2),
+          native_balance: (Number(nativeBalance) / 1e18).toFixed(6),
+          native_value_usd: nativeValueUsd.toFixed(2),
           total_value_usd: totalValueUsd.toFixed(2),
           token_balances: tokenBalances,
           lending_positions: lendingPositions,

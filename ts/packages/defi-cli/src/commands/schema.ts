@@ -10,7 +10,12 @@ export function registerSchema(parent: Command, getOpts: () => OutputMode): void
     .option("--all", "Show all schemas")
     .action(async (command: string | undefined, opts: { all?: boolean }) => {
       const mode = getOpts();
-      const action = opts.all ? "all" : (command ?? "all");
+      // CLI passes hyphenated forms (`schema lending-supply`); the action
+      // dispatcher in agent.ts uses dotted keys (`lending.supply`). Normalise
+      // here so the schema lookup hits the right case instead of falling
+      // through to the generic action list.
+      const raw = opts.all ? "all" : (command ?? "all");
+      const action = raw.replace(/-/g, ".");
       const params: Record<string, unknown> = { action };
       const schema = handleSchema(params);
       printOutput(schema, mode);

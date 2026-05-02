@@ -5,6 +5,7 @@ import type { LendingRates } from "@hypurrquant/defi-core";
 import { createLending, createVault } from "@hypurrquant/defi-protocols";
 import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
+import { errMsg } from "../utils.js";
 import type { Executor } from "../executor.js";
 
 function resolveAsset(registry: Registry, chain: string, asset: string): Address {
@@ -16,17 +17,23 @@ function resolveAsset(registry: Registry, chain: string, asset: string): Address
 }
 
 /** Collect lending rates for all lending protocols */
+interface CollectedRates {
+  rates: LendingRates[];
+  errors: Array<{ protocol: string; type: string; reason: string }>;
+}
+
 async function collectLendingRates(
   registry: Registry,
   chainName: string,
   rpc: string,
   assetAddr: Address,
-): Promise<LendingRates[]> {
+): Promise<CollectedRates> {
   const protos = registry
     .getProtocolsForChain(chainName)
     .filter((p) => p.category === ProtocolCategory.Lending);
 
-  const results: LendingRates[] = [];
+  const rates: LendingRates[] = [];
+  const errors: CollectedRates["errors"] = [];
   let first = true;
 
   for (const proto of protos) {
@@ -38,29 +45,47 @@ async function collectLendingRates(
 
     try {
       const lending = createLending(proto, rpc);
-      const rates = await lending.getRates(assetAddr);
-      results.push(rates);
+      const r = await lending.getRates(assetAddr);
+      rates.push(r);
     } catch (err) {
+      // Stderr warning preserved for human users; structured error returned
+      // for programmatic callers (e.g. yield optimize) so they can decide
+      // whether "empty results" means a real miss or a transport failure.
       process.stderr.write(`Warning: ${proto.name} rates unavailable: ${err}\n`);
+      errors.push({ protocol: proto.name, type: "lending_supply", reason: errMsg(err) });
     }
   }
 
-  return results;
+  return { rates, errors };
 }
 
 /** Collect all yield opportunities: lending + morpho + vaults */
+interface CollectedYields {
+  opportunities: unknown[];
+  /**
+   * Per-probe errors accumulated during collection. Empty when all probes
+   * either returned data or were skipped because the protocol doesn't expose
+   * the asset. Non-empty when transport errors (RPC throttle, timeouts) hit —
+   * the caller should surface these instead of returning a misleading
+   * "no opportunities found" when the issue is environmental.
+   */
+  errors: Array<{ protocol: string; type: string; reason: string }>;
+}
+
 async function collectAllYields(
   registry: Registry,
   chainName: string,
   rpc: string,
   asset: string,
   assetAddr: Address,
-): Promise<unknown[]> {
+): Promise<CollectedYields> {
   const opportunities: unknown[] = [];
+  const errors: CollectedYields["errors"] = [];
 
   // 1. Aave V3 lending rates
-  const lendingRates = await collectLendingRates(registry, chainName, rpc, assetAddr);
-  for (const r of lendingRates) {
+  const lendingResult = await collectLendingRates(registry, chainName, rpc, assetAddr);
+  errors.push(...lendingResult.errors);
+  for (const r of lendingResult.rates) {
     if (r.supply_apy > 0) {
       opportunities.push({
         protocol: r.protocol,
@@ -88,8 +113,8 @@ async function collectAllYields(
             utilization: rates.utilization,
           });
         }
-      } catch {
-        // skip
+      } catch (e) {
+        errors.push({ protocol: proto.name, type: "morpho_vault", reason: errMsg(e) });
       }
     }
   }
@@ -107,8 +132,8 @@ async function collectAllYields(
           apy: info.apy ?? 0,
           total_assets: info.total_assets.toString(),
         });
-      } catch {
-        // skip
+      } catch (e) {
+        errors.push({ protocol: proto.name, type: "vault", reason: errMsg(e) });
       }
     }
   }
@@ -120,7 +145,7 @@ async function collectAllYields(
     return ba - aa;
   });
 
-  return opportunities;
+  return { opportunities, errors };
 }
 
 /** Scan all chains in parallel for best yield on an asset */
@@ -312,11 +337,16 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
         const rpc = chain.effectiveRpcUrl();
         const assetAddr = resolveAsset(registry, chainName, opts.asset as string);
 
-        const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+        const { rates: results, errors: ratesErrors } = await collectLendingRates(registry, chainName, rpc, assetAddr);
 
         if (results.length === 0) {
           printOutput(
-            { error: `No lending rate data available for asset '${opts.asset}'` },
+            ratesErrors.length > 0
+              ? {
+                  error: `Could not collect lending rates for '${opts.asset}': ${ratesErrors.length} probe(s) failed (likely RPC throttling). Retry, or set ${chainName.toUpperCase()}_RPC_URL.`,
+                  failed_probes: ratesErrors,
+                }
+              : { error: `No lending rate data available for asset '${opts.asset}'` },
             getOpts(),
           );
           process.exit(1);
@@ -627,10 +657,20 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
         const strategy = (opts.strategy as string) ?? "auto";
 
         if (strategy === "auto") {
-          const opportunities = await collectAllYields(registry, chainName, rpc, asset, assetAddr);
+          const { opportunities, errors } = await collectAllYields(registry, chainName, rpc, asset, assetAddr);
 
           if (opportunities.length === 0) {
-            printOutput({ error: `No yield opportunities found for '${asset}'` }, getOpts());
+            // Distinguish "really no yield" from "couldn't reach the RPC".
+            // When every probe errored we surface the transport failures so
+            // the caller can retry instead of treating it as a clean miss.
+            if (errors.length > 0) {
+              printOutput({
+                error: `Could not collect yield data for '${asset}': ${errors.length} probe(s) failed (likely RPC throttling or transport error). Retry, or set a private RPC URL via ${chainName.toUpperCase()}_RPC_URL.`,
+                failed_probes: errors,
+              }, getOpts());
+            } else {
+              printOutput({ error: `No yield opportunities found for '${asset}'` }, getOpts());
+            }
             process.exit(1);
             return;
           }
@@ -669,10 +709,15 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
             getOpts(),
           );
         } else if (strategy === "best-supply") {
-          const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+          const { rates: results, errors: rErr } = await collectLendingRates(registry, chainName, rpc, assetAddr);
 
           if (results.length === 0) {
-            printOutput({ error: `No lending rate data available for asset '${asset}'` }, getOpts());
+            printOutput(
+              rErr.length > 0
+                ? { error: `Could not collect lending rates for '${asset}': ${rErr.length} probe(s) failed (RPC throttling likely).`, failed_probes: rErr }
+                : { error: `No lending rate data available for asset '${asset}'` },
+              getOpts(),
+            );
             process.exit(1);
             return;
           }
@@ -697,10 +742,15 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
             getOpts(),
           );
         } else if (strategy === "leverage-loop") {
-          const results = await collectLendingRates(registry, chainName, rpc, assetAddr);
+          const { rates: results, errors: lErr } = await collectLendingRates(registry, chainName, rpc, assetAddr);
 
           if (results.length === 0) {
-            printOutput({ error: `No lending rate data available for asset '${asset}'` }, getOpts());
+            printOutput(
+              lErr.length > 0
+                ? { error: `Could not collect lending rates for '${asset}': ${lErr.length} probe(s) failed (RPC throttling likely).`, failed_probes: lErr }
+                : { error: `No lending rate data available for asset '${asset}'` },
+              getOpts(),
+            );
             process.exit(1);
             return;
           }
