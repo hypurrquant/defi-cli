@@ -70,9 +70,16 @@ export function resolveTokenAddress(registry: Registry, chainName: string, token
 // ── Wallet address ──
 
 const FALLBACK_ADDRESS = "0x0000000000000000000000000000000000000001" as Address;
+let warnedFallback = false;
 
 /**
- * Resolve wallet address from explicit option, env var (including OWS), or fallback.
+ * Resolve wallet address from explicit option, env var (including OWS), or
+ * fall back to a placeholder for dry-run preview.
+ *
+ * The placeholder is INTENTIONALLY visible: a wallet command that builds a
+ * transaction targeting 0x0000…0001 should be obvious in the dry-run output,
+ * and the stderr warning fires once per process so the user notices before
+ * they consider passing --broadcast.
  */
 export function resolveWallet(override?: string): Address {
   if (override) return override as Address;
@@ -80,8 +87,26 @@ export function resolveWallet(override?: string): Address {
     const { address } = resolveWalletWithSigner();
     return address;
   } catch {
+    if (!warnedFallback) {
+      process.stderr.write(
+        "WARNING: no wallet configured (set DEFI_WALLET_ADDRESS or DEFI_PRIVATE_KEY, or use --wallet <name>). " +
+        `Using placeholder ${FALLBACK_ADDRESS} for dry-run preview ONLY — do NOT pass --broadcast with this address.\n`,
+      );
+      warnedFallback = true;
+    }
     return FALLBACK_ADDRESS;
   }
+}
+
+/**
+ * Strict wallet resolution — throws when no wallet is configured. Use this in
+ * paths that have no meaningful dry-run semantics (e.g. broadcast-only flows
+ * or balance queries that would silently report the placeholder's balance).
+ */
+export function resolveWalletStrict(override?: string): Address {
+  if (override) return override as Address;
+  const { address } = resolveWalletWithSigner();
+  return address;
 }
 
 // ── Error formatting ──

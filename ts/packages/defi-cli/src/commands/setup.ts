@@ -3,8 +3,12 @@ import pc from "picocolors";
 import { createInterface } from "readline";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
+import { homedir } from "os";
 
-const DEFI_DIR = resolve(process.env.HOME || "~", ".defi");
+// homedir() handles HOME unset / Windows USERPROFILE / etc.
+// Previous resolve(process.env.HOME || "~", ".defi") wrote to literal `~/.defi`
+// inside cwd when HOME was unset (e.g. in some sandboxed CI runners).
+const DEFI_DIR = resolve(homedir(), ".defi");
 const ENV_FILE = resolve(DEFI_DIR, ".env");
 
 // ── .env helpers ──────────────────────────────────────────────
@@ -48,6 +52,65 @@ function ask(rl: ReturnType<typeof createInterface>, question: string): Promise<
   return new Promise((res) => rl.question(question, (answer) => res(answer.trim())));
 }
 
+/**
+ * Read sensitive input (private key) without echoing it to the terminal.
+ * Falls back to a plain question() when stdin is not a TTY (e.g. piped CI
+ * input) — there's no terminal to disable echo on, but the input also isn't
+ * being shown to a human in that case.
+ */
+function askSecret(rl: ReturnType<typeof createInterface>, question: string): Promise<string> {
+  const stdin = process.stdin;
+  if (!stdin.isTTY) return ask(rl, question);
+  process.stdout.write(question);
+  // Toggle the readline output so each keypress doesn't appear in the terminal.
+  // Approach: temporarily replace rl.output's write with a no-op while reading.
+  const rlAny = rl as unknown as { _writeToOutput?: (s: string) => void };
+  const original = rlAny._writeToOutput;
+  rlAny._writeToOutput = (s: string) => {
+    // Allow newline (Enter) and ANSI control sequences through; suppress
+    // visible characters of the secret itself.
+    if (s.includes("\n") || s.includes("\r")) {
+      original?.call(rl, s);
+    }
+  };
+  return new Promise((res) => {
+    rl.question("", (answer) => {
+      rlAny._writeToOutput = original;
+      process.stdout.write("\n"); // Newline since echo was suppressed.
+      res(answer.trim());
+    });
+  });
+}
+
+/**
+ * Mask the path of an RPC URL so embedded API keys (e.g.
+ * https://eth.example.com/v3/abc123) don't end up echoed back in the
+ * "Current configuration" or "Setup Complete" summary panes.
+ */
+function maskRpcUrl(s: string): string {
+  try {
+    const u = new URL(s);
+    if (u.pathname && u.pathname !== "/" && u.pathname.length > 1) {
+      return `${u.protocol}//${u.host}/***`;
+    }
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return "***";
+  }
+}
+
+function isValidRpcUrl(s: string): boolean {
+  try {
+    const u = new URL(s);
+    // Accept http(s) only — viem transports across the CLI hardcode `http(url)`,
+    // so a stored ws:// URL would parse cleanly here but fail at the first
+    // RPC call with "unknown scheme". Better to reject it during setup.
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 // ── Validation helpers ─────────────────────────────────────────
 
 function isValidAddress(s: string): boolean {
@@ -86,10 +149,16 @@ export function registerSetup(program: Command) {
         if (Object.keys(existing).length > 0) {
           console.log(pc.white("  Current configuration:"));
           for (const [key, value] of Object.entries(existing)) {
-            const masked =
-              key.toLowerCase().includes("key")
-                ? value.slice(0, 6) + "..." + value.slice(-4)
-                : value;
+            // Always mask private keys; mask RPC URL paths because providers
+            // commonly embed API keys in the path component.
+            let masked: string;
+            if (key.toLowerCase().includes("key")) {
+              masked = value.slice(0, 6) + "..." + value.slice(-4);
+            } else if (key.endsWith("RPC_URL")) {
+              masked = maskRpcUrl(value);
+            } else {
+              masked = value;
+            }
             console.log(`    ${pc.cyan(key.padEnd(24))} ${pc.gray(masked)}`);
           }
           console.log();
@@ -107,7 +176,9 @@ export function registerSetup(program: Command) {
         // ── Wallet address / private key ──
         console.log(pc.cyan(pc.bold("  Wallet")));
 
-        const privateKey = await ask(rl, "  Private key (optional, for --broadcast, 0x...): ");
+        // Hidden input: characters are suppressed in the terminal so the key
+        // doesn't end up in shoulder-surfing distance / terminal scrollback.
+        const privateKey = await askSecret(rl, "  Private key (optional, for --broadcast, 0x... — input hidden): ");
         if (privateKey) {
           const normalized = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
           if (!isValidPrivateKey(normalized)) {
@@ -147,6 +218,12 @@ export function registerSetup(program: Command) {
         for (const { env, label } of rpcPrompts) {
           const value = await ask(rl, `  ${label} RPC URL: `);
           if (value) {
+            // Reject obvious typos / wrong protocols up front rather than
+            // letting them fail at the first eth_call hours later.
+            if (!isValidRpcUrl(value)) {
+              console.log(pc.yellow(`  Invalid URL (${value}). Skipped — re-run setup to retry.`));
+              continue;
+            }
             newEnv[env] = value;
             console.log(`  ${pc.green("OK")} ${label} RPC set`);
           }
@@ -176,7 +253,7 @@ export function registerSetup(program: Command) {
         ];
         for (const [k, label] of rpcSummary) {
           const v = finalEnv[k];
-          if (v) console.log(`  ${label}: ${pc.gray(v)}`);
+          if (v) console.log(`  ${label}: ${pc.gray(maskRpcUrl(v))}`);
         }
 
         console.log(pc.bold(pc.white("\n  Next steps:")));

@@ -9777,12 +9777,20 @@ function resolveTokenAddress(registry, chainName, tokenOrAddress) {
   return registry.resolveToken(chainName, tokenOrAddress).address;
 }
 var FALLBACK_ADDRESS = "0x0000000000000000000000000000000000000001";
+var warnedFallback = false;
 function resolveWallet(override) {
   if (override) return override;
   try {
     const { address } = resolveWalletWithSigner();
     return address;
   } catch {
+    if (!warnedFallback) {
+      process.stderr.write(
+        `WARNING: no wallet configured (set DEFI_WALLET_ADDRESS or DEFI_PRIVATE_KEY, or use --wallet <name>). Using placeholder ${FALLBACK_ADDRESS} for dry-run preview ONLY \u2014 do NOT pass --broadcast with this address.
+`
+      );
+      warnedFallback = true;
+    }
     return FALLBACK_ADDRESS;
   }
 }
@@ -11196,14 +11204,25 @@ function registerPrice(parent, getOpts) {
 // src/commands/wallet.ts
 init_dist();
 import { createPublicClient as createPublicClient26, http as http26, formatEther } from "viem";
+function resolveCurrentAddress(override) {
+  if (override) return { address: override, source: "flag" };
+  try {
+    const { address, signer } = resolveWalletWithSigner();
+    return { address, source: signer ? "ows" : process.env["DEFI_PRIVATE_KEY"] ? "private_key" : "env" };
+  } catch {
+    return { address: null, source: "none" };
+  }
+}
 function registerWallet(parent, getOpts) {
   const wallet = parent.command("wallet").description("Wallet management");
-  wallet.command("balance").description("Show native token balance").option("--address <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
+  wallet.command("balance").description("Show native token balance").option("--address <address>", "Wallet address (defaults to OWS vault, DEFI_PRIVATE_KEY, or DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
-    const addr = opts.address ?? process.env["DEFI_WALLET_ADDRESS"];
+    const { address: addr, source } = resolveCurrentAddress(opts.address);
     if (!addr) {
-      printOutput({ error: "--address required (or set DEFI_WALLET_ADDRESS)" }, getOpts());
+      printOutput({
+        error: "No wallet configured. Set DEFI_WALLET_ADDRESS, set DEFI_PRIVATE_KEY, or pass --address."
+      }, getOpts());
       return;
     }
     const registry = Registry.loadEmbedded();
@@ -11213,14 +11232,15 @@ function registerWallet(parent, getOpts) {
     printOutput({
       chain: chain.name,
       address: addr,
+      wallet_source: source,
       native_token: chain.native_token,
       balance_wei: balance,
       balance_formatted: formatEther(balance)
     }, getOpts());
   });
   wallet.command("address").description("Show configured wallet address").action(async () => {
-    const addr = process.env.DEFI_WALLET_ADDRESS ?? "(not set)";
-    printOutput({ address: addr }, getOpts());
+    const { address, source } = resolveCurrentAddress();
+    printOutput({ address, source }, getOpts());
   });
 }
 
@@ -11874,7 +11894,8 @@ import pc2 from "picocolors";
 import { createInterface } from "readline";
 import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "fs";
 import { resolve as resolve4 } from "path";
-var DEFI_DIR = resolve4(process.env.HOME || "~", ".defi");
+import { homedir as homedir2 } from "os";
+var DEFI_DIR = resolve4(homedir2(), ".defi");
 var ENV_FILE = resolve4(DEFI_DIR, ".env");
 function ensureDefiDir() {
   if (!existsSync3(DEFI_DIR)) mkdirSync2(DEFI_DIR, { recursive: true, mode: 448 });
@@ -11909,6 +11930,44 @@ function writeEnvFile(env) {
 function ask(rl, question) {
   return new Promise((res) => rl.question(question, (answer) => res(answer.trim())));
 }
+function askSecret(rl, question) {
+  const stdin = process.stdin;
+  if (!stdin.isTTY) return ask(rl, question);
+  process.stdout.write(question);
+  const rlAny = rl;
+  const original = rlAny._writeToOutput;
+  rlAny._writeToOutput = (s) => {
+    if (s.includes("\n") || s.includes("\r")) {
+      original?.call(rl, s);
+    }
+  };
+  return new Promise((res) => {
+    rl.question("", (answer) => {
+      rlAny._writeToOutput = original;
+      process.stdout.write("\n");
+      res(answer.trim());
+    });
+  });
+}
+function maskRpcUrl(s) {
+  try {
+    const u = new URL(s);
+    if (u.pathname && u.pathname !== "/" && u.pathname.length > 1) {
+      return `${u.protocol}//${u.host}/***`;
+    }
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return "***";
+  }
+}
+function isValidRpcUrl(s) {
+  try {
+    const u = new URL(s);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 function isValidAddress(s) {
   return /^0x[0-9a-fA-F]{40}$/.test(s);
 }
@@ -11933,7 +11992,14 @@ function registerSetup(program2) {
       if (Object.keys(existing).length > 0) {
         console.log(pc2.white("  Current configuration:"));
         for (const [key, value] of Object.entries(existing)) {
-          const masked = key.toLowerCase().includes("key") ? value.slice(0, 6) + "..." + value.slice(-4) : value;
+          let masked;
+          if (key.toLowerCase().includes("key")) {
+            masked = value.slice(0, 6) + "..." + value.slice(-4);
+          } else if (key.endsWith("RPC_URL")) {
+            masked = maskRpcUrl(value);
+          } else {
+            masked = value;
+          }
           console.log(`    ${pc2.cyan(key.padEnd(24))} ${pc2.gray(masked)}`);
         }
         console.log();
@@ -11947,7 +12013,7 @@ function registerSetup(program2) {
       }
       const newEnv = {};
       console.log(pc2.cyan(pc2.bold("  Wallet")));
-      const privateKey = await ask(rl, "  Private key (optional, for --broadcast, 0x...): ");
+      const privateKey = await askSecret(rl, "  Private key (optional, for --broadcast, 0x... \u2014 input hidden): ");
       if (privateKey) {
         const normalized = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
         if (!isValidPrivateKey(normalized)) {
@@ -11983,6 +12049,10 @@ function registerSetup(program2) {
       for (const { env, label } of rpcPrompts) {
         const value = await ask(rl, `  ${label} RPC URL: `);
         if (value) {
+          if (!isValidRpcUrl(value)) {
+            console.log(pc2.yellow(`  Invalid URL (${value}). Skipped \u2014 re-run setup to retry.`));
+            continue;
+          }
           newEnv[env] = value;
           console.log(`  ${pc2.green("OK")} ${label} RPC set`);
         }
@@ -12006,7 +12076,7 @@ function registerSetup(program2) {
       ];
       for (const [k, label] of rpcSummary) {
         const v = finalEnv[k];
-        if (v) console.log(`  ${label}: ${pc2.gray(v)}`);
+        if (v) console.log(`  ${label}: ${pc2.gray(maskRpcUrl(v))}`);
       }
       console.log(pc2.bold(pc2.white("\n  Next steps:")));
       console.log(`    ${pc2.green("defi portfolio")}          view balances & positions`);
