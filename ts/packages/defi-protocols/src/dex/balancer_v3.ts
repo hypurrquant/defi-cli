@@ -34,7 +34,16 @@ export class BalancerV3Adapter implements IDex {
   }
 
   async buildSwap(params: SwapParams): Promise<DeFiTx> {
-    const minAmountOut = 0n;
+    // SSOT 7.3: this.quote() is unimplemented for Balancer V3, so the
+    // caller MUST pin params.amount_out_min. We refuse to ship 0n.
+    if (params.amount_out_min === undefined) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] buildSwap requires amount_out_min for slippage protection ` +
+          `(SSOT 7.3) — Balancer V3 has no on-chain quoter wired in this adapter. Compute the ` +
+          `floor off-chain (e.g. via the Vault's static-call simulation) and pass it explicitly.`,
+      );
+    }
+    const minAmountOut = params.amount_out_min;
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
 
     // Balancer V3 requires a pool address. For now use a simplified single-pool swap.
