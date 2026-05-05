@@ -8,7 +8,7 @@
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  5 chains · 39 protocols · 5 aggregators
+  5 chains · 38 protocols · 5 aggregators
 ```
 
 Multi-chain DeFi toolkit with verified mainnet broadcast paths. Lending, LP farming, DEX swap, cross-chain bridge, yield comparison — all from your terminal. Built for humans and AI agents.
@@ -93,7 +93,7 @@ The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integ
 
 ## Supported Protocols
 
-### HyperEVM (11)
+### HyperEVM (10)
 
 | Slug | Category | Interface | Notes |
 |---|---|---|---|
@@ -101,13 +101,13 @@ The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integ
 | `hypurrfi` | Lending | aave_v3 | Aave V3 fork |
 | `felix-morpho` | Lending | morpho_blue | MetaMorpho ERC-4626 vault routing |
 | `project-x` | DEX | uniswap_v3 | V3 fee-only |
-| `hyperswap` | DEX | uniswap_v3 | V3 fee-only |
+| `hyperswap-v3` | DEX | uniswap_v3 | V3 fee-only |
 | `curve-hyperevm` | DEX | curve_stableswap | StableswapNG |
 | `ramses-cl` | DEX | uniswap_v3 + cl_style="ramses" | x(3,3) auto-stake, NPM.getPeriodReward |
 | `ramses-hl` | DEX | solidly_v2 | ve(3,3) gauge, RAM emission |
 | `kittenswap` | DEX | algebra_v3 + farming_center | Eternal farming, KITTEN/WHYPE rewards |
 | `hybra` | DEX | hybra (V4 CL) | GaugeManager + 2-year veHYBR lock (default) |
-| `nest` | DEX | algebra_v3 | Off-chain ticket-based NEST claim |
+| `nest` _(inactive)_ | DEX | algebra_v3 | Off-chain ticket-based NEST claim — disabled in config (`is_active = false`); CLI rejects with "Protocol not found". Off-chain claim via `blaze.nest.aegas.it`. |
 
 ### Mantle (3)
 
