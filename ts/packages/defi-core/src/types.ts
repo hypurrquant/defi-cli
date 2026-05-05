@@ -95,6 +95,14 @@ export interface SwapParams {
   slippage: Slippage;
   recipient: Address;
   deadline?: number;
+  /**
+   * Explicit minimum amount of `token_out` accepted by the swap. When
+   * provided, this overrides the slippage-derived floor — the adapter
+   * MUST use this value verbatim. When omitted, the adapter computes
+   * `applyMinSlippage(slippage, quotedAmountOut)` as the floor and
+   * MUST NOT fall back to 0.
+   */
+  amount_out_min?: bigint;
 }
 
 export interface QuoteParams {
@@ -127,6 +135,17 @@ export interface AddLiquidityParams {
   range_pct?: number;
   /** Optional pool address for tick detection / single-side LP */
   pool?: Address;
+  /**
+   * Slippage tolerance for `amount0Min`/`amount1Min` derivation.
+   * When `amount_a_min`/`amount_b_min` are not provided, the adapter
+   * applies `applyMinSlippage(slippage, amountDesired)` per side. Default
+   * = `defaultSwapSlippage()` (50 bps = 0.5%).
+   */
+  slippage?: Slippage;
+  /** Explicit minimum of token_a accepted on add (overrides slippage). */
+  amount_a_min?: bigint;
+  /** Explicit minimum of token_b accepted on add (overrides slippage). */
+  amount_b_min?: bigint;
 }
 
 export interface RemoveLiquidityParams {
@@ -137,6 +156,16 @@ export interface RemoveLiquidityParams {
   recipient: Address;
   /** NFT tokenId for V3 / CL position managers (required for V3-style removes) */
   token_id?: bigint;
+  /**
+   * Slippage tolerance for `amount0Min`/`amount1Min` derivation. When the
+   * caller does not supply explicit minimums, the adapter computes them
+   * from a live quote. Default = `defaultSwapSlippage()` (50 bps).
+   */
+  slippage?: Slippage;
+  /** Explicit minimum of token_a accepted on remove (overrides slippage). */
+  amount_a_min?: bigint;
+  /** Explicit minimum of token_b accepted on remove (overrides slippage). */
+  amount_b_min?: bigint;
 }
 
 // === Lending Types ===
