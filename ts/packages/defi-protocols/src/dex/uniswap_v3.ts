@@ -1,7 +1,11 @@
 import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParameters } from "viem";
 import type { Address } from "viem";
 
-import { DefiError } from "@hypurrquant/defi-core";
+import {
+  DefiError,
+  applyMinSlippage,
+  defaultSwapSlippage,
+} from "@hypurrquant/defi-core";
 import type {
   IDex,
   ProtocolEntry,
@@ -87,7 +91,23 @@ export class UniswapV3Adapter implements IDex {
 
   async buildSwap(params: SwapParams): Promise<DeFiTx> {
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-    const amountOutMinimum = 0n;
+    // SSOT Section 7.3: never broadcast `amountOutMinimum: 0n`. If the
+    // caller pinned an explicit floor (e.g. from an aggregator quote),
+    // honor it verbatim. Otherwise derive a floor from a live quote so
+    // the user is protected even if they forgot the --slippage flag.
+    const amountOutMinimum =
+      params.amount_out_min ??
+      applyMinSlippage(
+        params.slippage,
+        (
+          await this.quote({
+            protocol: this.protocolName,
+            token_in: params.token_in,
+            token_out: params.token_out,
+            amount_in: params.amount_in,
+          })
+        ).amount_out,
+      );
 
     const data = encodeFunctionData({
       abi: swapRouterAbi,
@@ -280,15 +300,23 @@ export class UniswapV3Adapter implements IDex {
     }
 
     // Sort tokens (Uniswap V3 requires token0 < token1)
-    const [token0, token1, rawAmount0, rawAmount1] =
-      params.token_a.toLowerCase() < params.token_b.toLowerCase()
-        ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
-        : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [token0, token1, rawAmount0, rawAmount1] = isAFirst
+      ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
+      : [params.token_b, params.token_a, params.amount_b, params.amount_a];
 
     // V3 NPM mint: getLiquidityForAmounts uses min(L0, L1), so if either is 0
     // then liquidity=0 → revert. Use 1 wei minimum for single-side LP.
     const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
     const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
+
+    // SSOT 7.3: derive amount{0,1}Min from caller's per-side override or
+    // applyMinSlippage(slippage, desired). Single-side mints (where one
+    // side is 0) yield a 0n minimum — this is correct, not a regression.
+    const slippage = params.slippage ?? defaultSwapSlippage();
+    const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+    const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+    const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
 
     // Default: full range, configured fee tier
     let thirdField: number = this.fee;
@@ -340,8 +368,8 @@ export class UniswapV3Adapter implements IDex {
               tickUpper,
               amount0Desired: amount0,
               amount1Desired: amount1,
-              amount0Min: 0n,
-              amount1Min: 0n,
+              amount0Min,
+              amount1Min,
               recipient: params.recipient,
               deadline: BigInt("18446744073709551615"),
               sqrtPriceX96: 0n,
@@ -360,8 +388,8 @@ export class UniswapV3Adapter implements IDex {
               tickUpper,
               amount0Desired: amount0,
               amount1Desired: amount1,
-              amount0Min: 0n,
-              amount1Min: 0n,
+              amount0Min,
+              amount1Min,
               recipient: params.recipient,
               deadline: BigInt("18446744073709551615"),
             },
@@ -397,10 +425,26 @@ export class UniswapV3Adapter implements IDex {
     const liquidity = params.liquidity;
     const MAX_UINT128 = (1n << 128n) - 1n;
     const deadline = BigInt("18446744073709551615");
+    // SSOT 7.3: caller must pin amount{0,1}Min when removing liquidity.
+    // Computing them from on-chain state would require sqrtPriceMath +
+    // tick math; we leave that to the caller (lp.ts CLI) and refuse to
+    // ship a 0n floor. token_a/token_b carry the unsorted symbol pair so
+    // we map amount_{a,b}_min back to the sorted token0/token1 here.
+    if (params.amount_a_min === undefined || params.amount_b_min === undefined) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] V3 remove_liquidity requires amount_a_min and amount_b_min for ` +
+          `slippage protection (SSOT 7.3). Caller must compute expected token outputs from the ` +
+          `pool state and apply a slippage tolerance before calling buildRemoveLiquidity.`,
+      );
+    }
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [amount0Min, amount1Min] = isAFirst
+      ? [params.amount_a_min, params.amount_b_min]
+      : [params.amount_b_min, params.amount_a_min];
     const decreaseData = encodeFunctionData({
       abi: positionManagerAbi,
       functionName: "decreaseLiquidity",
-      args: [{ tokenId, liquidity, amount0Min: 0n, amount1Min: 0n, deadline }],
+      args: [{ tokenId, liquidity, amount0Min, amount1Min, deadline }],
     });
     const collectData = encodeFunctionData({
       abi: positionManagerAbi,
