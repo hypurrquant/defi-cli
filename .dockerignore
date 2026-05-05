@@ -1,0 +1,53 @@
+# Keep the build context lean and prevent host node_modules from leaking
+# into the container image.
+
+# VCS / IDE
+.git
+.gitignore
+.github
+.idea
+.vscode
+
+# Node / pnpm
+**/node_modules
+**/dist
+**/.turbo
+**/.next
+**/.tsbuildinfo
+
+# Python (legacy)
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+src/
+tests/
+config/
+results.tsv
+run.log
+
+# Rust (legacy)
+target
+crates
+Cargo.toml
+Cargo.lock
+**/*.rs.bk
+
+# Tooling state
+.serena
+.omc
+.playwright-mcp
+.claude
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.swp
+*.swo
+*.log
+.env
+*.key
