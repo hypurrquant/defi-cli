@@ -131,8 +131,10 @@ describe("chainId integrity (SSOT 7.4)", () => {
     const bad: string[] = [];
     for (const key of chainKeys) {
       const cfg = reg.chains.get(key)!;
-      const wn = cfg.wrapped_native;
-      if (!/^0x[0-9a-fA-F]{40}$/.test(wn)) {
+      const wn = cfg.wrapped_native ?? "";
+      if (!wn) {
+        bad.push(`${key}: wrapped_native missing`);
+      } else if (!/^0x[0-9a-fA-F]{40}$/.test(wn)) {
         bad.push(`${key}: wrapped_native='${wn}' is not a 20-byte hex address`);
       } else if (/^0x0+$/.test(wn)) {
         bad.push(`${key}: wrapped_native is the zero address`);
