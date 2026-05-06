@@ -691,6 +691,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)")
     .option("--range <percent>", "±N% concentrated range around current price (e.g. --range 2)")
     .option("--num-bins <n>", "Merchant Moe LB: bins on each side of active (default 5)")
+    .option("--slippage <bps>", "Slippage tolerance in basis points (default 50 = 0.5%). Sets amount{0,1}Min per side via applyMinSlippage.")
+    .option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on add (overrides --slippage for that side).")
+    .option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on add (overrides --slippage for that side).")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain;
@@ -742,6 +745,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         tick_upper: opts.tickUpper !== undefined ? parseInt(opts.tickUpper) : undefined,
         range_pct: opts.range !== undefined ? parseFloat(opts.range) : undefined,
         pool: poolAddr,
+        slippage: opts.slippage !== undefined ? { bps: parseInt(opts.slippage, 10) } : undefined,
+        amount_a_min: opts.amountAMin !== undefined ? BigInt(opts.amountAMin) : undefined,
+        amount_b_min: opts.amountBMin !== undefined ? BigInt(opts.amountBMin) : undefined,
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -763,6 +769,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--tick-lower <tick>", "Lower tick for concentrated LP")
     .option("--tick-upper <tick>", "Upper tick for concentrated LP")
     .option("--range <percent>", "±N% concentrated range around current price")
+    .option("--slippage <bps>", "Slippage tolerance in basis points (default 50 = 0.5%). Applied to the underlying mint step.")
+    .option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on add (overrides --slippage for that side).")
+    .option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on add (overrides --slippage for that side).")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = parent.opts<{ chain?: string }>().chain;
@@ -794,6 +803,9 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         tick_upper: opts.tickUpper !== undefined ? parseInt(opts.tickUpper) : undefined,
         range_pct: opts.range !== undefined ? parseFloat(opts.range) : undefined,
         pool: poolAddr,
+        slippage: opts.slippage !== undefined ? { bps: parseInt(opts.slippage, 10) } : undefined,
+        amount_a_min: opts.amountAMin !== undefined ? BigInt(opts.amountAMin) : undefined,
+        amount_b_min: opts.amountBMin !== undefined ? BigInt(opts.amountBMin) : undefined,
       });
 
       process.stderr.write("Step 1/2: Adding liquidity...\n");
@@ -1145,6 +1157,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
     .option("--recipient <address>", "Recipient address")
     .option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default — WARNING: long lock)")
     .option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw")
+    .option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on remove (REQUIRED for V3/Algebra/Thena CL — caller must compute from positions(tokenId) + pool state and apply tolerance).")
+    .option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on remove (REQUIRED for V3/Algebra/Thena CL).")
     .option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)")
     .action(async (opts) => {
       const executor = makeExecutor();
@@ -1356,6 +1370,8 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         liquidity: removeLiquidity,
         recipient,
         token_id: opts.tokenId ? BigInt(opts.tokenId) : undefined,
+        amount_a_min: opts.amountAMin !== undefined ? BigInt(opts.amountAMin) : undefined,
+        amount_b_min: opts.amountBMin !== undefined ? BigInt(opts.amountBMin) : undefined,
       });
       const removeResult = await executor.execute(removeTx);
       printOutput({ step: "lp_remove", ...removeResult }, getOpts());
