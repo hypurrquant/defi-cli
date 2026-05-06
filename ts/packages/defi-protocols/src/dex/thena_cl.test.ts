@@ -15,7 +15,7 @@ const ENTRY: ProtocolEntry = {
   slug: "test-thena-cl",
   category: ProtocolCategory.Dex,
   interface: "thena_cl",
-  chain: "test",
+  chain: "bnb",
   contracts: {
     router: ("0x" + "01".repeat(20)) as Address,
     position_manager: ("0x" + "03".repeat(20)) as Address,
