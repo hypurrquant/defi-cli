@@ -22,7 +22,9 @@ v2_factory = "0x9c7397c9C5ecC400992843408D3A283fE9108009"
 voter = "0x5623F012d15EB828C12fe32e46d40AdC2A9e4FA3"
 ve_token = "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
 minter = "0xA8265e40e4Cdf6DB345861F4FCb75F9CC63E149b"
-rewards_distributor = "0x04FCae9aF38e79B7bb82C6491BDACC2431F0e"
+# rewards_distributor: removed 2026-05-07 — the previously-listed address
+# was malformed (37 hex chars after 0x, should be 40) and no adapter code
+# referenced it. Re-add with the correct address when it's actually wired in.
 gauge_factory_cl = "0xeB60888176d0c6AF4C539D64b2E83E470a63e4F9"
 gauge_manager = "0x742CAA5bA7C92ca6CFeBfD0e73c21739b3b65d5e"
 bribe_factory = "0x2555F79AC6e8096c755096e3A8d175a4Bf5fC82F"
