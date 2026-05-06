@@ -1,17 +1,17 @@
 // Slippage protection guard (SSOT Section 7.3).
 //
-// **Active findings (2026-05-05)**: 4 DEX adapters ship swap and LP
-// builders with hard-coded `amountOutMinimum: 0n` / `amount{0,1}Min: 0n`
-// — i.e. effectively unlimited slippage and zero MEV protection. These
-// are tracked in KNOWN_INFINITE_SLIPPAGE below as a snapshot of the
-// pre-fix baseline. Removing entries from the set is the goal; adding
-// new entries is what this test blocks.
+// PR #3 (feat/slippage-protection) closed 14 of the 15 sites the
+// 2026-05-05 baseline catalogued. The single remaining `0n` minimum
+// in adapter code is an intentional carve-out inside an `eth_call`
+// simulation path that never broadcasts a transaction — see
+// KNOWN_INFINITE_SLIPPAGE below. Adding any *new* entry to that set
+// (i.e. a new place where 0n leaks into a real broadcast) is what
+// this test blocks.
 //
-// Why a snapshot rather than a hard ban: fixing all 15 sites requires
-// threading a `slippageBps` (or `amount{Out,0,1}Min`) parameter through
-// the IDex / lp-builder traits, which is a breaking change for the
-// public adapter surface. That refactor is intentionally separated from
-// this baseline pass and is tracked in the QA report's follow-up list.
+// Implementation note: line numbers in the snapshot are fragile when
+// adapter files get refactored. The 2026-05-05 baseline broke when
+// PR #4 shifted line numbers in uniswap_v3.ts; the snapshot below was
+// re-grounded against the current tree (post-PR #6 main).
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,29 +38,25 @@ function walk(dir: string): string[] {
 //   - Removing a line = adapter has been hardened (good).
 //   - Adding a line = regression — this test will fail.
 //
-// Snapshot taken: 2026-05-05 baseline (qa/2026-05-05-v1-0-12-baseline).
+// Re-grounded: 2026-05-06 against post-PR #6 main. PR #3 closed all
+// 14 broadcast-path sites the original 2026-05-05 baseline tracked.
 const KNOWN_INFINITE_SLIPPAGE = new Set<string>([
-  "dex/algebra_v3.ts:86",   // const amountOutMinimum = 0n  (buildSwap)
-  "dex/algebra_v3.ts:273",  // amount0Min: 0n, amount1Min: 0n  (buildAddLiquidity)
-  "dex/algebra_v3.ts:278",  // amount0Min: 0n, amount1Min: 0n  (alt mint args)
-  "dex/algebra_v3.ts:304",  // amount0Min: 0n, amount1Min: 0n  (buildRemoveLiquidity)
-  "dex/balancer_v3.ts:37",  // const minAmountOut = 0n  (buildSwap)
-  "dex/thena_cl.ts:78",     // amountOutMinimum: 0n  (buildSwap)
-  "dex/thena_cl.ts:165",    // amount0Min: 0n, amount1Min: 0n  (buildAddLiquidity)
-  "dex/thena_cl.ts:190",    // amount0Min: 0n, amount1Min: 0n  (buildRemoveLiquidity)
-  "dex/uniswap_v3.ts:90",   // const amountOutMinimum = 0n  (buildSwap)
-  "dex/uniswap_v3.ts:242",  // amountOutMinimum: 0n  (multi-hop swap)
-  "dex/uniswap_v3.ts:343",  // amount0Min: 0n  (buildAddLiquidity)
-  "dex/uniswap_v3.ts:344",  // amount1Min: 0n
-  "dex/uniswap_v3.ts:363",  // amount0Min: 0n  (slipstream mint)
-  "dex/uniswap_v3.ts:364",  // amount1Min: 0n
-  "dex/uniswap_v3.ts:403",  // amount0Min: 0n, amount1Min: 0n  (buildRemoveLiquidity)
+  // Read-only `eth_call` simulation inside UniswapV3Adapter.quote()
+  // fallback — never broadcasts a tx, so the floor is irrelevant.
+  // Refactoring the simulation to use a sentinel is tracked but is
+  // not a slippage exposure.
+  "dex/uniswap_v3.ts:262",
 ]);
 
 const slippageKeyPattern =
   /\b(amountOutMinimum|amount0Min|amount1Min|amountAMin|amountBMin|minAmountOut|minSharesOut)\s*:\s*0n\b/;
 const slippageDeclPattern =
   /^\s*(?:const|let)\s+(?:amountOutMinimum|minAmountOut|amount0Min|amount1Min|amountAMin|amountBMin)\s*=\s*0n\b/;
+// A line whose first non-whitespace character is `//` is a single-line
+// comment — the documentation comment in uniswap_v3.ts that warns
+// against `amountOutMinimum: 0n` would otherwise self-trigger this
+// guard. Block-comment lines starting with `*` are also skipped.
+const commentLinePattern = /^\s*(?:\/\/|\*)/;
 
 describe("slippage protection (SSOT 7.3)", () => {
   it("infinite-slippage call sites do not grow beyond the known snapshot", () => {
@@ -69,6 +65,7 @@ describe("slippage protection (SSOT 7.3)", () => {
       const rel = relative(ADAPTERS_DIR, file);
       const lines = readFileSync(file, "utf8").split("\n");
       for (let i = 0; i < lines.length; i++) {
+        if (commentLinePattern.test(lines[i])) continue;
         if (slippageKeyPattern.test(lines[i]) || slippageDeclPattern.test(lines[i])) {
           found.add(`${rel}:${i + 1}`);
         }
@@ -90,6 +87,7 @@ describe("slippage protection (SSOT 7.3)", () => {
       const rel = relative(ADAPTERS_DIR, file);
       const lines = readFileSync(file, "utf8").split("\n");
       for (let i = 0; i < lines.length; i++) {
+        if (commentLinePattern.test(lines[i])) continue;
         if (slippageKeyPattern.test(lines[i]) || slippageDeclPattern.test(lines[i])) {
           found.add(`${rel}:${i + 1}`);
         }
