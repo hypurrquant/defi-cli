@@ -257,12 +257,28 @@ export function registerSwap(
             slippageBps,
           );
 
+          // Native gas tokens (0x0 internal sentinel, 0xeeee… external
+          // 1inch/KyberSwap convention) move via msg.value, not via an ERC20
+          // transferFrom. KyberSwap's response sometimes echoes value="0"
+          // for native input on chains where the router infers value at
+          // execution time — but the actual router call requires
+          // msg.value === amount_in, so we force it here. We also skip
+          // approvals[] because there's no ERC20 contract to approve.
+          // Mirrors the openocean branch's handling at swap.ts:316-328.
+          const fromLowerKyber = (fromAddr as string).toLowerCase();
+          const isNativeInputKyber =
+            fromLowerKyber === "0x0000000000000000000000000000000000000000" ||
+            fromLowerKyber === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
           const tx = {
             description: `KyberSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
             to: txData.to as Address,
             data: txData.data as `0x${string}`,
-            value: parseBigIntValue(txData.value),
-            approvals: [{ token: fromAddr as Address, spender: txData.to as Address, amount: BigInt(opts.amount as string) }],
+            value: isNativeInputKyber
+              ? BigInt(opts.amount as string)
+              : parseBigIntValue(txData.value),
+            ...(isNativeInputKyber
+              ? {}
+              : { approvals: [{ token: fromAddr as Address, spender: txData.to as Address, amount: BigInt(opts.amount as string) }] }),
           };
 
           const result = await executor.execute(tx);
