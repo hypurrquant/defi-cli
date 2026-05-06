@@ -29,6 +29,20 @@ const CTOKEN_ABI = parseAbi([
   "function repayBorrow(uint256 repayAmount) external returns (uint256)",
 ]);
 
+// cETH / vBNB-style "native" cToken — same Compound V2 family but the
+// payable mint/repayBorrow variants take no args (msg.value carries the
+// underlying). Different selector from the ERC20 variants above.
+//   mint()         -> 0x1249c58b
+//   repayBorrow()  -> 0x4e4d9fea
+const NATIVE_CTOKEN_ABI = parseAbi([
+  "function mint() external payable",
+  "function repayBorrow() external payable",
+]);
+
+// defi-cli's internal sentinel for native gas tokens (registry uses 0x0
+// for HYPE / MNT / ETH / BNB / MON in tokens/*.toml).
+const NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000" as const;
+
 // ~3s blocks on BSC
 const BSC_BLOCKS_PER_YEAR = 10_512_000;
 
@@ -37,8 +51,15 @@ export class CompoundV2Adapter implements ILending {
   private readonly defaultVtoken: Address;
   private readonly vTokenCandidates: Address[];
   private readonly rpcUrl?: string;
-  // Lazy cache: underlying asset address (lowercased) → vToken address
+  // Lazy cache: underlying asset address (lowercased) → vToken address.
+  // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
+  // when one is detected during resolveVtoken().
   private vTokenByAsset: Map<string, Address> | null = null;
+  // The cETH/vBNB-style vToken whose underlying() reverts (it has no
+  // ERC20 underlying — the underlying is the chain's native gas token).
+  // Set lazily by resolveVtoken() and consulted by buildSupply/buildRepay
+  // to switch to the payable mint() / repayBorrow() variants.
+  private nativeVtoken: Address | null = null;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
@@ -64,18 +85,46 @@ export class CompoundV2Adapter implements ILending {
     if (!this.vTokenByAsset) {
       const client = createPublicClient({ transport: http(this.rpcUrl) });
       const map = new Map<string, Address>();
+      let nativeVtoken: Address | null = null;
       const lookups = await Promise.allSettled(
         this.vTokenCandidates.map(async (v) => {
-          const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" }) as Address;
-          return [u.toLowerCase(), v] as const;
+          try {
+            const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" }) as Address;
+            return { vtoken: v, underlying: u };
+          } catch {
+            // underlying() reverts → cETH/vBNB-style native cToken. The
+            // contract has no ERC20 underlying; supply/repay flows through
+            // the payable mint() / repayBorrow() variants and msg.value.
+            return { vtoken: v, underlying: null };
+          }
         }),
       );
       for (const r of lookups) {
-        if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
+        if (r.status !== "fulfilled") continue;
+        const { vtoken, underlying } = r.value;
+        if (underlying) {
+          map.set(underlying.toLowerCase(), vtoken);
+        } else if (!nativeVtoken) {
+          // First native cToken wins. A protocol with multiple native
+          // cTokens would be unusual; guard with the nullish check anyway
+          // so we don't silently overwrite.
+          nativeVtoken = vtoken;
+        }
+      }
+      if (nativeVtoken) {
+        // Map defi-cli's 0x0 native sentinel to the native cToken so
+        // `lending supply --asset BNB` (which resolves to 0x0) finds vBNB.
+        map.set(NATIVE_SENTINEL, nativeVtoken);
       }
       this.vTokenByAsset = map;
+      this.nativeVtoken = nativeVtoken;
     }
     return this.vTokenByAsset.get(asset.toLowerCase()) ?? null;
+  }
+
+  /** True iff `vtoken` is the cETH/vBNB-style native cToken for this protocol. */
+  private isNativeVtoken(vtoken: Address): boolean {
+    return this.nativeVtoken !== null && vtoken.toLowerCase() === this.nativeVtoken.toLowerCase();
   }
 
   name(): string {
@@ -93,6 +142,18 @@ export class CompoundV2Adapter implements ILending {
 
   async buildSupply(params: SupplyParams): Promise<DeFiTx> {
     const vtoken = await this.vtokenFor(params.asset);
+    if (this.isNativeVtoken(vtoken)) {
+      // cETH/vBNB pattern: mint() takes no args, native amount via msg.value.
+      // No ERC20 approval is possible (or needed) for native gas tokens.
+      const data = encodeFunctionData({ abi: NATIVE_CTOKEN_ABI, functionName: "mint" });
+      return {
+        description: `[${this.protocolName}] Supply ${params.amount} (native) to Venus`,
+        to: vtoken,
+        data,
+        value: params.amount,
+        gas_estimate: 300_000,
+      };
+    }
     const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "mint", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to Venus`,
@@ -118,6 +179,19 @@ export class CompoundV2Adapter implements ILending {
 
   async buildRepay(params: RepayParams): Promise<DeFiTx> {
     const vtoken = await this.vtokenFor(params.asset);
+    if (this.isNativeVtoken(vtoken)) {
+      // cETH/vBNB pattern: repayBorrow() takes no args, native amount via
+      // msg.value. The contract refunds excess to the sender, so the user
+      // can pass repay-all amounts safely.
+      const data = encodeFunctionData({ abi: NATIVE_CTOKEN_ABI, functionName: "repayBorrow" });
+      return {
+        description: `[${this.protocolName}] Repay ${params.amount} (native) to Venus`,
+        to: vtoken,
+        data,
+        value: params.amount,
+        gas_estimate: 300_000,
+      };
+    }
     const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "repayBorrow", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to Venus`,
