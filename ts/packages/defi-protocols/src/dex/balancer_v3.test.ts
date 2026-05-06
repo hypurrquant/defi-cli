@@ -17,7 +17,7 @@ const ENTRY: ProtocolEntry = {
   slug: "test-balancer-v3",
   category: ProtocolCategory.Dex,
   interface: "balancer_v3",
-  chain: "test",
+  chain: "hyperevm",
   contracts: { router: ROUTER, pool: POOL },
 };
 const ENTRY_NO_POOL: ProtocolEntry = {

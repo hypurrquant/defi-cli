@@ -19,7 +19,7 @@ const ENTRY: ProtocolEntry = {
   slug: "test-algebra-v3",
   category: ProtocolCategory.Dex,
   interface: "algebra_v3",
-  chain: "test",
+  chain: "hyperevm",
   contracts: {
     router: ("0x" + "01".repeat(20)) as Address,
     quoter: ("0x" + "02".repeat(20)) as Address,
