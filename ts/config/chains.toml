@@ -67,5 +67,10 @@ native_token = "MON"
 wrapped_native = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"
 multicall3 = "0xcA11bde05977b3631167028862bE2a173976CA11"
 
-# Monad: no aggregator support yet (early-stage mainnet)
+# Monad: 4 of 5 aggregators verified live against mainnet (chain id 143).
+# LiquidSwap is HyperEVM-only and intentionally omitted.
 [chain.monad.aggregators]
+kyber = "monad"
+openocean = "monad"
+lifi = "auto"
+relay = "auto"
