@@ -6,7 +6,7 @@ interface = "aave_v3"
 chain = "hyperevm"
 native = true
 verified = true
-description = "HypurrFi Pooled — Aave V3 fork on HyperEVM. 19 reserves listed, provider.getPool ↔ pool verified 2026-04-29."
+description = "HypurrFi Pooled — Aave V3 fork on HyperEVM. 19 reserves listed, provider.getPool ↔ pool verified 2026-04-29; full borrow lifecycle (supply→toggle→borrow→repay→withdraw) live-confirmed 2026-05-08 (tx 0xc16e0f43…832e)."
 
 [protocol.contracts]
 pool = "0xceCcE0EB9DD2Ef7996e01e25DD70e461F918A14b"
