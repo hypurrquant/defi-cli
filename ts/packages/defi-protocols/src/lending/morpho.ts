@@ -280,6 +280,52 @@ export class MorphoBlueAdapter implements ILending {
       );
     }
     const market = await this.resolveMarketParams(params.market_id);
+    // Max-repay path: when caller passes `--amount max` (= maxUint256), the
+    // CLI's parseAmount() gives us 2^256-1. Morpho's repay() reverts if
+    // assets > borrowed (toSharesUp underflows), so we instead repay by
+    // SHARES — pass `shares = position[id][user].borrowShares, assets = 0`.
+    // This cleanly closes the position even when toAssetsDown(borrowShares)
+    // rounds to 0 wei (the post-repay residual that left users stuck before
+    // 2026-05-07).
+    if (params.amount === MAX_UINT256) {
+      if (!this.rpcUrl) {
+        throw DefiError.rpcError(
+          `[${this.protocolName}] max-repay requires an RPC URL to read borrowShares.`,
+        );
+      }
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const positionAbi = parseAbi([
+        "function position(bytes32 id, address user) external view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral)",
+      ]);
+      const pos = await client.readContract({
+        address: this.morpho,
+        abi: positionAbi,
+        functionName: "position",
+        args: [params.market_id, params.on_behalf_of],
+      }) as readonly [bigint, bigint, bigint];
+      const [, borrowShares] = pos;
+      if (borrowShares === 0n) {
+        throw DefiError.invalidParam(
+          `[${this.protocolName}] cannot repay max — user has no borrow position in market ${params.market_id}.`,
+        );
+      }
+      const data = encodeFunctionData({
+        abi: MORPHO_ABI,
+        functionName: "repay",
+        args: [market, 0n, borrowShares, params.on_behalf_of, "0x"],
+      });
+      // Approve generously since the contract pulls assets equivalent to
+      // borrowShares × current borrow rate; rounded up. Use uint256 max so
+      // small-rate-of-change interest doesn't fail the approve mid-flight.
+      return {
+        description: `[${this.protocolName}] Repay max (${borrowShares} shares) to market ${params.market_id.slice(0, 10)}…`,
+        to: this.morpho,
+        data,
+        value: 0n,
+        gas_estimate: 350_000,
+        approvals: [{ token: params.asset, spender: this.morpho, amount: MAX_UINT256 }],
+      };
+    }
     const data = encodeFunctionData({
       abi: MORPHO_ABI,
       functionName: "repay",

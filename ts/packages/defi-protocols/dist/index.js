@@ -5998,6 +5998,42 @@ var MorphoBlueAdapter = class {
       );
     }
     const market = await this.resolveMarketParams(params.market_id);
+    if (params.amount === MAX_UINT256) {
+      if (!this.rpcUrl) {
+        throw DefiError21.rpcError(
+          `[${this.protocolName}] max-repay requires an RPC URL to read borrowShares.`
+        );
+      }
+      const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+      const positionAbi = parseAbi20([
+        "function position(bytes32 id, address user) external view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral)"
+      ]);
+      const pos = await client.readContract({
+        address: this.morpho,
+        abi: positionAbi,
+        functionName: "position",
+        args: [params.market_id, params.on_behalf_of]
+      });
+      const [, borrowShares] = pos;
+      if (borrowShares === 0n) {
+        throw DefiError21.invalidParam(
+          `[${this.protocolName}] cannot repay max \u2014 user has no borrow position in market ${params.market_id}.`
+        );
+      }
+      const data2 = encodeFunctionData19({
+        abi: MORPHO_ABI,
+        functionName: "repay",
+        args: [market, 0n, borrowShares, params.on_behalf_of, "0x"]
+      });
+      return {
+        description: `[${this.protocolName}] Repay max (${borrowShares} shares) to market ${params.market_id.slice(0, 10)}\u2026`,
+        to: this.morpho,
+        data: data2,
+        value: 0n,
+        gas_estimate: 35e4,
+        approvals: [{ token: params.asset, spender: this.morpho, amount: MAX_UINT256 }]
+      };
+    }
     const data = encodeFunctionData19({
       abi: MORPHO_ABI,
       functionName: "repay",
