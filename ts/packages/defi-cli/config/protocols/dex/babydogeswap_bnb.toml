@@ -7,7 +7,7 @@ chain = "bnb"
 native = false
 verified = true
 reward_strategy = "none"
-description = "BabyDogeSwap V2 on BNB Chain. On-chain verified 2026-04-03."
+description = "BabyDogeSwap V2 on BNB Chain. On-chain verified 2026-04-03; add+remove liquidity (USDT/USDC pool 0x30949ff5…d95a) live-confirmed 2026-05-08 (add tx 0x395a1f92…3c56, remove tx 0x29ce470f…f62e)."
 
 [protocol.contracts]
 router = "0xC9a0F685F39d05D835c369036251ee3aEaaF3c47"
