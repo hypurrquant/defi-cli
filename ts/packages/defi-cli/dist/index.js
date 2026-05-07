@@ -7328,10 +7328,22 @@ var Executor = class _Executor {
   dryRun;
   rpcUrl;
   explorerUrl;
-  constructor(broadcast, rpcUrl, explorerUrl) {
+  /**
+   * Optional viem Chain object. When set, all wallet/public clients built
+   * inside this executor anchor to the explicit chainId at construction
+   * time, defending against MITM RPCs that lie about eth_chainId and
+   * keeping offline-signing safe under RPC drift (SSOT 7.4).
+   */
+  chain;
+  constructor(broadcast, rpcUrl, explorerUrl, chain) {
     this.dryRun = !broadcast;
     this.rpcUrl = rpcUrl;
     this.explorerUrl = explorerUrl;
+    this.chain = chain;
+  }
+  /** Returns the optional `{ chain }` spread for viem client constructors. */
+  chainOpt() {
+    return this.chain ? { chain: this.chain } : {};
   }
   /** Apply 20% buffer to a gas estimate */
   static applyGasBuffer(gas) {
@@ -7455,7 +7467,7 @@ var Executor = class _Executor {
    */
   async fetchEip1559Fees(rpcUrl) {
     try {
-      const client = createPublicClient2({ transport: http2(rpcUrl) });
+      const client = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
       let priorityFee = DEFAULT_PRIORITY_FEE_WEI;
       try {
         priorityFee = await client.estimateMaxPriorityFeePerGas();
@@ -7477,7 +7489,7 @@ var Executor = class _Executor {
   /** Estimate gas dynamically with buffer, falling back to a hardcoded estimate */
   async estimateGasWithBuffer(rpcUrl, tx, from) {
     try {
-      const client = createPublicClient2({ transport: http2(rpcUrl) });
+      const client = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
       const estimated = await client.estimateGas({
         to: tx.to,
         data: tx.data,
@@ -7501,7 +7513,7 @@ var Executor = class _Executor {
     if (!rpcUrl) {
       throw DefiError.rpcError("No RPC URL \u2014 cannot simulate. Set HYPEREVM_RPC_URL.");
     }
-    const client = createPublicClient2({ transport: http2(rpcUrl) });
+    const client = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
     const privateKey = process.env["DEFI_PRIVATE_KEY"];
     const from = privateKey ? privateKeyToAccount(privateKey).address : "0x0000000000000000000000000000000000000001";
     if (tx.approvals && tx.approvals.length > 0) {
@@ -7615,8 +7627,8 @@ var Executor = class _Executor {
     if (!rpcUrl) {
       throw DefiError.rpcError("No RPC URL configured for broadcasting");
     }
-    const publicClient = createPublicClient2({ transport: http2(rpcUrl) });
-    const walletClient = createWalletClient({ account, transport: http2(rpcUrl) });
+    const publicClient = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
+    const walletClient = createWalletClient({ account, transport: http2(rpcUrl), ...this.chainOpt() });
     if (tx.pre_txs && tx.pre_txs.length > 0) {
       for (const preTx of tx.pre_txs) {
         process.stderr.write(`  Pre-tx: ${preTx.description}...
@@ -8909,7 +8921,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       printOutput(results, getOpts());
     }
   });
-  lp.command("add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2)").option("--num-bins <n>", "Merchant Moe LB: bins on each side of active (default 5)").action(async (opts) => {
+  lp.command("add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2)").option("--num-bins <n>", "Merchant Moe LB: bins on each side of active (default 5)").option("--slippage <bps>", "Slippage tolerance in basis points (default 50 = 0.5%). Sets amount{0,1}Min per side via applyMinSlippage.").option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on add (overrides --slippage for that side).").option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on add (overrides --slippage for that side).").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -8958,12 +8970,15 @@ function registerLP(parent, getOpts, makeExecutor2) {
       tick_lower: opts.tickLower !== void 0 ? parseInt(opts.tickLower) : void 0,
       tick_upper: opts.tickUpper !== void 0 ? parseInt(opts.tickUpper) : void 0,
       range_pct: opts.range !== void 0 ? parseFloat(opts.range) : void 0,
-      pool: poolAddr
+      pool: poolAddr,
+      slippage: opts.slippage !== void 0 ? { bps: parseInt(opts.slippage, 10) } : void 0,
+      amount_a_min: opts.amountAMin !== void 0 ? BigInt(opts.amountAMin) : void 0,
+      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lp.command("farm").description("Add liquidity and auto-stake into gauge/farming for emissions").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--gauge <address>", "Gauge address (required for solidly/hybra if not resolved automatically)").option("--recipient <address>", "Recipient / owner address").option("--tick-lower <tick>", "Lower tick for concentrated LP").option("--tick-upper <tick>", "Upper tick for concentrated LP").option("--range <percent>", "\xB1N% concentrated range around current price").action(async (opts) => {
+  lp.command("farm").description("Add liquidity and auto-stake into gauge/farming for emissions").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--gauge <address>", "Gauge address (required for solidly/hybra if not resolved automatically)").option("--recipient <address>", "Recipient / owner address").option("--tick-lower <tick>", "Lower tick for concentrated LP").option("--tick-upper <tick>", "Upper tick for concentrated LP").option("--range <percent>", "\xB1N% concentrated range around current price").option("--slippage <bps>", "Slippage tolerance in basis points (default 50 = 0.5%). Applied to the underlying mint step.").option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on add (overrides --slippage for that side).").option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on add (overrides --slippage for that side).").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -8989,7 +9004,10 @@ function registerLP(parent, getOpts, makeExecutor2) {
       tick_lower: opts.tickLower !== void 0 ? parseInt(opts.tickLower) : void 0,
       tick_upper: opts.tickUpper !== void 0 ? parseInt(opts.tickUpper) : void 0,
       range_pct: opts.range !== void 0 ? parseFloat(opts.range) : void 0,
-      pool: poolAddr
+      pool: poolAddr,
+      slippage: opts.slippage !== void 0 ? { bps: parseInt(opts.slippage, 10) } : void 0,
+      amount_a_min: opts.amountAMin !== void 0 ? BigInt(opts.amountAMin) : void 0,
+      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0
     });
     process.stderr.write("Step 1/2: Adding liquidity...\n");
     const addResult = await executor.execute(addTx);
@@ -9229,7 +9247,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       note: "Plan output. Run each cli_command sequentially. After the mint step, broadcast mode prints `details.minted_token_id` \u2014 feed that into the next step's --token-id."
     }, getOpts());
   });
-  lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").option("--token-a <token>", "First token symbol or address (required for V2/Curve/LB)").option("--token-b <token>", "Second token symbol or address (required for V2/Curve/LB)").option("--liquidity <amount>", "Liquidity amount to remove in wei (required for V2/Curve/LB)").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default \u2014 WARNING: long lock)").option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw").option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)").action(async (opts) => {
+  lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").option("--token-a <token>", "First token symbol or address (required for V2/Curve/LB)").option("--token-b <token>", "Second token symbol or address (required for V2/Curve/LB)").option("--liquidity <amount>", "Liquidity amount to remove in wei (required for V2/Curve/LB)").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default \u2014 WARNING: long lock)").option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw").option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on remove (REQUIRED for V3/Algebra/Thena CL \u2014 caller must compute from positions(tokenId) + pool state and apply tolerance).").option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on remove (REQUIRED for V3/Algebra/Thena CL).").option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -9396,7 +9414,9 @@ function registerLP(parent, getOpts, makeExecutor2) {
       token_b: tokenB ?? ZERO,
       liquidity: removeLiquidity,
       recipient,
-      token_id: opts.tokenId ? BigInt(opts.tokenId) : void 0
+      token_id: opts.tokenId ? BigInt(opts.tokenId) : void 0,
+      amount_a_min: opts.amountAMin !== void 0 ? BigInt(opts.amountAMin) : void 0,
+      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0
     });
     const removeResult = await executor.execute(removeTx);
     printOutput({ step: "lp_remove", ...removeResult }, getOpts());
@@ -9749,6 +9769,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
 // src/commands/lending.ts
 init_dist();
 init_dist2();
+import { maxUint256 } from "viem";
 
 // src/utils.ts
 init_dist();
@@ -9798,6 +9819,11 @@ function parseBigIntValue(v) {
 }
 
 // src/commands/lending.ts
+function parseAmount(s) {
+  const lower = s.toLowerCase();
+  if (lower === "max" || lower === "all") return maxUint256;
+  return BigInt(s);
+}
 function registerLending(parent, getOpts, makeExecutor2) {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
   lending.command("rates").description("Show current lending rates").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
@@ -9820,18 +9846,24 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const position = await adapter.getUserPosition(address);
     printOutput(position, getOpts());
   });
-  lending.command("supply").description("Supply an asset to a lending protocol").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount to supply in wei").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+  lending.command("supply").description("Supply an asset to a lending protocol").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount to supply in wei (or 'max')").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
     const adapter = createLending(ctx.protocol, ctx.rpcUrl);
     const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
     const onBehalfOf = resolveWallet(opts.onBehalfOf);
-    const tx = await adapter.buildSupply({ protocol: ctx.protocol.name, asset, amount: BigInt(opts.amount), on_behalf_of: onBehalfOf });
+    const tx = await adapter.buildSupply({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
+    });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lending.command("borrow").description("Borrow an asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+  lending.command("borrow").description("Borrow an asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").option("--rate-mode <mode>", "variable or stable", "variable").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
@@ -9841,14 +9873,15 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const tx = await adapter.buildBorrow({
       protocol: ctx.protocol.name,
       asset,
-      amount: BigInt(opts.amount),
+      amount: parseAmount(opts.amount),
       interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
-      on_behalf_of: onBehalfOf
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lending.command("repay").description("Repay a borrowed asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+  lending.command("repay").description("Repay a borrowed asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").option("--rate-mode <mode>", "variable or stable", "variable").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
@@ -9858,21 +9891,118 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const tx = await adapter.buildRepay({
       protocol: ctx.protocol.name,
       asset,
-      amount: BigInt(opts.amount),
+      amount: parseAmount(opts.amount),
       interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
-      on_behalf_of: onBehalfOf
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lending.command("withdraw").description("Withdraw a supplied asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--to <address>", "Recipient address").action(async (opts) => {
+  lending.command("withdraw").description("Withdraw a supplied asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--to <address>", "Recipient address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
     const adapter = createLending(ctx.protocol, ctx.rpcUrl);
     const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
     const to = resolveWallet(opts.to);
-    const tx = await adapter.buildWithdraw({ protocol: ctx.protocol.name, asset, amount: BigInt(opts.amount), to });
+    const tx = await adapter.buildWithdraw({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      to,
+      market_id: opts.market
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("toggle-collateral").description("Enable or disable a supplied reserve as collateral (Aave V3 family)").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").option("--enable", "Enable as collateral").option("--disable", "Disable as collateral").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    if (!opts.enable && !opts.disable) {
+      printOutput({ error: "must pass either --enable or --disable" }, getOpts());
+      return;
+    }
+    if (opts.enable && opts.disable) {
+      printOutput({ error: "--enable and --disable are mutually exclusive" }, getOpts());
+      return;
+    }
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildSetUseReserveAsCollateral !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildSetUseReserveAsCollateral. Aave V3 forks support this; Compound V2/Morpho Blue use different flows.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const tx = await adapter.buildSetUseReserveAsCollateral(asset, !!opts.enable);
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("set-emode").description("Enroll the user in an Aave V3 efficiency-mode category (0 to opt out)").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--category-id <id>", "eMode category id (0 = opt out)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildSetEMode !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildSetEMode (Aave V3 only)`
+      }, getOpts());
+      return;
+    }
+    const id = parseInt(opts.categoryId, 10);
+    if (!Number.isInteger(id) || id < 0 || id > 255) {
+      printOutput({ error: `--category-id must be an integer in [0, 255], got '${opts.categoryId}'` }, getOpts());
+      return;
+    }
+    const tx = await adapter.buildSetEMode(id);
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("supply-collateral").description("Supply the collateral side of a Morpho Blue market (different selector from supply)").requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)").requiredOption("--asset <token>", "Collateral token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").requiredOption("--market <marketId>", "32-byte Morpho marketId (find via Morpho API)").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildSupplyCollateral !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildSupplyCollateral. Only Morpho Blue forks expose this; Aave V3 / Compound use plain supply.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const onBehalfOf = resolveWallet(opts.onBehalfOf);
+    const tx = await adapter.buildSupplyCollateral({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("withdraw-collateral").description("Withdraw the collateral side of a Morpho Blue market").requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)").requiredOption("--asset <token>", "Collateral token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").requiredOption("--market <marketId>", "32-byte Morpho marketId").option("--to <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildWithdrawCollateral !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildWithdrawCollateral.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const to = resolveWallet(opts.to);
+    const tx = await adapter.buildWithdrawCollateral({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      to,
+      market_id: opts.market
+    });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
@@ -11242,7 +11372,7 @@ function registerWallet(parent, getOpts) {
 
 // src/commands/token.ts
 init_dist();
-import { createPublicClient as createPublicClient27, http as http27, maxUint256 } from "viem";
+import { createPublicClient as createPublicClient27, http as http27, maxUint256 as maxUint2562 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
@@ -11276,7 +11406,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
     const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
-    const amount = opts.amount === "max" ? maxUint256 : BigInt(opts.amount);
+    const amount = opts.amount === "max" ? maxUint2562 : BigInt(opts.amount);
     const tx = buildApprove(tokenAddr, opts.spender, amount);
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -11718,7 +11848,7 @@ async function liquidSwapRoute(tokenIn, tokenOut, amountIn, slippagePct) {
   };
 }
 function registerSwap(parent, getOpts, makeExecutor2) {
-  parent.command("swap").description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay)").requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber").option("--slippage <bps>", "Slippage tolerance in bps", "50").action(async (opts) => {
+  parent.command("swap").description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay)").requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber").option("--slippage <bps>", "Slippage tolerance in bps", "100").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
@@ -11747,12 +11877,14 @@ function registerSwap(parent, getOpts, makeExecutor2) {
           wallet,
           slippageBps
         );
+        const fromLowerKyber = fromAddr.toLowerCase();
+        const isNativeInputKyber = fromLowerKyber === "0x0000000000000000000000000000000000000000" || fromLowerKyber === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
         const tx = {
           description: `KyberSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
           to: txData.to,
           data: txData.data,
-          value: parseBigIntValue(txData.value),
-          approvals: [{ token: fromAddr, spender: txData.to, amount: BigInt(opts.amount) }]
+          value: isNativeInputKyber ? BigInt(opts.amount) : parseBigIntValue(txData.value),
+          ...isNativeInputKyber ? {} : { approvals: [{ token: fromAddr, spender: txData.to, amount: BigInt(opts.amount) }] }
         };
         const result = await executor.execute(tx);
         printOutput({
@@ -12319,7 +12451,8 @@ function makeExecutor() {
     process.exit(1);
   }
   const chain = registry.getChain(opts.chain);
-  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url);
+  const viemChain = chain.viemChain();
+  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url, viemChain);
 }
 registerStatus(program, getOutputMode);
 registerSchema(program, getOutputMode);

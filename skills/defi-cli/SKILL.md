@@ -12,7 +12,7 @@ metadata:
 
 Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, yield comparison.
 
-**5 chains · 38 protocols · 5 DEX aggregators**
+**5 chains · 39 protocols · 5 DEX aggregators**
 
 ## Rules
 
@@ -61,7 +61,7 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 
 ## References
 
-- **`references/protocols.md`** — full protocol slug catalog per chain (38 protocols across 5 chains)
+- **`references/protocols.md`** — full protocol slug catalog per chain (39 protocols across 5 chains)
 - **`references/commands.md`** — every CLI command with flags, dry-run shape, and JSON envelope notes
 
 ## Scripts (`scripts/`)

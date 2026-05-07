@@ -8,7 +8,7 @@
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  5 chains · 38 protocols · 5 aggregators
+  5 chains · 39 protocols · 5 aggregators
 ```
 
 Multi-chain DeFi toolkit with verified mainnet broadcast paths. Lending, LP farming, DEX swap, cross-chain bridge, yield comparison — all from your terminal. Built for humans and AI agents.
@@ -107,7 +107,7 @@ The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integ
 | `ramses-hl` | DEX | solidly_v2 | ve(3,3) gauge, RAM emission |
 | `kittenswap` | DEX | algebra_v3 + farming_center | Eternal farming, KITTEN/WHYPE rewards |
 | `hybra` | DEX | hybra (V4 CL) | GaugeManager + 2-year veHYBR lock (default) |
-| `nest` _(inactive)_ | DEX | algebra_v3 | Off-chain ticket-based NEST claim — disabled in config (`is_active = false`); CLI rejects with "Protocol not found". Off-chain claim via `blaze.nest.aegas.it`. |
+| `nest-v1` | DEX | algebra_v3 | NEST V1 — claim path verified live 2026-05-07 (off-chain ticket via `blaze.nest.aegas.it` / `usenest.xyz/api/blaze`). LP/farm read-paths still return zero (`gauge.rewardRate = 0`); only `lp claim` is functional. |
 
 ### Mantle (3)
 
