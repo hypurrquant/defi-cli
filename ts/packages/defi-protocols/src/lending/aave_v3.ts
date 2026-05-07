@@ -21,6 +21,16 @@ const POOL_ABI = parseAbi([
   "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
   "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
   "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
+  // Toggles required to actually borrow against an isolation-mode reserve
+  // (https://aave.com/docs/aave-v3/smart-contracts/pool):
+  //   - setUserUseReserveAsCollateral: an isolation reserve can be enabled
+  //     only if no other asset is enabled; LTV=0 reserves can never be
+  //     enabled; disable reverts if the resulting HF would drop below the
+  //     liquidation threshold.
+  //   - setUserEMode: reverts if the user is borrowing a non-eMode-
+  //     compatible asset, or if the change would push HF below threshold.
+  "function setUserUseReserveAsCollateral(address asset, bool useAsCollateral) external",
+  "function setUserEMode(uint8 categoryId) external",
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
   "function getReservesList() external view returns (address[])",
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)",
@@ -211,6 +221,43 @@ export class AaveV3Adapter implements ILending {
       data,
       value: 0n,
       gas_estimate: 250_000,
+    };
+  }
+
+  async buildSetUseReserveAsCollateral(asset: Address, useAsCollateral: boolean): Promise<DeFiTx> {
+    // Required before borrowing against an isolation-mode reserve.
+    // The Pool reverts if guard conditions fail (see POOL_ABI comment):
+    //   - enabling: must satisfy isolation-mode constraint + LTV > 0;
+    //   - disabling: resulting HF must stay above liquidation threshold.
+    const data = encodeFunctionData({
+      abi: POOL_ABI,
+      functionName: "setUserUseReserveAsCollateral",
+      args: [asset, useAsCollateral],
+    });
+    return {
+      description: `[${this.protocolName}] ${useAsCollateral ? "Enable" : "Disable"} ${asset} as collateral`,
+      to: this.pool,
+      data,
+      value: 0n,
+      gas_estimate: 100_000,
+    };
+  }
+
+  async buildSetEMode(categoryId: number): Promise<DeFiTx> {
+    // Aave V3 efficiency mode (eMode). categoryId = 0 opts out. Pool
+    // reverts if the user is borrowing a non-eMode-compatible asset, or
+    // if the change would push HF below the liquidation threshold.
+    const data = encodeFunctionData({
+      abi: POOL_ABI,
+      functionName: "setUserEMode",
+      args: [categoryId],
+    });
+    return {
+      description: `[${this.protocolName}] Set eMode category to ${categoryId}${categoryId === 0 ? " (opt out)" : ""}`,
+      to: this.pool,
+      data,
+      value: 0n,
+      gas_estimate: 150_000,
     };
   }
 
