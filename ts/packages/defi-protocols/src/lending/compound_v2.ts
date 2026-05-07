@@ -39,6 +39,16 @@ const NATIVE_CTOKEN_ABI = parseAbi([
   "function repayBorrow() external payable",
 ]);
 
+// Comptroller toggle. enterMarkets is the Compound V2 family equivalent
+// of Aave V3's setUserUseReserveAsCollateral — without an explicit
+// enterMarkets call, supplied assets DO NOT count as collateral and
+// any borrow reverts with `getAccountLiquidity` shortfall.
+//   enterMarkets(address[]) -> 0xc2998238
+const COMPTROLLER_ABI = parseAbi([
+  "function enterMarkets(address[] cTokens) external returns (uint256[])",
+  "function exitMarket(address cToken) external returns (uint256)",
+]);
+
 // defi-cli's internal sentinel for native gas tokens (registry uses 0x0
 // for HYPE / MNT / ETH / BNB / MON in tokens/*.toml).
 const NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000" as const;
@@ -50,6 +60,7 @@ export class CompoundV2Adapter implements ILending {
   private readonly protocolName: string;
   private readonly defaultVtoken: Address;
   private readonly vTokenCandidates: Address[];
+  private readonly comptroller: Address | undefined;
   private readonly rpcUrl?: string;
   // Lazy cache: underlying asset address (lowercased) → vToken address.
   // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
@@ -72,6 +83,9 @@ export class CompoundV2Adapter implements ILending {
       contracts["comptroller"];
     if (!vtoken) throw DefiError.contractError("Missing vToken or comptroller address");
     this.defaultVtoken = vtoken;
+    // Comptroller is required for `buildEnterMarkets`. Optional otherwise
+    // (rates / position / supply / withdraw / repay / borrow don't need it).
+    this.comptroller = contracts["comptroller"];
     // Collect all keys that look like vTokens (`v<symbol>`) — used by getRates
     // to resolve the per-asset market. Falls back to defaultVtoken if empty.
     this.vTokenCandidates = Object.entries(contracts)
@@ -215,6 +229,39 @@ export class CompoundV2Adapter implements ILending {
       data,
       value: 0n,
       gas_estimate: 250_000,
+    };
+  }
+
+  /**
+   * Compound V2 family: enter cTokens as collateral via Comptroller.
+   * Without this call, supplied assets sit dormant in the Comptroller's
+   * accountAssets[] and `getAccountLiquidity` reports zero collateral —
+   * any borrow then reverts. Mirrors the role of Aave V3's
+   * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
+   */
+  async buildEnterMarkets(cTokens: Address[]): Promise<DeFiTx> {
+    if (!this.comptroller) {
+      throw DefiError.contractError(
+        `[${this.protocolName}] enterMarkets requires the Comptroller address ` +
+          `to be registered under [protocol.contracts] as 'comptroller'.`,
+      );
+    }
+    if (cTokens.length === 0) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] enterMarkets requires at least one cToken address.`,
+      );
+    }
+    const data = encodeFunctionData({
+      abi: COMPTROLLER_ABI,
+      functionName: "enterMarkets",
+      args: [cTokens],
+    });
+    return {
+      description: `[${this.protocolName}] Enter ${cTokens.length} market(s) as collateral`,
+      to: this.comptroller,
+      data,
+      value: 0n,
+      gas_estimate: 200_000,
     };
   }
 

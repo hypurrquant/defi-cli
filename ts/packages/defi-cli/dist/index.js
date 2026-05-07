@@ -18,6 +18,12 @@ import { resolve } from "path";
 import { fileURLToPath } from "url";
 import { parse } from "smol-toml";
 import { existsSync } from "fs";
+function defaultSwapSlippage() {
+  return { bps: 50 };
+}
+function applyMinSlippage(slippage, amount) {
+  return amount * BigInt(1e4 - slippage.bps) / 10000n;
+}
 function jsonReplacerDecimal(_key, value) {
   if (typeof value === "bigint") {
     return value.toString();
@@ -55,11 +61,15 @@ function buildTransfer(token, to, amount) {
     gas_estimate: 65e3
   };
 }
-function getProvider(rpcUrl) {
-  const cached = providerCache.get(rpcUrl);
+function getProvider(rpcUrl, chain) {
+  const key = chain ? `${rpcUrl}@${chain.id}` : rpcUrl;
+  const cached = providerCache.get(key);
   if (cached) return cached;
-  const client = createPublicClient({ transport: http(rpcUrl) });
-  providerCache.set(rpcUrl, client);
+  const client = createPublicClient({
+    transport: http(rpcUrl),
+    ...chain ? { chain } : {}
+  });
+  providerCache.set(key, client);
   return client;
 }
 async function multicallRead(rpcUrl, calls) {
@@ -228,6 +238,28 @@ var init_dist = __esm({
       effectiveRpcUrl() {
         const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
         return process.env[chainEnv] ?? this.rpc_url;
+      }
+      /**
+       * Build a viem Chain object pinned to this config so wallet/public clients
+       * can sign with an explicit chainId rather than auto-fetching it from the
+       * RPC. SSOT 7.4: anchoring chainId at client-construction time defends
+       * against an MITM RPC that returns the wrong eth_chainId, and keeps
+       * offline signing safe against RPC drift.
+       */
+      viemChain() {
+        const rpcUrl = this.effectiveRpcUrl();
+        return {
+          id: this.chain_id,
+          name: this.name,
+          nativeCurrency: {
+            name: this.native_token,
+            symbol: this.native_token,
+            decimals: 18
+          },
+          rpcUrls: { default: { http: [rpcUrl] } },
+          ...this.explorer_url ? { blockExplorers: { default: { name: this.name, url: this.explorer_url } } } : {},
+          ...this.multicall3 ? { contracts: { multicall3: { address: this.multicall3 } } } : {}
+        };
       }
     };
     ProtocolCategory = /* @__PURE__ */ ((ProtocolCategory2) => {
@@ -420,13 +452,13 @@ __export(dist_exports, {
 import { encodeFunctionData as encodeFunctionData4, parseAbi as parseAbi4, createPublicClient as createPublicClient4, http as http4, decodeAbiParameters } from "viem";
 import { encodeFunctionData as encodeFunctionData22, parseAbi as parseAbi22, createPublicClient as createPublicClient22, http as http22, decodeFunctionResult as decodeFunctionResult2, decodeAbiParameters as decodeAbiParameters2 } from "viem";
 import { encodeFunctionData as encodeFunctionData32, parseAbi as parseAbi32, createPublicClient as createPublicClient32, http as http32, decodeAbiParameters as decodeAbiParameters3, concatHex, zeroAddress } from "viem";
-import { encodeFunctionData as encodeFunctionData42, parseAbi as parseAbi42, zeroAddress as zeroAddress2 } from "viem";
+import { encodeFunctionData as encodeFunctionData42, parseAbi as parseAbi42 } from "viem";
 import { encodeFunctionData as encodeFunctionData5, parseAbi as parseAbi5 } from "viem";
 import { encodeFunctionData as encodeFunctionData6, parseAbi as parseAbi6, decodeAbiParameters as decodeAbiParameters4 } from "viem";
-import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, createPublicClient as createPublicClient42, http as http42, zeroAddress as zeroAddress3 } from "viem";
-import { createPublicClient as createPublicClient5, decodeFunctionResult as decodeFunctionResult22, encodeFunctionData as encodeFunctionData8, http as http5, parseAbi as parseAbi8, zeroAddress as zeroAddress4 } from "viem";
-import { encodeFunctionData as encodeFunctionData9, parseAbi as parseAbi9, zeroAddress as zeroAddress5 } from "viem";
-import { createPublicClient as createPublicClient6, decodeFunctionResult as decodeFunctionResult3, encodeFunctionData as encodeFunctionData10, http as http6, parseAbi as parseAbi10, zeroAddress as zeroAddress6 } from "viem";
+import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, createPublicClient as createPublicClient42, http as http42, zeroAddress as zeroAddress2 } from "viem";
+import { createPublicClient as createPublicClient5, decodeFunctionResult as decodeFunctionResult22, encodeFunctionData as encodeFunctionData8, http as http5, parseAbi as parseAbi8, zeroAddress as zeroAddress3 } from "viem";
+import { encodeFunctionData as encodeFunctionData9, parseAbi as parseAbi9, zeroAddress as zeroAddress4 } from "viem";
+import { createPublicClient as createPublicClient6, decodeFunctionResult as decodeFunctionResult3, encodeFunctionData as encodeFunctionData10, http as http6, parseAbi as parseAbi10, zeroAddress as zeroAddress5 } from "viem";
 import { encodeFunctionData as encodeFunctionData11, parseAbi as parseAbi11, createPublicClient as createPublicClient7, http as http7 } from "viem";
 import {
   encodeFunctionData as encodeFunctionData12,
@@ -444,24 +476,24 @@ import {
   keccak256,
   parseAbi as parseAbi13,
   decodeFunctionResult as decodeFunctionResult5,
-  zeroAddress as zeroAddress7
+  zeroAddress as zeroAddress6
 } from "viem";
-import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult6, zeroAddress as zeroAddress8 } from "viem";
-import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData15, zeroAddress as zeroAddress9 } from "viem";
+import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult6, zeroAddress as zeroAddress7 } from "viem";
+import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData15, zeroAddress as zeroAddress8 } from "viem";
 import { createPublicClient as createPublicClient12, http as http12, parseAbi as parseAbi16 } from "viem";
 import { createPublicClient as createPublicClient13, http as http13, parseAbi as parseAbi17, encodeFunctionData as encodeFunctionData16 } from "viem";
 import { createPublicClient as createPublicClient14, http as http14, parseAbi as parseAbi18, encodeFunctionData as encodeFunctionData17 } from "viem";
 import { createPublicClient as createPublicClient15, http as http15, parseAbi as parseAbi19, encodeFunctionData as encodeFunctionData18 } from "viem";
-import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult7, zeroAddress as zeroAddress10 } from "viem";
-import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress11 } from "viem";
-import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi222 } from "viem";
-import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } from "viem";
+import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult7, zeroAddress as zeroAddress9, createPublicClient as createPublicClient16, http as http16 } from "viem";
+import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress10 } from "viem";
+import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi222 } from "viem";
+import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } from "viem";
 import { parseAbi as parseAbi24, encodeFunctionData as encodeFunctionData222 } from "viem";
-import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23, zeroAddress as zeroAddress12 } from "viem";
-import { createPublicClient as createPublicClient20, http as http20, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24, zeroAddress as zeroAddress13 } from "viem";
+import { createPublicClient as createPublicClient20, http as http20, parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23, zeroAddress as zeroAddress11 } from "viem";
+import { createPublicClient as createPublicClient21, http as http21, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24, zeroAddress as zeroAddress12 } from "viem";
 import { parseAbi as parseAbi27, encodeFunctionData as encodeFunctionData25 } from "viem";
 import { parseAbi as parseAbi28, encodeFunctionData as encodeFunctionData26 } from "viem";
-import { createPublicClient as createPublicClient21, http as http21, parseAbi as parseAbi29 } from "viem";
+import { createPublicClient as createPublicClient222, http as http222, parseAbi as parseAbi29 } from "viem";
 function pctToTickDelta(pct) {
   return Math.round(Math.log(1 + pct / 100) / Math.log(1.0001));
 }
@@ -715,15 +747,6 @@ function u256ToF642(v) {
   if (v > MAX_U128) return Infinity;
   return Number(v);
 }
-function defaultMarketParams(loanToken = zeroAddress10) {
-  return {
-    loanToken,
-    collateralToken: zeroAddress10,
-    oracle: zeroAddress10,
-    irm: zeroAddress10,
-    lltv: 0n
-  };
-}
 function decodeMarket(data) {
   if (!data) return null;
   try {
@@ -956,7 +979,7 @@ function createKittenSwapFarming(entry, rpcUrl) {
   const bonusRewardToken = entry.contracts?.["bonus_reward_token"];
   return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory, rewardToken, bonusRewardToken);
 }
-var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, slipstreamMintAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, algebraSharedPmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, DEFAULT_BASE_URL, FALLBACK_BASE_URL, NEST_TOKEN, NEST_DECIMALS, NestOffChainAdapter, POOL_ABI, ERC20_ABI2, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI22, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, ERC4626_ABI, MAX_UINT256, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI2, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
+var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, slipstreamMintAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, algebraSharedPmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, DEFAULT_BASE_URL, FALLBACK_BASE_URL, NEST_TOKEN, NEST_DECIMALS, NestOffChainAdapter, POOL_ABI, ERC20_ABI2, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI22, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, NATIVE_CTOKEN_ABI, COMPTROLLER_ABI, NATIVE_SENTINEL, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, ERC4626_ABI, MAX_UINT256, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI2, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
 var init_dist2 = __esm({
   "../defi-protocols/dist/index.js"() {
     "use strict";
@@ -1052,7 +1075,15 @@ var init_dist2 = __esm({
       }
       async buildSwap(params) {
         const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-        const amountOutMinimum = 0n;
+        const amountOutMinimum = params.amount_out_min ?? applyMinSlippage(
+          params.slippage,
+          (await this.quote({
+            protocol: this.protocolName,
+            token_in: params.token_in,
+            token_out: params.token_out,
+            amount_in: params.amount_in
+          })).amount_out
+        );
         const data = encodeFunctionData4({
           abi: swapRouterAbi,
           functionName: "exactInputSingle",
@@ -1218,9 +1249,14 @@ var init_dist2 = __esm({
         if (!pm) {
           throw new DefiError("CONTRACT_ERROR", "Position manager address not configured");
         }
-        const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+        const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+        const [token0, token1, rawAmount0, rawAmount1] = isAFirst ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
         const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
         const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
+        const slippage = params.slippage ?? defaultSwapSlippage();
+        const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+        const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+        const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
         let thirdField = this.fee;
         let tickLower = -887220;
         let tickUpper = 887220;
@@ -1262,8 +1298,8 @@ var init_dist2 = __esm({
               tickUpper,
               amount0Desired: amount0,
               amount1Desired: amount1,
-              amount0Min: 0n,
-              amount1Min: 0n,
+              amount0Min,
+              amount1Min,
               recipient: params.recipient,
               deadline: BigInt("18446744073709551615"),
               sqrtPriceX96: 0n
@@ -1281,8 +1317,8 @@ var init_dist2 = __esm({
               tickUpper,
               amount0Desired: amount0,
               amount1Desired: amount1,
-              amount0Min: 0n,
-              amount1Min: 0n,
+              amount0Min,
+              amount1Min,
               recipient: params.recipient,
               deadline: BigInt("18446744073709551615")
             }
@@ -1316,10 +1352,17 @@ var init_dist2 = __esm({
         const liquidity = params.liquidity;
         const MAX_UINT128 = (1n << 128n) - 1n;
         const deadline = BigInt("18446744073709551615");
+        if (params.amount_a_min === void 0 || params.amount_b_min === void 0) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] V3 remove_liquidity requires amount_a_min and amount_b_min for slippage protection (SSOT 7.3). Caller must compute expected token outputs from the pool state and apply a slippage tolerance before calling buildRemoveLiquidity.`
+          );
+        }
+        const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+        const [amount0Min, amount1Min] = isAFirst ? [params.amount_a_min, params.amount_b_min] : [params.amount_b_min, params.amount_a_min];
         const decreaseData = encodeFunctionData4({
           abi: positionManagerAbi,
           functionName: "decreaseLiquidity",
-          args: [{ tokenId, liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+          args: [{ tokenId, liquidity, amount0Min, amount1Min, deadline }]
         });
         const collectData = encodeFunctionData4({
           abi: positionManagerAbi,
@@ -1672,7 +1715,15 @@ var init_dist2 = __esm({
       }
       async buildSwap(params) {
         const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-        const amountOutMinimum = 0n;
+        const amountOutMinimum = params.amount_out_min ?? applyMinSlippage(
+          params.slippage,
+          (await this.quote({
+            protocol: this.protocolName,
+            token_in: params.token_in,
+            token_out: params.token_out,
+            amount_in: params.amount_in
+          })).amount_out
+        );
         const data = encodeFunctionData32({
           abi: abi2,
           functionName: "exactInputSingle",
@@ -1786,7 +1837,12 @@ var init_dist2 = __esm({
         if (!pm) {
           throw new DefiError("CONTRACT_ERROR", "Position manager address not configured");
         }
-        const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+        const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+        const [token0, token1, rawAmount0, rawAmount1] = isAFirst ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+        const slippage = params.slippage ?? defaultSwapSlippage();
+        const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+        const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+        const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
         let tickLower = params.tick_lower ?? -887220;
         let tickUpper = params.tick_upper ?? 887220;
         const isSingleSide = rawAmount0 === 0n || rawAmount1 === 0n;
@@ -1823,11 +1879,11 @@ var init_dist2 = __esm({
         const data = this.useSingleQuoter ? encodeFunctionData32({
           abi: algebraV2PmAbi,
           functionName: "mint",
-          args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
+          args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
         }) : encodeFunctionData32({
           abi: algebraIntegralPmAbi,
           functionName: "mint",
-          args: [{ token0, token1, deployer: zeroAddress, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
+          args: [{ token0, token1, deployer: zeroAddress, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
         });
         const approvals = [];
         if (amount0 > 0n) approvals.push({ token: token0, spender: pm, amount: amount0 });
@@ -1845,12 +1901,19 @@ var init_dist2 = __esm({
         const pm = this.positionManager;
         if (!pm) throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager'`);
         if (!params.token_id) throw DefiError.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+        if (params.amount_a_min === void 0 || params.amount_b_min === void 0) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] remove_liquidity requires amount_a_min and amount_b_min for slippage protection (SSOT 7.3). Compute expected outputs from positions(tokenId) + pool.globalState off-chain and apply tolerance.`
+          );
+        }
+        const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+        const [amount0Min, amount1Min] = isAFirst ? [params.amount_a_min, params.amount_b_min] : [params.amount_b_min, params.amount_a_min];
         const MAX_UINT128 = (1n << 128n) - 1n;
         const deadline = BigInt("18446744073709551615");
         const decreaseData = encodeFunctionData32({
           abi: algebraSharedPmAbi,
           functionName: "decreaseLiquidity",
-          args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+          args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min, amount1Min, deadline }]
         });
         const collectData = encodeFunctionData32({
           abi: algebraSharedPmAbi,
@@ -1877,6 +1940,7 @@ var init_dist2 = __esm({
     BalancerV3Adapter = class {
       protocolName;
       router;
+      pool;
       constructor(entry, _rpcUrl) {
         this.protocolName = entry.name;
         const router = entry.contracts?.["router"];
@@ -1884,19 +1948,29 @@ var init_dist2 = __esm({
           throw new DefiError("CONTRACT_ERROR", "Missing 'router' contract");
         }
         this.router = router;
+        this.pool = entry.contracts?.["pool"];
       }
       name() {
         return this.protocolName;
       }
       async buildSwap(params) {
-        const minAmountOut = 0n;
+        if (params.amount_out_min === void 0) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] buildSwap requires amount_out_min for slippage protection (SSOT 7.3) \u2014 Balancer V3 has no on-chain quoter wired in this adapter. Compute the floor off-chain (e.g. via the Vault's static-call simulation) and pass it explicitly.`
+          );
+        }
+        if (!this.pool) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] buildSwap requires a pool address. Register the pool under [protocol.contracts] as \`pool = "0x..."\` in the protocol's TOML config. Multi-pool routing is intentionally not implemented in this adapter \u2014 for that, quote against the Balancer V3 BatchRouter off-chain and route via a different surface.`
+          );
+        }
+        const minAmountOut = params.amount_out_min;
         const deadline = BigInt(params.deadline ?? 18446744073709551615n);
         const data = encodeFunctionData42({
           abi: abi3,
           functionName: "swapSingleTokenExactIn",
           args: [
-            zeroAddress2,
-            // TODO: resolve pool from registry
+            this.pool,
             params.token_in,
             params.token_out,
             params.amount_in,
@@ -1907,7 +1981,7 @@ var init_dist2 = __esm({
           ]
         });
         return {
-          description: `[${this.protocolName}] Swap ${params.amount_in} via Balancer V3`,
+          description: `[${this.protocolName}] Swap ${params.amount_in} via Balancer V3 pool ${this.pool}`,
           to: this.router,
           data,
           value: 0n,
@@ -2201,6 +2275,11 @@ var init_dist2 = __esm({
         return this.protocolName;
       }
       async buildSwap(params) {
+        if (params.amount_out_min === void 0) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] buildSwap requires amount_out_min for slippage protection (SSOT 7.3) \u2014 Thena CL has no on-chain quoter. Compute the floor off-chain (e.g. via the router's static-call simulation) and pass it explicitly.`
+          );
+        }
         const data = encodeFunctionData7({
           abi: thenaRouterAbi,
           functionName: "exactInputSingle",
@@ -2211,7 +2290,7 @@ var init_dist2 = __esm({
             recipient: params.recipient,
             deadline: BigInt(params.deadline ?? 18446744073709551615n),
             amountIn: params.amount_in,
-            amountOutMinimum: 0n,
+            amountOutMinimum: params.amount_out_min,
             sqrtPriceLimitX96: 0n
           }]
         });
@@ -2231,7 +2310,12 @@ var init_dist2 = __esm({
         const pm = this.positionManager;
         if (!pm) throw new DefiError("CONTRACT_ERROR", "Position manager not configured");
         if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
-        const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+        const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+        const [token0, token1, rawAmount0, rawAmount1] = isAFirst ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+        const slippage = params.slippage ?? defaultSwapSlippage();
+        const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+        const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+        const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
         const client = createPublicClient42({ transport: http42(this.rpcUrl) });
         const poolAddr = params.pool;
         let tickSpacing = this.defaultTickSpacing;
@@ -2246,7 +2330,7 @@ var init_dist2 = __esm({
               functionName: "getPool",
               args: [token0, token1, tickSpacing]
             });
-            if (pool === zeroAddress3) throw new DefiError("CONTRACT_ERROR", "Pool not found");
+            if (pool === zeroAddress2) throw new DefiError("CONTRACT_ERROR", "Pool not found");
           }
           if (pool) {
             const [slot0, ts] = await Promise.all([
@@ -2289,8 +2373,8 @@ var init_dist2 = __esm({
             tickUpper,
             amount0Desired: rawAmount0,
             amount1Desired: rawAmount1,
-            amount0Min: 0n,
-            amount1Min: 0n,
+            amount0Min,
+            amount1Min,
             recipient: params.recipient,
             deadline: BigInt("18446744073709551615"),
             sqrtPriceX96: 0n
@@ -2312,12 +2396,19 @@ var init_dist2 = __esm({
         const pm = this.positionManager;
         if (!pm) throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager'`);
         if (!params.token_id) throw DefiError.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+        if (params.amount_a_min === void 0 || params.amount_b_min === void 0) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] remove_liquidity requires amount_a_min and amount_b_min for slippage protection (SSOT 7.3). Compute expected outputs from positions(tokenId) + pool.slot0 off-chain and apply tolerance.`
+          );
+        }
+        const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+        const [amount0Min, amount1Min] = isAFirst ? [params.amount_a_min, params.amount_b_min] : [params.amount_b_min, params.amount_a_min];
         const MAX_UINT128 = (1n << 128n) - 1n;
         const deadline = BigInt("18446744073709551615");
         const decreaseData = encodeFunctionData7({
           abi: thenaPmAbi,
           functionName: "decreaseLiquidity",
-          args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+          args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min, amount1Min, deadline }]
         });
         const collectData = encodeFunctionData7({
           abi: thenaPmAbi,
@@ -2384,8 +2475,8 @@ var init_dist2 = __esm({
         const ve = entry.contracts?.["ve_token"];
         if (!ve) throw new DefiError("CONTRACT_ERROR", "Missing 've_token' contract");
         this.veToken = ve;
-        this.voter = entry.contracts?.["voter"] ?? zeroAddress4;
-        this.positionManager = entry.contracts?.["position_manager"] ?? zeroAddress4;
+        this.voter = entry.contracts?.["voter"] ?? zeroAddress3;
+        this.positionManager = entry.contracts?.["position_manager"] ?? zeroAddress3;
         this.poolFactory = entry.contracts?.["pool_factory"];
         this.rpcUrl = rpcUrl;
       }
@@ -2427,7 +2518,7 @@ var init_dist2 = __esm({
           ]);
         }
         const poolAddressResults = await multicallRead(this.rpcUrl, poolAddressCalls);
-        const pools = poolAddressResults.map((r) => decodeAddress(r)).filter((a) => a !== null && a !== zeroAddress4);
+        const pools = poolAddressResults.map((r) => decodeAddress(r)).filter((a) => a !== null && a !== zeroAddress3);
         if (pools.length === 0) return [];
         const gaugeCalls = pools.map((pool) => [
           this.gaugeManager,
@@ -2437,7 +2528,7 @@ var init_dist2 = __esm({
         const gaugedPools = [];
         for (let i = 0; i < pools.length; i++) {
           const gauge = decodeAddress(gaugeResults[i] ?? null);
-          if (gauge && gauge !== zeroAddress4) {
+          if (gauge && gauge !== zeroAddress3) {
             gaugedPools.push({ pool: pools[i], gauge });
           }
         }
@@ -2452,8 +2543,8 @@ var init_dist2 = __esm({
         for (let i = 0; i < gaugedPools.length; i++) {
           const t0 = decodeAddress(tokenResults[i * 2] ?? null);
           const t1 = decodeAddress(tokenResults[i * 2 + 1] ?? null);
-          if (t0 && t0 !== zeroAddress4) tokenAddrs.add(t0);
-          if (t1 && t1 !== zeroAddress4) tokenAddrs.add(t1);
+          if (t0 && t0 !== zeroAddress3) tokenAddrs.add(t0);
+          if (t1 && t1 !== zeroAddress3) tokenAddrs.add(t1);
         }
         const uniqueTokens = Array.from(tokenAddrs);
         const symbolCalls = uniqueTokens.map((t) => [
@@ -2492,7 +2583,7 @@ var init_dist2 = __esm({
           functionName: "gauges",
           args: [pool]
         });
-        if (gauge === zeroAddress4) throw new DefiError("CONTRACT_ERROR", `No gauge for pool ${pool}`);
+        if (gauge === zeroAddress3) throw new DefiError("CONTRACT_ERROR", `No gauge for pool ${pool}`);
         return gauge;
       }
       // ─── CL Gauge: NFT Deposit/Withdraw ──────────────────────────
@@ -2654,7 +2745,7 @@ var init_dist2 = __esm({
             params.amount_in,
             minToAmount,
             params.recipient,
-            zeroAddress5
+            zeroAddress4
           ]
         });
         return {
@@ -2879,7 +2970,7 @@ var init_dist2 = __esm({
             poolCalls.push([this.voter, encodeFunctionData10({ abi: voterPoolsAbi, functionName: "pools", args: [BigInt(i)] })]);
           }
           const poolResults = await multicallRead(this.rpcUrl, poolCalls);
-          pairs = poolResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress6);
+          pairs = poolResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress5);
         } else {
           const v2FactoryAbi = parseAbi10(["function allPairsLength() view returns (uint256)", "function allPairs(uint256) view returns (address)"]);
           const solidlyFactoryAbi = parseAbi10(["function allPoolsLength() view returns (uint256)", "function allPools(uint256) view returns (address)"]);
@@ -2904,17 +2995,17 @@ var init_dist2 = __esm({
           const pairCalls = [];
           for (let i = startIdx; i < count; i++) pairCalls.push([this.v2Factory, encodeFunctionData10({ abi: fetchAbi, functionName: fetchFn, args: [BigInt(i)] })]);
           const pairResults = await multicallRead(this.rpcUrl, pairCalls);
-          pairs = pairResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress6);
+          pairs = pairResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress5);
         }
         if (pairs.length === 0) return;
         const gaugeCalls = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [p] })]);
         let gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
-        const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+        const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress5 || decodeAddress2(r) === null);
         if (allNull) {
           const fb1 = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [p] })]);
           gaugeResults = await multicallRead(this.rpcUrl, fb1);
         }
-        const allNull2 = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+        const allNull2 = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress5 || decodeAddress2(r) === null);
         if (allNull2) {
           const fb2 = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: gaugesAbi, functionName: "gauges", args: [p] })]);
           gaugeResults = await multicallRead(this.rpcUrl, fb2);
@@ -2922,7 +3013,7 @@ var init_dist2 = __esm({
         const gaugedPairs = [];
         for (let i = 0; i < pairs.length; i++) {
           const gauge = decodeAddress2(gaugeResults[i] ?? null);
-          if (gauge && gauge !== zeroAddress6) {
+          if (gauge && gauge !== zeroAddress5) {
             gaugedPairs.push({ pair: pairs[i], gauge });
           }
         }
@@ -2938,8 +3029,8 @@ var init_dist2 = __esm({
         for (let i = 0; i < gaugedPairs.length; i++) {
           const t0 = decodeAddress2(metaResults[i * 3] ?? null);
           const t1 = decodeAddress2(metaResults[i * 3 + 1] ?? null);
-          if (t0 && t0 !== zeroAddress6) tokenAddrs.add(t0);
-          if (t1 && t1 !== zeroAddress6) tokenAddrs.add(t1);
+          if (t0 && t0 !== zeroAddress5) tokenAddrs.add(t0);
+          if (t1 && t1 !== zeroAddress5) tokenAddrs.add(t1);
         }
         const uniqueTokens = Array.from(tokenAddrs);
         const symbolCalls = uniqueTokens.map((t) => [
@@ -3029,7 +3120,7 @@ var init_dist2 = __esm({
         const candidatePools = [];
         for (let i = 0; i < getPoolCalls.length; i++) {
           const pool = decodeAddress2(getPoolResults[i] ?? null);
-          if (pool && pool !== zeroAddress6) {
+          if (pool && pool !== zeroAddress5) {
             const { pairIdx, tickSpacing } = callMeta[i];
             const [tokenA, tokenB] = pairs[pairIdx];
             candidatePools.push({ pool, tokenA, tokenB, tickSpacing });
@@ -3041,7 +3132,7 @@ var init_dist2 = __esm({
           encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pool] })
         ]);
         let gaugeResults = await multicallRead(this.rpcUrl, gaugeCalls);
-        const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+        const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress5 || decodeAddress2(r) === null);
         if (allNull) {
           const fallbackCalls = candidatePools.map(({ pool }) => [
             this.voter,
@@ -3052,7 +3143,7 @@ var init_dist2 = __esm({
         const gaugedCL = [];
         for (let i = 0; i < candidatePools.length; i++) {
           const gauge = decodeAddress2(gaugeResults[i] ?? null);
-          if (gauge && gauge !== zeroAddress6) {
+          if (gauge && gauge !== zeroAddress5) {
             gaugedCL.push({ ...candidatePools[i], gauge });
           }
         }
@@ -3082,8 +3173,8 @@ var init_dist2 = __esm({
           const { pool, gauge, tokenA, tokenB, tickSpacing } = gaugedCL[i];
           const rawT0 = decodeAddress2(poolTokenResults[i * 2] ?? null);
           const rawT1 = decodeAddress2(poolTokenResults[i * 2 + 1] ?? null);
-          const t0 = rawT0 && rawT0 !== zeroAddress6 ? rawT0 : tokenA;
-          const t1 = rawT1 && rawT1 !== zeroAddress6 ? rawT1 : tokenB;
+          const t0 = rawT0 && rawT0 !== zeroAddress5 ? rawT0 : tokenA;
+          const t1 = rawT1 && rawT1 !== zeroAddress5 ? rawT1 : tokenB;
           out.push({
             pool,
             gauge,
@@ -3185,7 +3276,7 @@ var init_dist2 = __esm({
               functionName: fn,
               args: [pool]
             });
-            if (gauge !== zeroAddress6) return gauge;
+            if (gauge !== zeroAddress5) return gauge;
           } catch {
           }
         }
@@ -3239,7 +3330,7 @@ var init_dist2 = __esm({
             abi: gaugeAbi,
             functionName: "rewardToken"
           });
-          if (rt !== zeroAddress6) return { tokens: [rt], multiToken: false };
+          if (rt !== zeroAddress5) return { tokens: [rt], multiToken: false };
         } catch {
         }
         return { tokens: [], multiToken: false };
@@ -3249,7 +3340,7 @@ var init_dist2 = __esm({
           const data = encodeFunctionData10({
             abi: gaugeAbi,
             functionName: "getReward",
-            args: [account ?? zeroAddress6]
+            args: [account ?? zeroAddress5]
           });
           return { description: `[${this.protocolName}] Claim gauge rewards`, to: gauge, data, value: 0n, gas_estimate: 2e5 };
         }
@@ -3473,7 +3564,7 @@ var init_dist2 = __esm({
               functionName: "earned",
               args: [user]
             });
-            results.push({ token: zeroAddress6, symbol: "unknown", amount: earned });
+            results.push({ token: zeroAddress5, symbol: "unknown", amount: earned });
           } catch {
           }
         }
@@ -4813,7 +4904,7 @@ var init_dist2 = __esm({
         const poolSet = /* @__PURE__ */ new Set();
         for (const data of poolResults) {
           const addr = decodeAddress3(data);
-          if (addr && addr !== zeroAddress7) {
+          if (addr && addr !== zeroAddress6) {
             poolSet.add(addr.toLowerCase());
           }
         }
@@ -5133,6 +5224,16 @@ var init_dist2 = __esm({
       "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
       "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
       "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
+      // Toggles required to actually borrow against an isolation-mode reserve
+      // (https://aave.com/docs/aave-v3/smart-contracts/pool):
+      //   - setUserUseReserveAsCollateral: an isolation reserve can be enabled
+      //     only if no other asset is enabled; LTV=0 reserves can never be
+      //     enabled; disable reverts if the resulting HF would drop below the
+      //     liquidation threshold.
+      //   - setUserEMode: reverts if the user is borrowing a non-eMode-
+      //     compatible asset, or if the change would push HF below threshold.
+      "function setUserUseReserveAsCollateral(address asset, bool useAsCollateral) external",
+      "function setUserEMode(uint8 categoryId) external",
       "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
       "function getReservesList() external view returns (address[])",
       "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)"
@@ -5258,6 +5359,34 @@ var init_dist2 = __esm({
           gas_estimate: 25e4
         };
       }
+      async buildSetUseReserveAsCollateral(asset, useAsCollateral) {
+        const data = encodeFunctionData14({
+          abi: POOL_ABI,
+          functionName: "setUserUseReserveAsCollateral",
+          args: [asset, useAsCollateral]
+        });
+        return {
+          description: `[${this.protocolName}] ${useAsCollateral ? "Enable" : "Disable"} ${asset} as collateral`,
+          to: this.pool,
+          data,
+          value: 0n,
+          gas_estimate: 1e5
+        };
+      }
+      async buildSetEMode(categoryId) {
+        const data = encodeFunctionData14({
+          abi: POOL_ABI,
+          functionName: "setUserEMode",
+          args: [categoryId]
+        });
+        return {
+          description: `[${this.protocolName}] Set eMode category to ${categoryId}${categoryId === 0 ? " (opt out)" : ""}`,
+          to: this.pool,
+          data,
+          value: 0n,
+          gas_estimate: 15e4
+        };
+      }
       async getRates(asset) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
         const reserveCallData = encodeFunctionData14({
@@ -5302,7 +5431,7 @@ var init_dist2 = __esm({
             [aTokenAddress, encodeFunctionData14({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
           ]);
           const controllerAddr = decodeAddress4(controllerRaw ?? null);
-          if (controllerAddr && controllerAddr !== zeroAddress8) {
+          if (controllerAddr && controllerAddr !== zeroAddress7) {
             const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead(this.rpcUrl, [
               [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
               [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
@@ -5498,8 +5627,8 @@ var init_dist2 = __esm({
             if (p.value.borrow > 0n) borrows.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.borrow });
           }
         } catch {
-          if (collateralUsd > 0) supplies.push({ asset: zeroAddress8, symbol: "Total Collateral (per-asset breakdown unavailable)", amount: totalCollateralBase });
-          if (debtUsd > 0) borrows.push({ asset: zeroAddress8, symbol: "Total Debt (per-asset breakdown unavailable)", amount: totalDebtBase });
+          if (collateralUsd > 0) supplies.push({ asset: zeroAddress7, symbol: "Total Collateral (per-asset breakdown unavailable)", amount: totalCollateralBase });
+          if (debtUsd > 0) borrows.push({ asset: zeroAddress7, symbol: "Total Debt (per-asset breakdown unavailable)", amount: totalDebtBase });
         }
         return {
           protocol: this.protocolName,
@@ -5666,8 +5795,8 @@ var init_dist2 = __esm({
         const collateralUsd = u256ToF642(totalCollateralBase) / 1e18;
         const debtUsd = u256ToF642(totalDebtBase) / 1e18;
         const ltvBps = u256ToF642(ltv);
-        const supplies = collateralUsd > 0 ? [{ asset: zeroAddress9, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-        const borrows = debtUsd > 0 ? [{ asset: zeroAddress9, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+        const supplies = collateralUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
+        const borrows = debtUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
         return {
           protocol: this.protocolName,
           user,
@@ -5770,14 +5899,31 @@ var init_dist2 = __esm({
       "function borrow(uint256 borrowAmount) external returns (uint256)",
       "function repayBorrow(uint256 repayAmount) external returns (uint256)"
     ]);
+    NATIVE_CTOKEN_ABI = parseAbi17([
+      "function mint() external payable",
+      "function repayBorrow() external payable"
+    ]);
+    COMPTROLLER_ABI = parseAbi17([
+      "function enterMarkets(address[] cTokens) external returns (uint256[])",
+      "function exitMarket(address cToken) external returns (uint256)"
+    ]);
+    NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000";
     BSC_BLOCKS_PER_YEAR = 10512e3;
     CompoundV2Adapter = class {
       protocolName;
       defaultVtoken;
       vTokenCandidates;
+      comptroller;
       rpcUrl;
-      // Lazy cache: underlying asset address (lowercased) → vToken address
+      // Lazy cache: underlying asset address (lowercased) → vToken address.
+      // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
+      // when one is detected during resolveVtoken().
       vTokenByAsset = null;
+      // The cETH/vBNB-style vToken whose underlying() reverts (it has no
+      // ERC20 underlying — the underlying is the chain's native gas token).
+      // Set lazily by resolveVtoken() and consulted by buildSupply/buildRepay
+      // to switch to the payable mint() / repayBorrow() variants.
+      nativeVtoken = null;
       constructor(entry, rpcUrl) {
         this.protocolName = entry.name;
         this.rpcUrl = rpcUrl;
@@ -5785,6 +5931,7 @@ var init_dist2 = __esm({
         const vtoken = contracts["vusdt"] ?? contracts["vusdc"] ?? contracts["vbnb"] ?? contracts["comptroller"];
         if (!vtoken) throw DefiError.contractError("Missing vToken or comptroller address");
         this.defaultVtoken = vtoken;
+        this.comptroller = contracts["comptroller"];
         this.vTokenCandidates = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k)).map(([, v]) => v);
         if (this.vTokenCandidates.length === 0) this.vTokenCandidates = [vtoken];
       }
@@ -5793,18 +5940,37 @@ var init_dist2 = __esm({
         if (!this.vTokenByAsset) {
           const client = createPublicClient13({ transport: http13(this.rpcUrl) });
           const map = /* @__PURE__ */ new Map();
+          let nativeVtoken = null;
           const lookups = await Promise.allSettled(
             this.vTokenCandidates.map(async (v) => {
-              const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" });
-              return [u.toLowerCase(), v];
+              try {
+                const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" });
+                return { vtoken: v, underlying: u };
+              } catch {
+                return { vtoken: v, underlying: null };
+              }
             })
           );
           for (const r of lookups) {
-            if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
+            if (r.status !== "fulfilled") continue;
+            const { vtoken, underlying } = r.value;
+            if (underlying) {
+              map.set(underlying.toLowerCase(), vtoken);
+            } else if (!nativeVtoken) {
+              nativeVtoken = vtoken;
+            }
+          }
+          if (nativeVtoken) {
+            map.set(NATIVE_SENTINEL, nativeVtoken);
           }
           this.vTokenByAsset = map;
+          this.nativeVtoken = nativeVtoken;
         }
         return this.vTokenByAsset.get(asset.toLowerCase()) ?? null;
+      }
+      /** True iff `vtoken` is the cETH/vBNB-style native cToken for this protocol. */
+      isNativeVtoken(vtoken) {
+        return this.nativeVtoken !== null && vtoken.toLowerCase() === this.nativeVtoken.toLowerCase();
       }
       name() {
         return this.protocolName;
@@ -5819,6 +5985,16 @@ var init_dist2 = __esm({
       }
       async buildSupply(params) {
         const vtoken = await this.vtokenFor(params.asset);
+        if (this.isNativeVtoken(vtoken)) {
+          const data2 = encodeFunctionData16({ abi: NATIVE_CTOKEN_ABI, functionName: "mint" });
+          return {
+            description: `[${this.protocolName}] Supply ${params.amount} (native) to Venus`,
+            to: vtoken,
+            data: data2,
+            value: params.amount,
+            gas_estimate: 3e5
+          };
+        }
         const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "mint", args: [params.amount] });
         return {
           description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to Venus`,
@@ -5842,6 +6018,16 @@ var init_dist2 = __esm({
       }
       async buildRepay(params) {
         const vtoken = await this.vtokenFor(params.asset);
+        if (this.isNativeVtoken(vtoken)) {
+          const data2 = encodeFunctionData16({ abi: NATIVE_CTOKEN_ABI, functionName: "repayBorrow" });
+          return {
+            description: `[${this.protocolName}] Repay ${params.amount} (native) to Venus`,
+            to: vtoken,
+            data: data2,
+            value: params.amount,
+            gas_estimate: 3e5
+          };
+        }
         const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "repayBorrow", args: [params.amount] });
         return {
           description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to Venus`,
@@ -5861,6 +6047,37 @@ var init_dist2 = __esm({
           data,
           value: 0n,
           gas_estimate: 25e4
+        };
+      }
+      /**
+       * Compound V2 family: enter cTokens as collateral via Comptroller.
+       * Without this call, supplied assets sit dormant in the Comptroller's
+       * accountAssets[] and `getAccountLiquidity` reports zero collateral —
+       * any borrow then reverts. Mirrors the role of Aave V3's
+       * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
+       */
+      async buildEnterMarkets(cTokens) {
+        if (!this.comptroller) {
+          throw DefiError.contractError(
+            `[${this.protocolName}] enterMarkets requires the Comptroller address to be registered under [protocol.contracts] as 'comptroller'.`
+          );
+        }
+        if (cTokens.length === 0) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] enterMarkets requires at least one cToken address.`
+          );
+        }
+        const data = encodeFunctionData16({
+          abi: COMPTROLLER_ABI,
+          functionName: "enterMarkets",
+          args: [cTokens]
+        });
+        return {
+          description: `[${this.protocolName}] Enter ${cTokens.length} market(s) as collateral`,
+          to: this.comptroller,
+          data,
+          value: 0n,
+          gas_estimate: 2e5
         };
       }
       async getRates(asset) {
@@ -6230,9 +6447,11 @@ var init_dist2 = __esm({
       "function market(bytes32 id) external view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee)",
       "function idToMarketParams(bytes32 id) external view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)",
       "function supply((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsSupplied, uint256 sharesSupplied)",
+      "function supplyCollateral((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, address onBehalf, bytes data) external",
       "function borrow((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsBorrowed, uint256 sharesBorrowed)",
       "function repay((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsRepaid, uint256 sharesRepaid)",
-      "function withdraw((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)"
+      "function withdraw((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)",
+      "function withdrawCollateral((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, address onBehalf, address receiver) external"
     ]);
     META_MORPHO_ABI = parseAbi20([
       "function supplyQueueLength() external view returns (uint256)",
@@ -6303,10 +6522,61 @@ var init_dist2 = __esm({
       name() {
         return this.protocolName;
       }
+      /**
+       * Resolve a Morpho Blue marketId into the full MarketParams tuple by
+       * calling Morpho.idToMarketParams(id). Used by every direct-market
+       * method (supply / borrow / repay / withdraw / supplyCollateral /
+       * withdrawCollateral) so the caller only has to pass the 32-byte
+       * marketId — same shape as the Morpho UI / API.
+       */
+      async resolveMarketParams(marketId) {
+        if (!this.rpcUrl) {
+          throw DefiError.rpcError(
+            `[${this.protocolName}] No RPC URL configured \u2014 cannot resolve marketId ${marketId}`
+          );
+        }
+        const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+        let result;
+        try {
+          result = await client.readContract({
+            address: this.morpho,
+            abi: MORPHO_ABI,
+            functionName: "idToMarketParams",
+            args: [marketId]
+          });
+        } catch (e) {
+          throw DefiError.rpcError(
+            `[${this.protocolName}] idToMarketParams(${marketId}) failed: ${e}`
+          );
+        }
+        const [loanToken, collateralToken, oracle, irm, lltv] = result;
+        if (loanToken === zeroAddress9 || collateralToken === zeroAddress9 || lltv === 0n) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] marketId ${marketId} resolves to an empty MarketParams (loan=${loanToken}, collateral=${collateralToken}, lltv=${lltv}). Verify the id matches a registered market on this chain.`
+          );
+        }
+        return { loanToken, collateralToken, oracle, irm, lltv };
+      }
       async buildSupply(params) {
+        if (params.market_id) {
+          const market = await this.resolveMarketParams(params.market_id);
+          const data = encodeFunctionData19({
+            abi: MORPHO_ABI,
+            functionName: "supply",
+            args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
+          });
+          return {
+            description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}\u2026`,
+            to: this.morpho,
+            data,
+            value: 0n,
+            gas_estimate: 35e4,
+            approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }]
+          };
+        }
         const vault = await this.resolveVault(params.asset);
         if (vault) {
-          const data2 = encodeFunctionData19({
+          const data = encodeFunctionData19({
             abi: ERC4626_ABI,
             functionName: "deposit",
             args: [params.amount, params.on_behalf_of]
@@ -6314,50 +6584,82 @@ var init_dist2 = __esm({
           return {
             description: `[${this.protocolName}] Deposit ${params.amount} into MetaMorpho vault`,
             to: vault,
-            data: data2,
+            data,
             value: 0n,
             gas_estimate: 4e5,
             approvals: [{ token: params.asset, spender: vault, amount: params.amount }]
           };
         }
-        const market = defaultMarketParams(params.asset);
-        const data = encodeFunctionData19({
-          abi: MORPHO_ABI,
-          functionName: "supply",
-          args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
-        });
-        return {
-          description: `[${this.protocolName}] Supply ${params.amount} to Morpho market`,
-          to: this.morpho,
-          data,
-          value: 0n,
-          gas_estimate: 3e5
-        };
+        throw DefiError.invalidParam(
+          `[${this.protocolName}] supply requires either a registered MetaMorpho vault for ${params.asset} or an explicit --market <marketId>. The legacy zero-MarketParams stub was removed (it always reverted on-chain).`
+        );
       }
       async buildBorrow(params) {
-        const market = defaultMarketParams(params.asset);
+        if (!params.market_id) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] Morpho Blue borrow requires --market <marketId>. Find one via the Morpho API (https://blue-api.morpho.org/graphql).`
+          );
+        }
+        const market = await this.resolveMarketParams(params.market_id);
         const data = encodeFunctionData19({
           abi: MORPHO_ABI,
           functionName: "borrow",
           args: [market, params.amount, 0n, params.on_behalf_of, params.on_behalf_of]
         });
         return {
-          description: `[${this.protocolName}] Borrow ${params.amount} from Morpho market`,
+          description: `[${this.protocolName}] Borrow ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}\u2026`,
           to: this.morpho,
           data,
           value: 0n,
-          gas_estimate: 35e4
+          gas_estimate: 4e5
         };
       }
       async buildRepay(params) {
-        const market = defaultMarketParams(params.asset);
+        if (!params.market_id) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] Morpho Blue repay requires --market <marketId>.`
+          );
+        }
+        const market = await this.resolveMarketParams(params.market_id);
         const data = encodeFunctionData19({
           abi: MORPHO_ABI,
           functionName: "repay",
           args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
         });
         return {
-          description: `[${this.protocolName}] Repay ${params.amount} to Morpho market`,
+          description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}\u2026`,
+          to: this.morpho,
+          data,
+          value: 0n,
+          gas_estimate: 35e4,
+          approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }]
+        };
+      }
+      async buildSupplyCollateral(params) {
+        const market = await this.resolveMarketParams(params.market_id);
+        const data = encodeFunctionData19({
+          abi: MORPHO_ABI,
+          functionName: "supplyCollateral",
+          args: [market, params.amount, params.on_behalf_of, "0x"]
+        });
+        return {
+          description: `[${this.protocolName}] Supply collateral ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}\u2026`,
+          to: this.morpho,
+          data,
+          value: 0n,
+          gas_estimate: 35e4,
+          approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }]
+        };
+      }
+      async buildWithdrawCollateral(params) {
+        const market = await this.resolveMarketParams(params.market_id);
+        const data = encodeFunctionData19({
+          abi: MORPHO_ABI,
+          functionName: "withdrawCollateral",
+          args: [market, params.amount, params.to, params.to]
+        });
+        return {
+          description: `[${this.protocolName}] Withdraw collateral ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}\u2026`,
           to: this.morpho,
           data,
           value: 0n,
@@ -6365,6 +6667,21 @@ var init_dist2 = __esm({
         };
       }
       async buildWithdraw(params) {
+        if (params.market_id) {
+          const market = await this.resolveMarketParams(params.market_id);
+          const data = encodeFunctionData19({
+            abi: MORPHO_ABI,
+            functionName: "withdraw",
+            args: [market, params.amount, 0n, params.to, params.to]
+          });
+          return {
+            description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}\u2026`,
+            to: this.morpho,
+            data,
+            value: 0n,
+            gas_estimate: 3e5
+          };
+        }
         const vault = await this.resolveVault(params.asset);
         if (vault) {
           if (params.amount === MAX_UINT256) {
@@ -6373,7 +6690,7 @@ var init_dist2 = __esm({
               [vault, encodeFunctionData19({ abi: ERC4626_ABI, functionName: "balanceOf", args: [params.to] })]
             ]);
             const shares = decodeU256(balRaw ?? null);
-            const data3 = encodeFunctionData19({
+            const data2 = encodeFunctionData19({
               abi: ERC4626_ABI,
               functionName: "redeem",
               args: [shares, params.to, params.to]
@@ -6381,12 +6698,12 @@ var init_dist2 = __esm({
             return {
               description: `[${this.protocolName}] Redeem all shares (${shares}) from MetaMorpho vault`,
               to: vault,
-              data: data3,
+              data: data2,
               value: 0n,
               gas_estimate: 4e5
             };
           }
-          const data2 = encodeFunctionData19({
+          const data = encodeFunctionData19({
             abi: ERC4626_ABI,
             functionName: "withdraw",
             args: [params.amount, params.to, params.to]
@@ -6394,24 +6711,14 @@ var init_dist2 = __esm({
           return {
             description: `[${this.protocolName}] Withdraw ${params.amount} assets from MetaMorpho vault`,
             to: vault,
-            data: data2,
+            data,
             value: 0n,
             gas_estimate: 4e5
           };
         }
-        const market = defaultMarketParams(params.asset);
-        const data = encodeFunctionData19({
-          abi: MORPHO_ABI,
-          functionName: "withdraw",
-          args: [market, params.amount, 0n, params.to, params.to]
-        });
-        return {
-          description: `[${this.protocolName}] Withdraw ${params.amount} from Morpho market`,
-          to: this.morpho,
-          data,
-          value: 0n,
-          gas_estimate: 25e4
-        };
+        throw DefiError.invalidParam(
+          `[${this.protocolName}] withdraw requires either a registered MetaMorpho vault for ${params.asset} or an explicit --market <marketId>. The legacy zero-MarketParams stub was removed (it always reverted on-chain).`
+        );
       }
       async getRates(asset) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
@@ -6528,7 +6835,7 @@ var init_dist2 = __esm({
         if (!this.hintHelpers || !this.sortedTroves || !this.rpcUrl) {
           return [0n, 0n];
         }
-        const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+        const client = createPublicClient17({ transport: http17(this.rpcUrl) });
         const approxResult = await client.readContract({
           address: this.hintHelpers,
           abi: HINT_HELPERS_ABI,
@@ -6619,7 +6926,7 @@ var init_dist2 = __esm({
       async getCdpInfo(cdpId) {
         if (!this.rpcUrl) throw DefiError.rpcError(`[${this.protocolName}] getCdpInfo requires RPC \u2014 set HYPEREVM_RPC_URL`);
         if (!this.troveManager) throw DefiError.contractError(`[${this.protocolName}] trove_manager contract not configured`);
-        const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+        const client = createPublicClient17({ transport: http17(this.rpcUrl) });
         const data = await client.readContract({
           address: this.troveManager,
           abi: TROVE_MANAGER_ABI,
@@ -6637,13 +6944,13 @@ var init_dist2 = __esm({
           protocol: this.protocolName,
           cdp_id: cdpId,
           collateral: {
-            token: zeroAddress11,
+            token: zeroAddress10,
             symbol: "WHYPE",
             amount: entireColl,
             decimals: 18
           },
           debt: {
-            token: zeroAddress11,
+            token: zeroAddress10,
             symbol: "feUSD",
             amount: entireDebt,
             decimals: 18
@@ -6678,7 +6985,7 @@ var init_dist2 = __esm({
         if (asset !== this.asset && this.asset !== "0x0000000000000000000000000000000000000000") {
           throw DefiError.unsupported(`[${this.protocolName}] Felix PriceFeed only supports asset ${this.asset}`);
         }
-        const client = createPublicClient17({ transport: http17(this.rpcUrl) });
+        const client = createPublicClient18({ transport: http18(this.rpcUrl) });
         let priceVal;
         try {
           const result = await client.readContract({
@@ -6770,7 +7077,7 @@ var init_dist2 = __esm({
       }
       async totalAssets() {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+        const client = createPublicClient19({ transport: http19(this.rpcUrl) });
         return client.readContract({
           address: this.vaultAddress,
           abi: ERC4626_ABI2,
@@ -6781,7 +7088,7 @@ var init_dist2 = __esm({
       }
       async convertToShares(assets) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+        const client = createPublicClient19({ transport: http19(this.rpcUrl) });
         return client.readContract({
           address: this.vaultAddress,
           abi: ERC4626_ABI2,
@@ -6793,7 +7100,7 @@ var init_dist2 = __esm({
       }
       async convertToAssets(shares) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+        const client = createPublicClient19({ transport: http19(this.rpcUrl) });
         return client.readContract({
           address: this.vaultAddress,
           abi: ERC4626_ABI2,
@@ -6805,7 +7112,7 @@ var init_dist2 = __esm({
       }
       async getVaultInfo() {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+        const client = createPublicClient19({ transport: http19(this.rpcUrl) });
         const [totalAssets, totalSupply, asset] = await Promise.all([
           client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI2, functionName: "totalAssets" }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
@@ -6897,7 +7204,7 @@ var init_dist2 = __esm({
         const data = encodeFunctionData23({
           abi: STHYPE_ABI,
           functionName: "submit",
-          args: [zeroAddress12]
+          args: [zeroAddress11]
         });
         return {
           description: `[${this.protocolName}] Stake ${params.amount} HYPE for stHYPE`,
@@ -6923,7 +7230,7 @@ var init_dist2 = __esm({
       }
       async getInfo() {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient19({ transport: http19(this.rpcUrl) });
+        const client = createPublicClient20({ transport: http20(this.rpcUrl) });
         const tokenAddr = this.sthypeToken ?? this.staking;
         const totalSupply = await client.readContract({
           address: tokenAddr,
@@ -6934,7 +7241,7 @@ var init_dist2 = __esm({
         });
         return {
           protocol: this.protocolName,
-          staked_token: zeroAddress12,
+          staked_token: zeroAddress11,
           liquid_token: tokenAddr,
           exchange_rate: 1,
           total_staked: totalSupply
@@ -6993,7 +7300,7 @@ var init_dist2 = __esm({
       }
       async getInfo() {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient20({ transport: http20(this.rpcUrl) });
+        const client = createPublicClient21({ transport: http21(this.rpcUrl) });
         const totalStaked = await client.readContract({
           address: this.staking,
           abi: KINETIQ_ABI,
@@ -7008,7 +7315,7 @@ var init_dist2 = __esm({
         const rateF64 = hypePrice > 0n && khypePrice > 0n ? Number(khypePrice * 10n ** 18n / hypePrice) / 1e18 : 1;
         return {
           protocol: this.protocolName,
-          staked_token: zeroAddress13,
+          staked_token: zeroAddress12,
           liquid_token: this.liquidToken,
           exchange_rate: rateF64,
           total_staked: totalStaked
@@ -7228,7 +7535,7 @@ var init_dist2 = __esm({
       }
       async getCollectionInfo(collection) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+        const client = createPublicClient222({ transport: http222(this.rpcUrl) });
         const [collectionName, symbol, totalSupply] = await Promise.all([
           client.readContract({ address: collection, abi: ERC721_ABI, functionName: "name" }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] name failed: ${e}`);
@@ -7247,7 +7554,7 @@ var init_dist2 = __esm({
       }
       async getTokenInfo(collection, tokenId) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+        const client = createPublicClient222({ transport: http222(this.rpcUrl) });
         const [owner, tokenUri] = await Promise.all([
           client.readContract({ address: collection, abi: ERC721_ABI, functionName: "ownerOf", args: [tokenId] }).catch((e) => {
             throw DefiError.rpcError(`[${this.protocolName}] ownerOf failed: ${e}`);
@@ -7263,7 +7570,7 @@ var init_dist2 = __esm({
       }
       async getBalance(owner, collection) {
         if (!this.rpcUrl) throw DefiError.rpcError("No RPC URL configured");
-        const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+        const client = createPublicClient222({ transport: http222(this.rpcUrl) });
         return client.readContract({ address: collection, abi: ERC721_ABI, functionName: "balanceOf", args: [owner] }).catch((e) => {
           throw DefiError.rpcError(`[${this.protocolName}] balanceOf failed: ${e}`);
         });
@@ -7328,10 +7635,22 @@ var Executor = class _Executor {
   dryRun;
   rpcUrl;
   explorerUrl;
-  constructor(broadcast, rpcUrl, explorerUrl) {
+  /**
+   * Optional viem Chain object. When set, all wallet/public clients built
+   * inside this executor anchor to the explicit chainId at construction
+   * time, defending against MITM RPCs that lie about eth_chainId and
+   * keeping offline-signing safe under RPC drift (SSOT 7.4).
+   */
+  chain;
+  constructor(broadcast, rpcUrl, explorerUrl, chain) {
     this.dryRun = !broadcast;
     this.rpcUrl = rpcUrl;
     this.explorerUrl = explorerUrl;
+    this.chain = chain;
+  }
+  /** Returns the optional `{ chain }` spread for viem client constructors. */
+  chainOpt() {
+    return this.chain ? { chain: this.chain } : {};
   }
   /** Apply 20% buffer to a gas estimate */
   static applyGasBuffer(gas) {
@@ -7455,7 +7774,7 @@ var Executor = class _Executor {
    */
   async fetchEip1559Fees(rpcUrl) {
     try {
-      const client = createPublicClient2({ transport: http2(rpcUrl) });
+      const client = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
       let priorityFee = DEFAULT_PRIORITY_FEE_WEI;
       try {
         priorityFee = await client.estimateMaxPriorityFeePerGas();
@@ -7477,7 +7796,7 @@ var Executor = class _Executor {
   /** Estimate gas dynamically with buffer, falling back to a hardcoded estimate */
   async estimateGasWithBuffer(rpcUrl, tx, from) {
     try {
-      const client = createPublicClient2({ transport: http2(rpcUrl) });
+      const client = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
       const estimated = await client.estimateGas({
         to: tx.to,
         data: tx.data,
@@ -7501,7 +7820,7 @@ var Executor = class _Executor {
     if (!rpcUrl) {
       throw DefiError.rpcError("No RPC URL \u2014 cannot simulate. Set HYPEREVM_RPC_URL.");
     }
-    const client = createPublicClient2({ transport: http2(rpcUrl) });
+    const client = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
     const privateKey = process.env["DEFI_PRIVATE_KEY"];
     const from = privateKey ? privateKeyToAccount(privateKey).address : "0x0000000000000000000000000000000000000001";
     if (tx.approvals && tx.approvals.length > 0) {
@@ -7615,8 +7934,8 @@ var Executor = class _Executor {
     if (!rpcUrl) {
       throw DefiError.rpcError("No RPC URL configured for broadcasting");
     }
-    const publicClient = createPublicClient2({ transport: http2(rpcUrl) });
-    const walletClient = createWalletClient({ account, transport: http2(rpcUrl) });
+    const publicClient = createPublicClient2({ transport: http2(rpcUrl), ...this.chainOpt() });
+    const walletClient = createWalletClient({ account, transport: http2(rpcUrl), ...this.chainOpt() });
     if (tx.pre_txs && tx.pre_txs.length > 0) {
       for (const preTx of tx.pre_txs) {
         process.stderr.write(`  Pre-tx: ${preTx.description}...
@@ -8298,7 +8617,7 @@ function registerSchema(parent, getOpts) {
 init_dist();
 init_dist();
 init_dist2();
-import { parseAbi as parseAbi30, encodeFunctionData as encodeFunctionData27, decodeFunctionResult as decodeFunctionResult8, createPublicClient as createPublicClient23, http as http23, zeroAddress as zeroAddress14 } from "viem";
+import { parseAbi as parseAbi30, encodeFunctionData as encodeFunctionData27, decodeFunctionResult as decodeFunctionResult8, createPublicClient as createPublicClient23, http as http23, zeroAddress as zeroAddress13 } from "viem";
 
 // src/whitelist.ts
 import { readFileSync as readFileSync2 } from "fs";
@@ -8834,7 +9153,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
                 try {
                   const decoded = decodeFunctionResult8({ abi: mcAbi, functionName: "poolInfo", data: raw });
                   const [allocPoint, v3Pool, t0, t1, , totalLiq] = decoded;
-                  if (allocPoint === 0n || v3Pool === zeroAddress14) continue;
+                  if (allocPoint === 0n || v3Pool === zeroAddress13) continue;
                   const tokens = registry.tokens.get(chainName);
                   const sym0 = tokens?.find((t) => t.address.toLowerCase() === t0?.toLowerCase())?.symbol ?? t0?.slice(0, 8) ?? "?";
                   const sym1 = tokens?.find((t) => t.address.toLowerCase() === t1?.toLowerCase())?.symbol ?? t1?.slice(0, 8) ?? "?";
@@ -8909,7 +9228,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       printOutput(results, getOpts());
     }
   });
-  lp.command("add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2)").option("--num-bins <n>", "Merchant Moe LB: bins on each side of active (default 5)").action(async (opts) => {
+  lp.command("add").description("Add liquidity to a pool").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--recipient <address>", "Recipient address").option("--tick-lower <tick>", "Lower tick for concentrated LP (default: full range)").option("--tick-upper <tick>", "Upper tick for concentrated LP (default: full range)").option("--range <percent>", "\xB1N% concentrated range around current price (e.g. --range 2)").option("--num-bins <n>", "Merchant Moe LB: bins on each side of active (default 5)").option("--slippage <bps>", "Slippage tolerance in basis points (default 50 = 0.5%). Sets amount{0,1}Min per side via applyMinSlippage.").option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on add (overrides --slippage for that side).").option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on add (overrides --slippage for that side).").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -8958,12 +9277,15 @@ function registerLP(parent, getOpts, makeExecutor2) {
       tick_lower: opts.tickLower !== void 0 ? parseInt(opts.tickLower) : void 0,
       tick_upper: opts.tickUpper !== void 0 ? parseInt(opts.tickUpper) : void 0,
       range_pct: opts.range !== void 0 ? parseFloat(opts.range) : void 0,
-      pool: poolAddr
+      pool: poolAddr,
+      slippage: opts.slippage !== void 0 ? { bps: parseInt(opts.slippage, 10) } : void 0,
+      amount_a_min: opts.amountAMin !== void 0 ? BigInt(opts.amountAMin) : void 0,
+      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lp.command("farm").description("Add liquidity and auto-stake into gauge/farming for emissions").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--gauge <address>", "Gauge address (required for solidly/hybra if not resolved automatically)").option("--recipient <address>", "Recipient / owner address").option("--tick-lower <tick>", "Lower tick for concentrated LP").option("--tick-upper <tick>", "Upper tick for concentrated LP").option("--range <percent>", "\xB1N% concentrated range around current price").action(async (opts) => {
+  lp.command("farm").description("Add liquidity and auto-stake into gauge/farming for emissions").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--token-a <token>", "First token symbol or address").requiredOption("--token-b <token>", "Second token symbol or address").requiredOption("--amount-a <amount>", "Amount of token A in wei").requiredOption("--amount-b <amount>", "Amount of token B in wei").option("--pool <name_or_address>", "Pool name (e.g. WHYPE/USDC) or address").option("--gauge <address>", "Gauge address (required for solidly/hybra if not resolved automatically)").option("--recipient <address>", "Recipient / owner address").option("--tick-lower <tick>", "Lower tick for concentrated LP").option("--tick-upper <tick>", "Upper tick for concentrated LP").option("--range <percent>", "\xB1N% concentrated range around current price").option("--slippage <bps>", "Slippage tolerance in basis points (default 50 = 0.5%). Applied to the underlying mint step.").option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on add (overrides --slippage for that side).").option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on add (overrides --slippage for that side).").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -8989,7 +9311,10 @@ function registerLP(parent, getOpts, makeExecutor2) {
       tick_lower: opts.tickLower !== void 0 ? parseInt(opts.tickLower) : void 0,
       tick_upper: opts.tickUpper !== void 0 ? parseInt(opts.tickUpper) : void 0,
       range_pct: opts.range !== void 0 ? parseFloat(opts.range) : void 0,
-      pool: poolAddr
+      pool: poolAddr,
+      slippage: opts.slippage !== void 0 ? { bps: parseInt(opts.slippage, 10) } : void 0,
+      amount_a_min: opts.amountAMin !== void 0 ? BigInt(opts.amountAMin) : void 0,
+      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0
     });
     process.stderr.write("Step 1/2: Adding liquidity...\n");
     const addResult = await executor.execute(addTx);
@@ -9229,7 +9554,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       note: "Plan output. Run each cli_command sequentially. After the mint step, broadcast mode prints `details.minted_token_id` \u2014 feed that into the next step's --token-id."
     }, getOpts());
   });
-  lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").option("--token-a <token>", "First token symbol or address (required for V2/Curve/LB)").option("--token-b <token>", "Second token symbol or address (required for V2/Curve/LB)").option("--liquidity <amount>", "Liquidity amount to remove in wei (required for V2/Curve/LB)").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default \u2014 WARNING: long lock)").option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw").option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)").action(async (opts) => {
+  lp.command("remove").description("Auto-unstake (if staked) and remove liquidity from a pool").requiredOption("--protocol <protocol>", "Protocol slug").option("--token-a <token>", "First token symbol or address (required for V2/Curve/LB)").option("--token-b <token>", "Second token symbol or address (required for V2/Curve/LB)").option("--liquidity <amount>", "Liquidity amount to remove in wei (required for V2/Curve/LB)").option("--pool <address>", "Pool address (needed to resolve gauge)").option("--gauge <address>", "Gauge contract address (for solidly/hybra unstake)").option("--token-id <id>", "NFT tokenId (for CL gauge or farming positions)").option("--recipient <address>", "Recipient address").option("--redeem-type <n>", "Hybra: 0=instant exit (with penalty), 1=lock into 2-year veHYBR (default \u2014 WARNING: long lock)").option("--bins <binIds>", "Merchant Moe LB: comma-separated bin IDs to withdraw").option("--amount-a-min <wei>", "Explicit minimum of token_a accepted on remove (REQUIRED for V3/Algebra/Thena CL \u2014 caller must compute from positions(tokenId) + pool state and apply tolerance).").option("--amount-b-min <wei>", "Explicit minimum of token_b accepted on remove (REQUIRED for V3/Algebra/Thena CL).").option("--amounts <wei>", "Merchant Moe LB: comma-separated bin amounts (parallel to --bins, default: full balance)").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = parent.opts().chain;
     if (!chainName) {
@@ -9396,7 +9721,9 @@ function registerLP(parent, getOpts, makeExecutor2) {
       token_b: tokenB ?? ZERO,
       liquidity: removeLiquidity,
       recipient,
-      token_id: opts.tokenId ? BigInt(opts.tokenId) : void 0
+      token_id: opts.tokenId ? BigInt(opts.tokenId) : void 0,
+      amount_a_min: opts.amountAMin !== void 0 ? BigInt(opts.amountAMin) : void 0,
+      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0
     });
     const removeResult = await executor.execute(removeTx);
     printOutput({ step: "lp_remove", ...removeResult }, getOpts());
@@ -9749,6 +10076,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
 // src/commands/lending.ts
 init_dist();
 init_dist2();
+import { maxUint256 } from "viem";
 
 // src/utils.ts
 init_dist();
@@ -9798,6 +10126,11 @@ function parseBigIntValue(v) {
 }
 
 // src/commands/lending.ts
+function parseAmount(s) {
+  const lower = s.toLowerCase();
+  if (lower === "max" || lower === "all") return maxUint256;
+  return BigInt(s);
+}
 function registerLending(parent, getOpts, makeExecutor2) {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
   lending.command("rates").description("Show current lending rates").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
@@ -9820,18 +10153,24 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const position = await adapter.getUserPosition(address);
     printOutput(position, getOpts());
   });
-  lending.command("supply").description("Supply an asset to a lending protocol").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount to supply in wei").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+  lending.command("supply").description("Supply an asset to a lending protocol").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount to supply in wei (or 'max')").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
     const adapter = createLending(ctx.protocol, ctx.rpcUrl);
     const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
     const onBehalfOf = resolveWallet(opts.onBehalfOf);
-    const tx = await adapter.buildSupply({ protocol: ctx.protocol.name, asset, amount: BigInt(opts.amount), on_behalf_of: onBehalfOf });
+    const tx = await adapter.buildSupply({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
+    });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lending.command("borrow").description("Borrow an asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+  lending.command("borrow").description("Borrow an asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").option("--rate-mode <mode>", "variable or stable", "variable").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
@@ -9841,14 +10180,15 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const tx = await adapter.buildBorrow({
       protocol: ctx.protocol.name,
       asset,
-      amount: BigInt(opts.amount),
+      amount: parseAmount(opts.amount),
       interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
-      on_behalf_of: onBehalfOf
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lending.command("repay").description("Repay a borrowed asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--rate-mode <mode>", "variable or stable", "variable").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+  lending.command("repay").description("Repay a borrowed asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").option("--rate-mode <mode>", "variable or stable", "variable").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
@@ -9858,21 +10198,150 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const tx = await adapter.buildRepay({
       protocol: ctx.protocol.name,
       asset,
-      amount: BigInt(opts.amount),
+      amount: parseAmount(opts.amount),
       interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
-      on_behalf_of: onBehalfOf
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  lending.command("withdraw").description("Withdraw a supplied asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").option("--to <address>", "Recipient address").action(async (opts) => {
+  lending.command("withdraw").description("Withdraw a supplied asset").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").option("--market <marketId>", "Morpho Blue marketId (32-byte hex) \u2014 required for direct Morpho markets, ignored elsewhere").option("--to <address>", "Recipient address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
     if (!ctx) return;
     const adapter = createLending(ctx.protocol, ctx.rpcUrl);
     const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
     const to = resolveWallet(opts.to);
-    const tx = await adapter.buildWithdraw({ protocol: ctx.protocol.name, asset, amount: BigInt(opts.amount), to });
+    const tx = await adapter.buildWithdraw({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      to,
+      market_id: opts.market
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("toggle-collateral").description("Enable or disable a supplied reserve as collateral (Aave V3 family)").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").option("--enable", "Enable as collateral").option("--disable", "Disable as collateral").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    if (!opts.enable && !opts.disable) {
+      printOutput({ error: "must pass either --enable or --disable" }, getOpts());
+      return;
+    }
+    if (opts.enable && opts.disable) {
+      printOutput({ error: "--enable and --disable are mutually exclusive" }, getOpts());
+      return;
+    }
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildSetUseReserveAsCollateral !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildSetUseReserveAsCollateral. Aave V3 forks support this; Compound V2/Morpho Blue use different flows.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const tx = await adapter.buildSetUseReserveAsCollateral(asset, !!opts.enable);
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("set-emode").description("Enroll the user in an Aave V3 efficiency-mode category (0 to opt out)").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--category-id <id>", "eMode category id (0 = opt out)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildSetEMode !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildSetEMode (Aave V3 only)`
+      }, getOpts());
+      return;
+    }
+    const id = parseInt(opts.categoryId, 10);
+    if (!Number.isInteger(id) || id < 0 || id > 255) {
+      printOutput({ error: `--category-id must be an integer in [0, 255], got '${opts.categoryId}'` }, getOpts());
+      return;
+    }
+    const tx = await adapter.buildSetEMode(id);
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("enter-markets").description("Compound V2 (Venus): enter supplied assets as collateral via Comptroller.enterMarkets").requiredOption("--protocol <protocol>", "Protocol slug (must be a Compound V2 fork)").requiredOption("--asset <token>", "Underlying asset symbol or address (resolved to its cToken)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildEnterMarkets !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildEnterMarkets. This is a Compound V2 family operation; Aave V3 uses toggle-collateral instead.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const contracts = ctx.protocol.contracts ?? {};
+    const vTokenEntries = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k));
+    if (vTokenEntries.length === 0) {
+      printOutput({ error: `[${ctx.protocol.name}] no vTokens registered in TOML` }, getOpts());
+      return;
+    }
+    const symbol = opts.asset.toLowerCase();
+    const matchedKey = vTokenEntries.find(([k]) => k.toLowerCase() === `v${symbol}`);
+    const vToken = matchedKey ? matchedKey[1] : void 0;
+    if (!vToken) {
+      printOutput({
+        error: `[${ctx.protocol.name}] could not resolve a vToken for '${opts.asset}'. Registered vTokens: ${vTokenEntries.map(([k]) => k).join(", ")}. Pass --asset matching the symbol after the 'v' prefix (e.g. USDT for vusdt).`
+      }, getOpts());
+      return;
+    }
+    void asset;
+    const tx = await adapter.buildEnterMarkets([vToken]);
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("supply-collateral").description("Supply the collateral side of a Morpho Blue market (different selector from supply)").requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)").requiredOption("--asset <token>", "Collateral token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").requiredOption("--market <marketId>", "32-byte Morpho marketId (find via Morpho API)").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildSupplyCollateral !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildSupplyCollateral. Only Morpho Blue forks expose this; Aave V3 / Compound use plain supply.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const onBehalfOf = resolveWallet(opts.onBehalfOf);
+    const tx = await adapter.buildSupplyCollateral({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      on_behalf_of: onBehalfOf,
+      market_id: opts.market
+    });
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
+  lending.command("withdraw-collateral").description("Withdraw the collateral side of a Morpho Blue market").requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)").requiredOption("--asset <token>", "Collateral token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").requiredOption("--market <marketId>", "32-byte Morpho marketId").option("--to <address>", "Recipient address").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildWithdrawCollateral !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildWithdrawCollateral.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const to = resolveWallet(opts.to);
+    const tx = await adapter.buildWithdrawCollateral({
+      protocol: ctx.protocol.name,
+      asset,
+      amount: parseAmount(opts.amount),
+      to,
+      market_id: opts.market
+    });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
@@ -11242,7 +11711,7 @@ function registerWallet(parent, getOpts) {
 
 // src/commands/token.ts
 init_dist();
-import { createPublicClient as createPublicClient27, http as http27, maxUint256 } from "viem";
+import { createPublicClient as createPublicClient27, http as http27, maxUint256 as maxUint2562 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
@@ -11276,7 +11745,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
     const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
-    const amount = opts.amount === "max" ? maxUint256 : BigInt(opts.amount);
+    const amount = opts.amount === "max" ? maxUint2562 : BigInt(opts.amount);
     const tx = buildApprove(tokenAddr, opts.spender, amount);
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -11718,7 +12187,7 @@ async function liquidSwapRoute(tokenIn, tokenOut, amountIn, slippagePct) {
   };
 }
 function registerSwap(parent, getOpts, makeExecutor2) {
-  parent.command("swap").description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay)").requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber").option("--slippage <bps>", "Slippage tolerance in bps", "50").action(async (opts) => {
+  parent.command("swap").description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay)").requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber").option("--slippage <bps>", "Slippage tolerance in bps", "100").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
@@ -11747,12 +12216,14 @@ function registerSwap(parent, getOpts, makeExecutor2) {
           wallet,
           slippageBps
         );
+        const fromLowerKyber = fromAddr.toLowerCase();
+        const isNativeInputKyber = fromLowerKyber === "0x0000000000000000000000000000000000000000" || fromLowerKyber === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
         const tx = {
           description: `KyberSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
           to: txData.to,
           data: txData.data,
-          value: parseBigIntValue(txData.value),
-          approvals: [{ token: fromAddr, spender: txData.to, amount: BigInt(opts.amount) }]
+          value: isNativeInputKyber ? BigInt(opts.amount) : parseBigIntValue(txData.value),
+          ...isNativeInputKyber ? {} : { approvals: [{ token: fromAddr, spender: txData.to, amount: BigInt(opts.amount) }] }
         };
         const result = await executor.execute(tx);
         printOutput({
@@ -12319,7 +12790,8 @@ function makeExecutor() {
     process.exit(1);
   }
   const chain = registry.getChain(opts.chain);
-  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url);
+  const viemChain = chain.viemChain();
+  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url, viemChain);
 }
 registerStatus(program, getOutputMode);
 registerSchema(program, getOutputMode);

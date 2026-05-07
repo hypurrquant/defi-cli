@@ -1,4 +1,4 @@
-import { Address, Hex, PublicClient } from 'viem';
+import { Address, Hex, Chain, PublicClient } from 'viem';
 
 /** A built DeFi transaction ready for simulation or broadcast */
 interface DeFiTx {
@@ -66,6 +66,14 @@ interface SwapParams {
     slippage: Slippage;
     recipient: Address;
     deadline?: number;
+    /**
+     * Explicit minimum amount of `token_out` accepted by the swap. When
+     * provided, this overrides the slippage-derived floor — the adapter
+     * MUST use this value verbatim. When omitted, the adapter computes
+     * `applyMinSlippage(slippage, quotedAmountOut)` as the floor and
+     * MUST NOT fall back to 0.
+     */
+    amount_out_min?: bigint;
 }
 interface QuoteParams {
     protocol: string;
@@ -95,6 +103,17 @@ interface AddLiquidityParams {
     range_pct?: number;
     /** Optional pool address for tick detection / single-side LP */
     pool?: Address;
+    /**
+     * Slippage tolerance for `amount0Min`/`amount1Min` derivation.
+     * When `amount_a_min`/`amount_b_min` are not provided, the adapter
+     * applies `applyMinSlippage(slippage, amountDesired)` per side. Default
+     * = `defaultSwapSlippage()` (50 bps = 0.5%).
+     */
+    slippage?: Slippage;
+    /** Explicit minimum of token_a accepted on add (overrides slippage). */
+    amount_a_min?: bigint;
+    /** Explicit minimum of token_b accepted on add (overrides slippage). */
+    amount_b_min?: bigint;
 }
 interface RemoveLiquidityParams {
     protocol: string;
@@ -104,12 +123,31 @@ interface RemoveLiquidityParams {
     recipient: Address;
     /** NFT tokenId for V3 / CL position managers (required for V3-style removes) */
     token_id?: bigint;
+    /**
+     * Slippage tolerance for `amount0Min`/`amount1Min` derivation. When the
+     * caller does not supply explicit minimums, the adapter computes them
+     * from a live quote. Default = `defaultSwapSlippage()` (50 bps).
+     */
+    slippage?: Slippage;
+    /** Explicit minimum of token_a accepted on remove (overrides slippage). */
+    amount_a_min?: bigint;
+    /** Explicit minimum of token_b accepted on remove (overrides slippage). */
+    amount_b_min?: bigint;
 }
+/**
+ * Optional 32-byte Morpho Blue marketId. When provided, Morpho-style
+ * adapters resolve the full MarketParams via `idToMarketParams(id)`
+ * instead of falling back to a stub. Aave V3 / Compound V2 / Compound V3
+ * adapters ignore this field — they identify positions by reserve
+ * address alone.
+ */
+type MorphoMarketId = `0x${string}`;
 interface SupplyParams {
     protocol: string;
     asset: Address;
     amount: bigint;
     on_behalf_of: Address;
+    market_id?: MorphoMarketId;
 }
 interface BorrowParams {
     protocol: string;
@@ -117,6 +155,7 @@ interface BorrowParams {
     amount: bigint;
     interest_rate_mode: InterestRateMode;
     on_behalf_of: Address;
+    market_id?: MorphoMarketId;
 }
 /** Interest rate mode (serde: snake_case) */
 declare enum InterestRateMode {
@@ -129,12 +168,34 @@ interface RepayParams {
     amount: bigint;
     interest_rate_mode: InterestRateMode;
     on_behalf_of: Address;
+    market_id?: MorphoMarketId;
 }
 interface WithdrawParams {
     protocol: string;
     asset: Address;
     amount: bigint;
     to: Address;
+    market_id?: MorphoMarketId;
+}
+/**
+ * Morpho Blue distinguishes loan-side liquidity (supply / withdraw) from
+ * collateral-side liquidity (supplyCollateral / withdrawCollateral).
+ * Aave V3 collapses both into supply/withdraw; Morpho needs the dedicated
+ * params type because the underlying selector and accounting differ.
+ */
+interface SupplyCollateralParams {
+    protocol: string;
+    asset: Address;
+    amount: bigint;
+    on_behalf_of: Address;
+    market_id: MorphoMarketId;
+}
+interface WithdrawCollateralParams {
+    protocol: string;
+    asset: Address;
+    amount: bigint;
+    to: Address;
+    market_id: MorphoMarketId;
 }
 interface LendingRates {
     protocol: string;
@@ -472,7 +533,12 @@ declare const erc20Abi: readonly [{
 declare function buildApprove(token: Address, spender: Address, amount: bigint): DeFiTx;
 declare function buildTransfer(token: Address, to: Address, amount: bigint): DeFiTx;
 
-declare function getProvider(rpcUrl: string): PublicClient;
+/**
+ * SSOT 7.4: when a `chain` is passed, the public client is anchored to that
+ * chainId at construction time. The cache key includes the chainId so two
+ * callers with the same RPC but different anchors don't collide.
+ */
+declare function getProvider(rpcUrl: string, chain?: Chain): PublicClient;
 declare function clearProviderCache(): void;
 
 declare const MULTICALL3_ADDRESS: Address;
@@ -503,6 +569,42 @@ interface ILending {
     buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
     getRates(asset: Address): Promise<LendingRates>;
     getUserPosition(user: Address): Promise<UserPosition>;
+    /**
+     * Optional — toggle whether a supplied reserve is used as collateral.
+     * Aave V3 surfaces this as `Pool.setUserUseReserveAsCollateral(asset,
+     * useAsCollateral)`. Required before borrowing against an isolation-mode
+     * reserve, and required before withdrawing the last collateral if the
+     * user has open debt. Adapters that don't expose a separate toggle
+     * (Compound V2's `Comptroller.enterMarkets/exitMarket`, Morpho Blue's
+     * per-market authorize) can leave this undefined.
+     */
+    buildSetUseReserveAsCollateral?(asset: Address, useAsCollateral: boolean): Promise<DeFiTx>;
+    /**
+     * Optional — enroll the user in an Aave V3 efficiency-mode (eMode)
+     * category. Pass `categoryId = 0` to opt out. Adapters without an
+     * eMode concept leave this undefined.
+     */
+    buildSetEMode?(categoryId: number): Promise<DeFiTx>;
+    /**
+     * Optional — supply the *collateral* side of a Morpho Blue market
+     * (separate selector from `supply`, which is the loan-asset LP path).
+     * Aave V3 collapses both into supply/withdraw, so its adapter leaves
+     * this undefined. Morpho Blue's adapter requires `params.market_id`.
+     */
+    buildSupplyCollateral?(params: SupplyCollateralParams): Promise<DeFiTx>;
+    /**
+     * Optional — withdraw the collateral side of a Morpho Blue market.
+     * Aave V3 leaves this undefined; Morpho Blue requires market_id.
+     */
+    buildWithdrawCollateral?(params: WithdrawCollateralParams): Promise<DeFiTx>;
+    /**
+     * Optional — Compound V2 forks (Venus etc.) require an explicit
+     * `Comptroller.enterMarkets([cToken])` call before a supplied asset
+     * is counted as collateral for borrowing. Aave V3 / Compound V3 /
+     * Morpho Blue use different mechanisms; their adapters leave this
+     * undefined.
+     */
+    buildEnterMarkets?(cTokens: Address[]): Promise<DeFiTx>;
 }
 
 /** ve(3,3) Gauge operations — stake LP tokens to earn emissions */
@@ -655,6 +757,36 @@ interface AggregatorSlugs {
     lifi?: string;
     relay?: string;
 }
+/**
+ * Minimal viem-compatible Chain shape. We type it locally rather than
+ * importing viem's Chain because defi-core is also consumed in browser /
+ * MCP contexts that may not have viem in their dependency closure.
+ */
+interface ViemChainShape {
+    id: number;
+    name: string;
+    nativeCurrency: {
+        name: string;
+        symbol: string;
+        decimals: number;
+    };
+    rpcUrls: {
+        default: {
+            http: readonly [string];
+        };
+    };
+    blockExplorers?: {
+        default: {
+            name: string;
+            url: string;
+        };
+    };
+    contracts?: {
+        multicall3?: {
+            address: `0x${string}`;
+        };
+    };
+}
 declare class ChainConfig {
     name: string;
     chain_id: number;
@@ -665,6 +797,14 @@ declare class ChainConfig {
     multicall3?: string;
     aggregators?: AggregatorSlugs;
     effectiveRpcUrl(): string;
+    /**
+     * Build a viem Chain object pinned to this config so wallet/public clients
+     * can sign with an explicit chainId rather than auto-fetching it from the
+     * RPC. SSOT 7.4: anchoring chainId at client-construction time defends
+     * against an MITM RPC that returns the wrong eth_chainId, and keeps
+     * offline signing safe against RPC drift.
+     */
+    viemChain(): ViemChainShape;
 }
 
 interface TokenEntry {
@@ -758,4 +898,4 @@ declare class Registry {
     resolvePool(protocolSlug: string, poolName: string): PoolInfo;
 }
 
-export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type AggregatorSlugs, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type GaugedPool, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type NativeInputStyle, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type RewardStrategy, type Slippage, type StakeParams, type StakingInfo, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };
+export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type AggregatorSlugs, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type GaugedPool, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type MorphoMarketId, type NativeInputStyle, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type RewardStrategy, type Slippage, type StakeParams, type StakingInfo, type SupplyCollateralParams, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type ViemChainShape, type WithdrawCollateralParams, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };

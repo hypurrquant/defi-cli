@@ -51,4 +51,13 @@ export interface ILending {
    * Aave V3 leaves this undefined; Morpho Blue requires market_id.
    */
   buildWithdrawCollateral?(params: WithdrawCollateralParams): Promise<DeFiTx>;
+
+  /**
+   * Optional — Compound V2 forks (Venus etc.) require an explicit
+   * `Comptroller.enterMarkets([cToken])` call before a supplied asset
+   * is counted as collateral for borrowing. Aave V3 / Compound V3 /
+   * Morpho Blue use different mechanisms; their adapters leave this
+   * undefined.
+   */
+  buildEnterMarkets?(cTokens: Address[]): Promise<DeFiTx>;
 }
