@@ -6,7 +6,7 @@ interface = "solidly_v2"
 chain = "base"
 native = true
 verified = true
-description = "Aerodrome Finance — ve(3,3) DEX on Base. add+remove liquidity (vAMM-USDC/USDT) live-confirmed 2026-05-08 (add tx 0x938234eb…3c39, remove tx 0xa99203f0…89dc)."
+description = "Aerodrome Finance — ve(3,3) DEX on Base. add+remove liquidity (vAMM-USDC/USDT) live-confirmed 2026-05-08 (add tx 0x938234eb…3c39, remove tx 0xa99203f0…89dc). Full gauge stake/claim/unstake cycle live-verified 2026-05-08 against gauge 0x6f62Ebea59dA60C8e10B4Dcda88571de7C124Fb1 (claim 0xc49375…79ca0, unstake 0xa061f6…ced0, remove 0x8888d8…bf2a)."
 
 [protocol.contracts]
 router = "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43"
