@@ -219,7 +219,14 @@ export function registerSwap(
     .requiredOption("--to <token>", "Output token symbol or address")
     .requiredOption("--amount <amount>", "Amount of input token in wei")
     .option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber")
-    .option("--slippage <bps>", "Slippage tolerance in bps", "50")
+    // Default 100 bps (1%) is the SSOT 7.3 ceiling for "safe default" and
+    // the sweet spot for thin-liquidity chains like Monad where the previous
+    // 50 bps default produced revert-on-broadcast even when the dry-run
+    // simulated successfully. Live re-verification on 2026-05-07 reproduced
+    // the issue: kyber dry-run succeeded but the actual on-chain tx reverted
+    // inside the router's minOut check (Monad tx 0x4fe39977…). Users wanting
+    // tighter control still pass --slippage explicitly.
+    .option("--slippage <bps>", "Slippage tolerance in bps", "100")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = requireChain(parent, getOpts);
