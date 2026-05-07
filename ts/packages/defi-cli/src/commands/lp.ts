@@ -743,13 +743,32 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
         if (!poolAddr) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book — pass --pool <addr>; use \`lp discover --protocol ${protocol.slug}\` to list active pools)`);
         const lbAdapter = createMerchantMoeLB(protocol, chain.effectiveRpcUrl());
-        const [tokenX, tokenY, amountX, amountY] = tokenA.toLowerCase() < tokenB.toLowerCase()
+        const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
+        // LB pool token order is canonical to the pool itself (set at pair creation),
+        // not lexicographic. Read tokenX/tokenY directly from the pool to avoid
+        // ordering mismatches that revert addLiquidity (e.g. WMON/AUSD on Monad).
+        const lbPairOrderAbi = parseAbi([
+          "function getTokenX() view returns (address)",
+          "function getTokenY() view returns (address)",
+          "function getBinStep() view returns (uint16)",
+        ]);
+        const [poolTokenX, poolTokenY, binStep] = await Promise.all([
+          client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getTokenX" }) as Promise<Address>,
+          client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getTokenY" }) as Promise<Address>,
+          client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getBinStep" }) as Promise<number>,
+        ]);
+        const aIsX = tokenA.toLowerCase() === poolTokenX.toLowerCase();
+        const bIsX = tokenB.toLowerCase() === poolTokenX.toLowerCase();
+        const aIsY = tokenA.toLowerCase() === poolTokenY.toLowerCase();
+        const bIsY = tokenB.toLowerCase() === poolTokenY.toLowerCase();
+        if (!((aIsX && bIsY) || (bIsX && aIsY))) {
+          throw new Error(
+            `[${protocol.name}] --token-a/--token-b (${tokenA}/${tokenB}) do not match pool tokens (X=${poolTokenX}, Y=${poolTokenY})`,
+          );
+        }
+        const [tokenX, tokenY, amountX, amountY] = aIsX
           ? [tokenA, tokenB, BigInt(opts.amountA), BigInt(opts.amountB)]
           : [tokenB, tokenA, BigInt(opts.amountB), BigInt(opts.amountA)];
-        const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
-        const binStep = await client.readContract({
-          address: poolAddr, abi: parseAbi(["function getBinStep() view returns (uint16)"]), functionName: "getBinStep",
-        }) as number;
         const tx = await lbAdapter.buildAddLiquidity({
           pool: poolAddr,
           tokenX, tokenY, binStep,
@@ -1218,12 +1237,30 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         const tokenB = opts.tokenB.startsWith("0x")
           ? (opts.tokenB as Address)
           : registry.resolveToken(chainName, opts.tokenB).address as Address;
-        const [tokenX, tokenY] = tokenA.toLowerCase() < tokenB.toLowerCase() ? [tokenA, tokenB] : [tokenB, tokenA];
         const binIds = (opts.bins as string).split(",").map((s) => parseInt(s.trim()));
         const client = createPublicClient({ transport: http(rpcUrl) });
-        const binStep = await client.readContract({
-          address: opts.pool as Address, abi: parseAbi(["function getBinStep() view returns (uint16)"]), functionName: "getBinStep",
-        }) as number;
+        // LB pool token order is canonical to the pool itself; resolve from pool
+        // rather than relying on lexicographic ordering of the input addresses.
+        const lbPairOrderAbi = parseAbi([
+          "function getTokenX() view returns (address)",
+          "function getTokenY() view returns (address)",
+          "function getBinStep() view returns (uint16)",
+        ]);
+        const [poolTokenX, poolTokenY, binStep] = await Promise.all([
+          client.readContract({ address: opts.pool as Address, abi: lbPairOrderAbi, functionName: "getTokenX" }) as Promise<Address>,
+          client.readContract({ address: opts.pool as Address, abi: lbPairOrderAbi, functionName: "getTokenY" }) as Promise<Address>,
+          client.readContract({ address: opts.pool as Address, abi: lbPairOrderAbi, functionName: "getBinStep" }) as Promise<number>,
+        ]);
+        const aIsX = tokenA.toLowerCase() === poolTokenX.toLowerCase();
+        const bIsX = tokenB.toLowerCase() === poolTokenX.toLowerCase();
+        const aIsY = tokenA.toLowerCase() === poolTokenY.toLowerCase();
+        const bIsY = tokenB.toLowerCase() === poolTokenY.toLowerCase();
+        if (!((aIsX && bIsY) || (bIsX && aIsY))) {
+          throw new Error(
+            `[${protocol.name}] --token-a/--token-b (${tokenA}/${tokenB}) do not match pool tokens (X=${poolTokenX}, Y=${poolTokenY})`,
+          );
+        }
+        const [tokenX, tokenY] = aIsX ? [tokenA, tokenB] : [tokenB, tokenA];
         let amounts: bigint[];
         if (opts.amounts) {
           amounts = (opts.amounts as string).split(",").map((s) => BigInt(s.trim()));
@@ -1245,6 +1282,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
           gas_estimate: 80_000,
         };
         const tx = await lbAdapter.buildRemoveLiquidity({
+          pool: opts.pool as Address,
           tokenX, tokenY, binStep,
           binIds, amounts,
           recipient,

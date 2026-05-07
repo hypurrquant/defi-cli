@@ -166,6 +166,9 @@ interface LBAddLiquidityParams {
     deadline?: bigint;
 }
 interface LBRemoveLiquidityParams {
+    /** Optional pool address. When provided, the adapter realigns tokenX/tokenY
+     * to the pool's actual ordering (LB pairs are not address-sorted). */
+    pool?: Address;
     tokenX: Address;
     tokenY: Address;
     binStep: number;
@@ -219,10 +222,20 @@ declare class MerchantMoeLBAdapter {
     /**
      * Build an addLiquidity transaction for a Liquidity Book pair.
      * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+     *
+     * The LB pair stores tokenX/tokenY in the order set at factory creation,
+     * which is **not** address-sorted. Callers may pass tokens in either order;
+     * we always re-align with the pool's `getTokenX/getTokenY` (and swap amounts
+     * accordingly) so the router's `if (tokenX != pair.tokenX) revert` path is
+     * never hit.
      */
     buildAddLiquidity(params: LBAddLiquidityParams): Promise<DeFiTx>;
     /**
      * Build a removeLiquidity transaction for specific LB bins.
+     *
+     * When `pool` is supplied, the adapter realigns tokenX/tokenY (and
+     * amountXMin/amountYMin) to the pool's actual ordering. Otherwise it trusts
+     * the caller — the router will revert if the order is wrong.
      */
     buildRemoveLiquidity(params: LBRemoveLiquidityParams): Promise<DeFiTx>;
     /**
@@ -555,6 +568,7 @@ declare class UniswapV3Adapter implements IDex {
     private readonly fee;
     private readonly rpcUrl;
     private readonly useTickSpacingQuoter;
+    private readonly clStyle;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;

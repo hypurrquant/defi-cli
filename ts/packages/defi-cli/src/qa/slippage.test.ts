@@ -45,7 +45,7 @@ const KNOWN_INFINITE_SLIPPAGE = new Set<string>([
   // fallback — never broadcasts a tx, so the floor is irrelevant.
   // Refactoring the simulation to use a sentinel is tracked but is
   // not a slippage exposure.
-  "dex/uniswap_v3.ts:262",
+  "dex/uniswap_v3.ts:272",
 ]);
 
 const slippageKeyPattern =

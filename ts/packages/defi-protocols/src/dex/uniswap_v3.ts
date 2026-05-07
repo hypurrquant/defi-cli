@@ -55,6 +55,14 @@ const slipstreamMintAbi = parseAbi([
   "function mint(SlipstreamMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
 ]);
 
+// Ramses CL NPM mint — 11-field struct (no sqrtPriceX96), int24 tickSpacing (replaces fee).
+// Selector 0x6d70c415, verified against Ramses NPM 0xB3F7…ED51 bytecode dispatch on HyperEVM 2026-05-08.
+// Pool init is a separate call (createAndInitializePoolIfNecessary, selector 0xf126fb67).
+const ramsesMintAbi = parseAbi([
+  "struct RamsesMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
+  "function mint(RamsesMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+]);
+
 export class UniswapV3Adapter implements IDex {
   private readonly protocolName: string;
   private readonly router: Address;
@@ -64,6 +72,7 @@ export class UniswapV3Adapter implements IDex {
   private readonly fee: number;
   private readonly rpcUrl: string | undefined;
   private readonly useTickSpacingQuoter: boolean;
+  private readonly clStyle: string | undefined;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
@@ -77,6 +86,7 @@ export class UniswapV3Adapter implements IDex {
     this.factory = entry.contracts?.["factory"];
     this.fee = DEFAULT_FEE;
     this.rpcUrl = rpcUrl;
+    this.clStyle = entry.cl_style;
     // CL dialect: Slipstream/Ramses use tickSpacing in MintParams instead of fee.
     // Prefer explicit `cl_style` config over the legacy heuristic of pool_deployer/gauge_factory.
     this.useTickSpacingQuoter = entry.cl_style === "slipstream"
@@ -325,17 +335,18 @@ export class UniswapV3Adapter implements IDex {
 
     // When --pool provided + RPC, read pool's actual tickSpacing/fee + current tick.
     // For Slipstream-style forks (useTickSpacingQuoter=true), MintParams' third field is tickSpacing, not fee.
+    // Ramses CL pool slot0 returns 7 fields (extra uint32 feeProtocol) vs standard V3's 6 — decode the
+    // current tick from the raw int24 word at offset 1 to be tolerant of fork-specific slot0 shapes.
     if (params.pool && this.rpcUrl) {
       const poolAbi = parseAbi([
         "function fee() view returns (uint24)",
         "function tickSpacing() view returns (int24)",
-        "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, bool)",
       ]);
       const client = createPublicClient({ transport: http(this.rpcUrl) });
-      const [poolFee, poolTs, slot0] = await Promise.all([
+      const [poolFee, poolTs, slot0Raw] = await Promise.all([
         client.readContract({ address: params.pool, abi: poolAbi, functionName: "fee" }).catch(() => null) as Promise<number | null>,
         client.readContract({ address: params.pool, abi: poolAbi, functionName: "tickSpacing" }).catch(() => null) as Promise<number | null>,
-        client.readContract({ address: params.pool, abi: poolAbi, functionName: "slot0" }).catch(() => null) as Promise<readonly [bigint, number, number, number, number, boolean] | null>,
+        client.call({ to: params.pool, data: "0x3850c7bd" }).then((r) => r.data ?? null).catch(() => null),
       ]);
       if (this.useTickSpacingQuoter && poolTs !== null) {
         thirdField = poolTs;
@@ -343,8 +354,11 @@ export class UniswapV3Adapter implements IDex {
         thirdField = poolFee;
       }
       // Compute concentrated range from --range_pct
-      if (params.range_pct !== undefined && slot0 && poolTs !== null) {
-        const currentTick = slot0[1];
+      if (params.range_pct !== undefined && slot0Raw && poolTs !== null) {
+        // slot0() second word (offset 0x22..0x42) holds int24 tick (sign-extended in 32 bytes).
+        const tickWord = slot0Raw.slice(2 + 64, 2 + 128);
+        const tickU = BigInt("0x" + tickWord);
+        const currentTick = tickU >= (1n << 255n) ? Number(tickU - (1n << 256n)) : Number(tickU);
         // Approximation: 1 tick ≈ 0.01% (1.0001x). ±N% → ±N*100 ticks.
         const rangeTicks = Math.floor(params.range_pct * 100);
         tickLower = Math.floor((currentTick - rangeTicks) / poolTs) * poolTs;
@@ -355,7 +369,31 @@ export class UniswapV3Adapter implements IDex {
     if (params.tick_lower !== undefined) tickLower = params.tick_lower;
     if (params.tick_upper !== undefined) tickUpper = params.tick_upper;
 
-    const data = this.useTickSpacingQuoter
+    // Mint dispatch:
+    //   - cl_style="ramses"     → 11-field MintParams (no sqrtPriceX96), selector 0x6d70c415
+    //   - cl_style="slipstream" or default tickSpacing-quoter → 12-field SlipstreamMintParams (with sqrtPriceX96), selector 0xb5007d1f
+    //   - else                  → 11-field Uniswap V3 MintParams (uint24 fee), selector 0x88316456
+    const data = this.clStyle === "ramses"
+      ? encodeFunctionData({
+          abi: ramsesMintAbi,
+          functionName: "mint",
+          args: [
+            {
+              token0,
+              token1,
+              tickSpacing: thirdField,
+              tickLower,
+              tickUpper,
+              amount0Desired: amount0,
+              amount1Desired: amount1,
+              amount0Min,
+              amount1Min,
+              recipient: params.recipient,
+              deadline: BigInt("18446744073709551615"),
+            },
+          ],
+        })
+      : this.useTickSpacingQuoter
       ? encodeFunctionData({
           abi: slipstreamMintAbi,
           functionName: "mint",

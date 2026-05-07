@@ -5,7 +5,8 @@ category = "dex"
 interface = "uniswap_v2"
 chain = "monad"
 native = false
-description = "Trader Joe (LFJ) V1/V2.2 DEX on Monad — multi-chain DEX with Liquidity Book"
+verified = true
+description = "Trader Joe (LFJ) V1/V2.2 DEX on Monad — multi-chain DEX with Liquidity Book. LB add+remove liquidity (WMON/AUSD pool 0xC8d65149…245F) live-confirmed 2026-05-08 with the same MerchantMoe-shared adapter fix (pool tokenX/tokenY canonical-order reconciliation; AUSD<WMON lex but pool stores tokenX=WMON). add tx 0x75d0e828…4ad0, remove tx 0x62989ed6…4952."
 
 [protocol.contracts]
 router = "0x4faCe5b0EF2757Ceb9151D14C036A1135931C70E"

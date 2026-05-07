@@ -37,6 +37,10 @@ var slipstreamMintAbi = parseAbi([
   "struct SlipstreamMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
   "function mint(SlipstreamMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
 ]);
+var ramsesMintAbi = parseAbi([
+  "struct RamsesMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
+  "function mint(RamsesMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+]);
 var UniswapV3Adapter = class {
   protocolName;
   router;
@@ -46,6 +50,7 @@ var UniswapV3Adapter = class {
   fee;
   rpcUrl;
   useTickSpacingQuoter;
+  clStyle;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
     const router = entry.contracts?.["router"];
@@ -58,6 +63,7 @@ var UniswapV3Adapter = class {
     this.factory = entry.contracts?.["factory"];
     this.fee = DEFAULT_FEE;
     this.rpcUrl = rpcUrl;
+    this.clStyle = entry.cl_style;
     this.useTickSpacingQuoter = entry.cl_style === "slipstream" || entry.cl_style === "ramses" || entry.contracts?.["pool_deployer"] !== void 0 || entry.contracts?.["gauge_factory"] !== void 0;
   }
   name() {
@@ -253,22 +259,23 @@ var UniswapV3Adapter = class {
     if (params.pool && this.rpcUrl) {
       const poolAbi2 = parseAbi([
         "function fee() view returns (uint24)",
-        "function tickSpacing() view returns (int24)",
-        "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, bool)"
+        "function tickSpacing() view returns (int24)"
       ]);
       const client = createPublicClient({ transport: http(this.rpcUrl) });
-      const [poolFee, poolTs, slot0] = await Promise.all([
+      const [poolFee, poolTs, slot0Raw] = await Promise.all([
         client.readContract({ address: params.pool, abi: poolAbi2, functionName: "fee" }).catch(() => null),
         client.readContract({ address: params.pool, abi: poolAbi2, functionName: "tickSpacing" }).catch(() => null),
-        client.readContract({ address: params.pool, abi: poolAbi2, functionName: "slot0" }).catch(() => null)
+        client.call({ to: params.pool, data: "0x3850c7bd" }).then((r) => r.data ?? null).catch(() => null)
       ]);
       if (this.useTickSpacingQuoter && poolTs !== null) {
         thirdField = poolTs;
       } else if (poolFee !== null) {
         thirdField = poolFee;
       }
-      if (params.range_pct !== void 0 && slot0 && poolTs !== null) {
-        const currentTick = slot0[1];
+      if (params.range_pct !== void 0 && slot0Raw && poolTs !== null) {
+        const tickWord = slot0Raw.slice(2 + 64, 2 + 128);
+        const tickU = BigInt("0x" + tickWord);
+        const currentTick = tickU >= 1n << 255n ? Number(tickU - (1n << 256n)) : Number(tickU);
         const rangeTicks = Math.floor(params.range_pct * 100);
         tickLower = Math.floor((currentTick - rangeTicks) / poolTs) * poolTs;
         tickUpper = Math.ceil((currentTick + rangeTicks) / poolTs) * poolTs;
@@ -276,7 +283,25 @@ var UniswapV3Adapter = class {
     }
     if (params.tick_lower !== void 0) tickLower = params.tick_lower;
     if (params.tick_upper !== void 0) tickUpper = params.tick_upper;
-    const data = this.useTickSpacingQuoter ? encodeFunctionData({
+    const data = this.clStyle === "ramses" ? encodeFunctionData({
+      abi: ramsesMintAbi,
+      functionName: "mint",
+      args: [
+        {
+          token0,
+          token1,
+          tickSpacing: thirdField,
+          tickLower,
+          tickUpper,
+          amount0Desired: amount0,
+          amount1Desired: amount1,
+          amount0Min,
+          amount1Min,
+          recipient: params.recipient,
+          deadline: BigInt("18446744073709551615")
+        }
+      ]
+    }) : this.useTickSpacingQuoter ? encodeFunctionData({
       abi: slipstreamMintAbi,
       functionName: "mint",
       args: [
@@ -3145,20 +3170,47 @@ var MerchantMoeLBAdapter = class {
   /**
    * Build an addLiquidity transaction for a Liquidity Book pair.
    * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+   *
+   * The LB pair stores tokenX/tokenY in the order set at factory creation,
+   * which is **not** address-sorted. Callers may pass tokens in either order;
+   * we always re-align with the pool's `getTokenX/getTokenY` (and swap amounts
+   * accordingly) so the router's `if (tokenX != pair.tokenX) revert` path is
+   * never hit.
    */
   async buildAddLiquidity(params) {
     const numBins = params.numBins ?? 5;
     const deadline = params.deadline ?? BigInt("18446744073709551615");
-    let activeIdDesired = params.activeIdDesired;
-    if (activeIdDesired === void 0) {
-      const rpcUrl = this.requireRpc();
-      const client = createPublicClient8({ transport: http8(rpcUrl) });
-      const activeId = await client.readContract({
-        address: params.pool,
-        abi: lbPairAbi,
-        functionName: "getActiveId"
-      });
-      activeIdDesired = activeId;
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient8({ transport: http8(rpcUrl) });
+    const [poolTokenX, poolTokenY, onChainActiveId] = await Promise.all([
+      client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }),
+      client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" }),
+      params.activeIdDesired === void 0 ? client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getActiveId" }) : Promise.resolve(params.activeIdDesired)
+    ]);
+    const activeIdDesired = onChainActiveId;
+    const inX = params.tokenX.toLowerCase();
+    const inY = params.tokenY.toLowerCase();
+    const poolX = poolTokenX.toLowerCase();
+    const poolY = poolTokenY.toLowerCase();
+    let tokenX;
+    let tokenY;
+    let amountX;
+    let amountY;
+    if (inX === poolX && inY === poolY) {
+      tokenX = params.tokenX;
+      tokenY = params.tokenY;
+      amountX = params.amountX;
+      amountY = params.amountY;
+    } else if (inX === poolY && inY === poolX) {
+      tokenX = poolTokenX;
+      tokenY = poolTokenY;
+      amountX = params.amountY;
+      amountY = params.amountX;
+    } else {
+      throw new DefiError12(
+        "CONTRACT_ERROR",
+        `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`
+      );
     }
     const deltaIds = [];
     for (let d = -numBins; d <= numBins; d++) {
@@ -3170,11 +3222,11 @@ var MerchantMoeLBAdapter = class {
       functionName: "addLiquidity",
       args: [
         {
-          tokenX: params.tokenX,
-          tokenY: params.tokenY,
+          tokenX,
+          tokenY,
           binStep: BigInt(params.binStep),
-          amountX: params.amountX,
-          amountY: params.amountY,
+          amountX,
+          amountY,
           amountXMin: 0n,
           amountYMin: 0n,
           activeIdDesired: BigInt(activeIdDesired),
@@ -3189,31 +3241,63 @@ var MerchantMoeLBAdapter = class {
       ]
     });
     return {
-      description: `[${this.protocolName}] LB addLiquidity ${params.amountX} tokenX + ${params.amountY} tokenY across ${deltaIds.length} bins`,
+      description: `[${this.protocolName}] LB addLiquidity ${amountX} tokenX + ${amountY} tokenY across ${deltaIds.length} bins`,
       to: this.lbRouter,
       data,
       value: 0n,
       gas_estimate: 8e5,
       approvals: [
-        { token: params.tokenX, spender: this.lbRouter, amount: params.amountX },
-        { token: params.tokenY, spender: this.lbRouter, amount: params.amountY }
+        { token: tokenX, spender: this.lbRouter, amount: amountX },
+        { token: tokenY, spender: this.lbRouter, amount: amountY }
       ]
     };
   }
   /**
    * Build a removeLiquidity transaction for specific LB bins.
+   *
+   * When `pool` is supplied, the adapter realigns tokenX/tokenY (and
+   * amountXMin/amountYMin) to the pool's actual ordering. Otherwise it trusts
+   * the caller — the router will revert if the order is wrong.
    */
   async buildRemoveLiquidity(params) {
     const deadline = params.deadline ?? BigInt("18446744073709551615");
+    let tokenX = params.tokenX;
+    let tokenY = params.tokenY;
+    let amountXMin = params.amountXMin ?? 0n;
+    let amountYMin = params.amountYMin ?? 0n;
+    if (params.pool) {
+      const rpcUrl = this.requireRpc();
+      const client = createPublicClient8({ transport: http8(rpcUrl) });
+      const [poolTokenX, poolTokenY] = await Promise.all([
+        client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }),
+        client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" })
+      ]);
+      const inX = params.tokenX.toLowerCase();
+      const inY = params.tokenY.toLowerCase();
+      const poolX = poolTokenX.toLowerCase();
+      const poolY = poolTokenY.toLowerCase();
+      if (inX === poolY && inY === poolX) {
+        tokenX = poolTokenX;
+        tokenY = poolTokenY;
+        const x = amountXMin;
+        amountXMin = amountYMin;
+        amountYMin = x;
+      } else if (!(inX === poolX && inY === poolY)) {
+        throw new DefiError12(
+          "CONTRACT_ERROR",
+          `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`
+        );
+      }
+    }
     const data = encodeFunctionData12({
       abi: lbRouterAbi,
       functionName: "removeLiquidity",
       args: [
-        params.tokenX,
-        params.tokenY,
+        tokenX,
+        tokenY,
         params.binStep,
-        params.amountXMin ?? 0n,
-        params.amountYMin ?? 0n,
+        amountXMin,
+        amountYMin,
         params.binIds.map(BigInt),
         params.amounts,
         params.recipient,
