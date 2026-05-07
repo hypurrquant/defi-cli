@@ -7,7 +7,7 @@ chain = "hyperevm"
 native = true
 verified = true
 reward_strategy = "on_chain_gauge_tokenid"
-description = "Hybra V4 CL DEX with ve(3,3) gauge emissions on HyperEVM. gauge.earned(tokenId) single-arg variant."
+description = "Hybra V4 CL DEX with ve(3,3) gauge emissions on HyperEVM. gauge.earned(tokenId) single-arg variant. CL NFT mint+remove (WHYPE/USDC pool 0x4C307812…9314) live-confirmed 2026-05-08 with --redeem-type 0 (instant exit, default 1 = 2-year veHYBR lock; tokenId 65929, mint 0xbe581c84…0e17, remove 0x4c271fef…1657)."
 
 [protocol.contracts]
 # V4 CL
