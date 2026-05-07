@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import type { OutputMode } from "../output.js";
 import type { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
-import { InterestRateMode } from "@hypurrquant/defi-core";
+import { InterestRateMode, type MorphoMarketId } from "@hypurrquant/defi-core";
 import type { Address } from "viem";
 import { maxUint256 } from "viem";
 import { createLending } from "@hypurrquant/defi-protocols";
@@ -59,6 +59,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .requiredOption("--protocol <protocol>", "Protocol slug")
     .requiredOption("--asset <token>", "Token symbol or address")
     .requiredOption("--amount <amount>", "Amount to supply in wei (or 'max')")
+    .option("--market <marketId>", "Morpho Blue marketId (32-byte hex) — required for direct Morpho markets, ignored elsewhere")
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
       const executor = makeExecutor();
@@ -67,7 +68,10 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
       const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
       const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
       const onBehalfOf = resolveWallet(opts.onBehalfOf);
-      const tx = await adapter.buildSupply({ protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount), on_behalf_of: onBehalfOf });
+      const tx = await adapter.buildSupply({
+        protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount), on_behalf_of: onBehalfOf,
+        market_id: opts.market as MorphoMarketId | undefined,
+      });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
     });
@@ -78,6 +82,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .requiredOption("--asset <token>", "Token symbol or address")
     .requiredOption("--amount <amount>", "Amount in wei (or 'max')")
     .option("--rate-mode <mode>", "variable or stable", "variable")
+    .option("--market <marketId>", "Morpho Blue marketId (32-byte hex) — required for direct Morpho markets, ignored elsewhere")
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
       const executor = makeExecutor();
@@ -90,6 +95,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
         protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount),
         interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
         on_behalf_of: onBehalfOf,
+        market_id: opts.market as MorphoMarketId | undefined,
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -101,6 +107,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .requiredOption("--asset <token>", "Token symbol or address")
     .requiredOption("--amount <amount>", "Amount in wei (or 'max')")
     .option("--rate-mode <mode>", "variable or stable", "variable")
+    .option("--market <marketId>", "Morpho Blue marketId (32-byte hex) — required for direct Morpho markets, ignored elsewhere")
     .option("--on-behalf-of <address>", "On behalf of address")
     .action(async (opts) => {
       const executor = makeExecutor();
@@ -113,6 +120,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
         protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount),
         interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
         on_behalf_of: onBehalfOf,
+        market_id: opts.market as MorphoMarketId | undefined,
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -123,6 +131,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
     .requiredOption("--protocol <protocol>", "Protocol slug")
     .requiredOption("--asset <token>", "Token symbol or address")
     .requiredOption("--amount <amount>", "Amount in wei (or 'max')")
+    .option("--market <marketId>", "Morpho Blue marketId (32-byte hex) — required for direct Morpho markets, ignored elsewhere")
     .option("--to <address>", "Recipient address")
     .action(async (opts) => {
       const executor = makeExecutor();
@@ -131,7 +140,10 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
       const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
       const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
       const to = resolveWallet(opts.to);
-      const tx = await adapter.buildWithdraw({ protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount), to });
+      const tx = await adapter.buildWithdraw({
+        protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount), to,
+        market_id: opts.market as MorphoMarketId | undefined,
+      });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
     });
@@ -189,6 +201,69 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
         return;
       }
       const tx = await adapter.buildSetEMode(id);
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+    });
+
+  lending.command("supply-collateral")
+    .description("Supply the collateral side of a Morpho Blue market (different selector from supply)")
+    .requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)")
+    .requiredOption("--asset <token>", "Collateral token symbol or address")
+    .requiredOption("--amount <amount>", "Amount in wei (or 'max')")
+    .requiredOption("--market <marketId>", "32-byte Morpho marketId (find via Morpho API)")
+    .option("--on-behalf-of <address>", "On behalf of address")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      if (typeof adapter.buildSupplyCollateral !== "function") {
+        printOutput({
+          error: `[${ctx.protocol!.name}] adapter does not implement buildSupplyCollateral. ` +
+                 `Only Morpho Blue forks expose this; Aave V3 / Compound use plain supply.`,
+        }, getOpts());
+        return;
+      }
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const onBehalfOf = resolveWallet(opts.onBehalfOf);
+      const tx = await adapter.buildSupplyCollateral({
+        protocol: ctx.protocol!.name,
+        asset,
+        amount: parseAmount(opts.amount),
+        on_behalf_of: onBehalfOf,
+        market_id: opts.market as MorphoMarketId,
+      });
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+    });
+
+  lending.command("withdraw-collateral")
+    .description("Withdraw the collateral side of a Morpho Blue market")
+    .requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)")
+    .requiredOption("--asset <token>", "Collateral token symbol or address")
+    .requiredOption("--amount <amount>", "Amount in wei (or 'max')")
+    .requiredOption("--market <marketId>", "32-byte Morpho marketId")
+    .option("--to <address>", "Recipient address")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      if (typeof adapter.buildWithdrawCollateral !== "function") {
+        printOutput({
+          error: `[${ctx.protocol!.name}] adapter does not implement buildWithdrawCollateral.`,
+        }, getOpts());
+        return;
+      }
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const to = resolveWallet(opts.to);
+      const tx = await adapter.buildWithdrawCollateral({
+        protocol: ctx.protocol!.name,
+        asset,
+        amount: parseAmount(opts.amount),
+        to,
+        market_id: opts.market as MorphoMarketId,
+      });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
     });

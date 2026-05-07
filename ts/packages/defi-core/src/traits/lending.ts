@@ -4,6 +4,8 @@ import type {
   BorrowParams,
   RepayParams,
   WithdrawParams,
+  SupplyCollateralParams,
+  WithdrawCollateralParams,
   LendingRates,
   UserPosition,
   DeFiTx,
@@ -35,4 +37,18 @@ export interface ILending {
    * eMode concept leave this undefined.
    */
   buildSetEMode?(categoryId: number): Promise<DeFiTx>;
+
+  /**
+   * Optional — supply the *collateral* side of a Morpho Blue market
+   * (separate selector from `supply`, which is the loan-asset LP path).
+   * Aave V3 collapses both into supply/withdraw, so its adapter leaves
+   * this undefined. Morpho Blue's adapter requires `params.market_id`.
+   */
+  buildSupplyCollateral?(params: SupplyCollateralParams): Promise<DeFiTx>;
+
+  /**
+   * Optional — withdraw the collateral side of a Morpho Blue market.
+   * Aave V3 leaves this undefined; Morpho Blue requires market_id.
+   */
+  buildWithdrawCollateral?(params: WithdrawCollateralParams): Promise<DeFiTx>;
 }
