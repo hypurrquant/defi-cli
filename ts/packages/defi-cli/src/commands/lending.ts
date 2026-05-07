@@ -135,4 +135,61 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
     });
+
+  lending.command("toggle-collateral")
+    .description("Enable or disable a supplied reserve as collateral (Aave V3 family)")
+    .requiredOption("--protocol <protocol>", "Protocol slug")
+    .requiredOption("--asset <token>", "Token symbol or address")
+    .option("--enable", "Enable as collateral")
+    .option("--disable", "Disable as collateral")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      if (!opts.enable && !opts.disable) {
+        printOutput({ error: "must pass either --enable or --disable" }, getOpts());
+        return;
+      }
+      if (opts.enable && opts.disable) {
+        printOutput({ error: "--enable and --disable are mutually exclusive" }, getOpts());
+        return;
+      }
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      if (typeof adapter.buildSetUseReserveAsCollateral !== "function") {
+        printOutput({
+          error: `[${ctx.protocol!.name}] adapter does not implement buildSetUseReserveAsCollateral. ` +
+                 `Aave V3 forks support this; Compound V2/Morpho Blue use different flows.`,
+        }, getOpts());
+        return;
+      }
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const tx = await adapter.buildSetUseReserveAsCollateral(asset, !!opts.enable);
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+    });
+
+  lending.command("set-emode")
+    .description("Enroll the user in an Aave V3 efficiency-mode category (0 to opt out)")
+    .requiredOption("--protocol <protocol>", "Protocol slug")
+    .requiredOption("--category-id <id>", "eMode category id (0 = opt out)")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      if (typeof adapter.buildSetEMode !== "function") {
+        printOutput({
+          error: `[${ctx.protocol!.name}] adapter does not implement buildSetEMode (Aave V3 only)`,
+        }, getOpts());
+        return;
+      }
+      const id = parseInt(opts.categoryId as string, 10);
+      if (!Number.isInteger(id) || id < 0 || id > 255) {
+        printOutput({ error: `--category-id must be an integer in [0, 255], got '${opts.categoryId}'` }, getOpts());
+        return;
+      }
+      const tx = await adapter.buildSetEMode(id);
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+    });
 }
