@@ -1,4 +1,4 @@
-import { parseAbi, encodeFunctionData, decodeFunctionResult, zeroAddress } from "viem";
+import { parseAbi, encodeFunctionData, decodeFunctionResult, zeroAddress, createPublicClient, http } from "viem";
 import type { Address, Hex } from "viem";
 import type { ILending } from "@hypurrquant/defi-core";
 import {
@@ -10,6 +10,8 @@ import {
   type BorrowParams,
   type RepayParams,
   type WithdrawParams,
+  type SupplyCollateralParams,
+  type WithdrawCollateralParams,
   type LendingRates,
   type UserPosition,
   type DeFiTx,
@@ -19,9 +21,11 @@ const MORPHO_ABI = parseAbi([
   "function market(bytes32 id) external view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee)",
   "function idToMarketParams(bytes32 id) external view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)",
   "function supply((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsSupplied, uint256 sharesSupplied)",
+  "function supplyCollateral((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, address onBehalf, bytes data) external",
   "function borrow((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsBorrowed, uint256 sharesBorrowed)",
   "function repay((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsRepaid, uint256 sharesRepaid)",
   "function withdraw((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)",
+  "function withdrawCollateral((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, address onBehalf, address receiver) external",
 ]);
 
 const META_MORPHO_ABI = parseAbi([
@@ -54,16 +58,6 @@ type MarketParams = {
   irm: Address;
   lltv: bigint;
 };
-
-function defaultMarketParams(loanToken: Address = zeroAddress as Address): MarketParams {
-  return {
-    loanToken,
-    collateralToken: zeroAddress as Address,
-    oracle: zeroAddress as Address,
-    irm: zeroAddress as Address,
-    lltv: 0n,
-  };
-}
 
 function decodeMarket(data: Hex | null): [bigint, bigint, bigint, bigint, bigint, bigint] | null {
   if (!data) return null;
@@ -150,7 +144,62 @@ export class MorphoBlueAdapter implements ILending {
     return this.protocolName;
   }
 
+  /**
+   * Resolve a Morpho Blue marketId into the full MarketParams tuple by
+   * calling Morpho.idToMarketParams(id). Used by every direct-market
+   * method (supply / borrow / repay / withdraw / supplyCollateral /
+   * withdrawCollateral) so the caller only has to pass the 32-byte
+   * marketId — same shape as the Morpho UI / API.
+   */
+  private async resolveMarketParams(marketId: `0x${string}`): Promise<MarketParams> {
+    if (!this.rpcUrl) {
+      throw DefiError.rpcError(
+        `[${this.protocolName}] No RPC URL configured — cannot resolve marketId ${marketId}`,
+      );
+    }
+    const client = createPublicClient({ transport: http(this.rpcUrl) });
+    let result: readonly [Address, Address, Address, Address, bigint];
+    try {
+      result = await client.readContract({
+        address: this.morpho,
+        abi: MORPHO_ABI,
+        functionName: "idToMarketParams",
+        args: [marketId],
+      }) as readonly [Address, Address, Address, Address, bigint];
+    } catch (e) {
+      throw DefiError.rpcError(
+        `[${this.protocolName}] idToMarketParams(${marketId}) failed: ${e}`,
+      );
+    }
+    const [loanToken, collateralToken, oracle, irm, lltv] = result;
+    if (loanToken === zeroAddress || collateralToken === zeroAddress || lltv === 0n) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] marketId ${marketId} resolves to an empty MarketParams ` +
+          `(loan=${loanToken}, collateral=${collateralToken}, lltv=${lltv}). ` +
+          `Verify the id matches a registered market on this chain.`,
+      );
+    }
+    return { loanToken, collateralToken, oracle, irm, lltv };
+  }
+
   async buildSupply(params: SupplyParams): Promise<DeFiTx> {
+    // Direct Morpho Blue market (loan-side LP) when caller pins marketId.
+    if (params.market_id) {
+      const market = await this.resolveMarketParams(params.market_id);
+      const data = encodeFunctionData({
+        abi: MORPHO_ABI,
+        functionName: "supply",
+        args: [market, params.amount, 0n, params.on_behalf_of, "0x"],
+      });
+      return {
+        description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}…`,
+        to: this.morpho,
+        data,
+        value: 0n,
+        gas_estimate: 350_000,
+        approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }],
+      };
+    }
     const vault = await this.resolveVault(params.asset);
     if (vault) {
       const data = encodeFunctionData({
@@ -167,46 +216,83 @@ export class MorphoBlueAdapter implements ILending {
         approvals: [{ token: params.asset, spender: vault, amount: params.amount }],
       };
     }
-    const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData({
-      abi: MORPHO_ABI,
-      functionName: "supply",
-      args: [market, params.amount, 0n, params.on_behalf_of, "0x"],
-    });
-    return {
-      description: `[${this.protocolName}] Supply ${params.amount} to Morpho market`,
-      to: this.morpho,
-      data,
-      value: 0n,
-      gas_estimate: 300_000,
-    };
+    throw DefiError.invalidParam(
+      `[${this.protocolName}] supply requires either a registered MetaMorpho vault for ` +
+        `${params.asset} or an explicit --market <marketId>. The legacy zero-MarketParams ` +
+        `stub was removed (it always reverted on-chain).`,
+    );
   }
 
   async buildBorrow(params: BorrowParams): Promise<DeFiTx> {
-    const market = defaultMarketParams(params.asset);
+    if (!params.market_id) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] Morpho Blue borrow requires --market <marketId>. ` +
+          `Find one via the Morpho API (https://blue-api.morpho.org/graphql).`,
+      );
+    }
+    const market = await this.resolveMarketParams(params.market_id);
     const data = encodeFunctionData({
       abi: MORPHO_ABI,
       functionName: "borrow",
       args: [market, params.amount, 0n, params.on_behalf_of, params.on_behalf_of],
     });
     return {
-      description: `[${this.protocolName}] Borrow ${params.amount} from Morpho market`,
+      description: `[${this.protocolName}] Borrow ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}…`,
       to: this.morpho,
       data,
       value: 0n,
-      gas_estimate: 350_000,
+      gas_estimate: 400_000,
     };
   }
 
   async buildRepay(params: RepayParams): Promise<DeFiTx> {
-    const market = defaultMarketParams(params.asset);
+    if (!params.market_id) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] Morpho Blue repay requires --market <marketId>.`,
+      );
+    }
+    const market = await this.resolveMarketParams(params.market_id);
     const data = encodeFunctionData({
       abi: MORPHO_ABI,
       functionName: "repay",
       args: [market, params.amount, 0n, params.on_behalf_of, "0x"],
     });
     return {
-      description: `[${this.protocolName}] Repay ${params.amount} to Morpho market`,
+      description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}…`,
+      to: this.morpho,
+      data,
+      value: 0n,
+      gas_estimate: 350_000,
+      approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }],
+    };
+  }
+
+  async buildSupplyCollateral(params: SupplyCollateralParams): Promise<DeFiTx> {
+    const market = await this.resolveMarketParams(params.market_id);
+    const data = encodeFunctionData({
+      abi: MORPHO_ABI,
+      functionName: "supplyCollateral",
+      args: [market, params.amount, params.on_behalf_of, "0x"],
+    });
+    return {
+      description: `[${this.protocolName}] Supply collateral ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}…`,
+      to: this.morpho,
+      data,
+      value: 0n,
+      gas_estimate: 350_000,
+      approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }],
+    };
+  }
+
+  async buildWithdrawCollateral(params: WithdrawCollateralParams): Promise<DeFiTx> {
+    const market = await this.resolveMarketParams(params.market_id);
+    const data = encodeFunctionData({
+      abi: MORPHO_ABI,
+      functionName: "withdrawCollateral",
+      args: [market, params.amount, params.to, params.to],
+    });
+    return {
+      description: `[${this.protocolName}] Withdraw collateral ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}…`,
       to: this.morpho,
       data,
       value: 0n,
@@ -215,6 +301,22 @@ export class MorphoBlueAdapter implements ILending {
   }
 
   async buildWithdraw(params: WithdrawParams): Promise<DeFiTx> {
+    // Direct Morpho Blue market (loan-side withdrawal) when caller pins marketId.
+    if (params.market_id) {
+      const market = await this.resolveMarketParams(params.market_id);
+      const data = encodeFunctionData({
+        abi: MORPHO_ABI,
+        functionName: "withdraw",
+        args: [market, params.amount, 0n, params.to, params.to],
+      });
+      return {
+        description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}…`,
+        to: this.morpho,
+        data,
+        value: 0n,
+        gas_estimate: 300_000,
+      };
+    }
     const vault = await this.resolveVault(params.asset);
     if (vault) {
       if (params.amount === MAX_UINT256) {
@@ -243,19 +345,11 @@ export class MorphoBlueAdapter implements ILending {
         to: vault, data, value: 0n, gas_estimate: 400_000,
       };
     }
-    const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData({
-      abi: MORPHO_ABI,
-      functionName: "withdraw",
-      args: [market, params.amount, 0n, params.to, params.to],
-    });
-    return {
-      description: `[${this.protocolName}] Withdraw ${params.amount} from Morpho market`,
-      to: this.morpho,
-      data,
-      value: 0n,
-      gas_estimate: 250_000,
-    };
+    throw DefiError.invalidParam(
+      `[${this.protocolName}] withdraw requires either a registered MetaMorpho vault for ` +
+        `${params.asset} or an explicit --market <marketId>. The legacy zero-MarketParams ` +
+        `stub was removed (it always reverted on-chain).`,
+    );
   }
 
   async getRates(asset: Address): Promise<LendingRates> {

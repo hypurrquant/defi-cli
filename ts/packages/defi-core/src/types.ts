@@ -170,11 +170,21 @@ export interface RemoveLiquidityParams {
 
 // === Lending Types ===
 
+/**
+ * Optional 32-byte Morpho Blue marketId. When provided, Morpho-style
+ * adapters resolve the full MarketParams via `idToMarketParams(id)`
+ * instead of falling back to a stub. Aave V3 / Compound V2 / Compound V3
+ * adapters ignore this field — they identify positions by reserve
+ * address alone.
+ */
+export type MorphoMarketId = `0x${string}`;
+
 export interface SupplyParams {
   protocol: string;
   asset: Address;
   amount: bigint;
   on_behalf_of: Address;
+  market_id?: MorphoMarketId;
 }
 
 export interface BorrowParams {
@@ -183,6 +193,7 @@ export interface BorrowParams {
   amount: bigint;
   interest_rate_mode: InterestRateMode;
   on_behalf_of: Address;
+  market_id?: MorphoMarketId;
 }
 
 /** Interest rate mode (serde: snake_case) */
@@ -197,6 +208,7 @@ export interface RepayParams {
   amount: bigint;
   interest_rate_mode: InterestRateMode;
   on_behalf_of: Address;
+  market_id?: MorphoMarketId;
 }
 
 export interface WithdrawParams {
@@ -204,6 +216,29 @@ export interface WithdrawParams {
   asset: Address;
   amount: bigint;
   to: Address;
+  market_id?: MorphoMarketId;
+}
+
+/**
+ * Morpho Blue distinguishes loan-side liquidity (supply / withdraw) from
+ * collateral-side liquidity (supplyCollateral / withdrawCollateral).
+ * Aave V3 collapses both into supply/withdraw; Morpho needs the dedicated
+ * params type because the underlying selector and accounting differ.
+ */
+export interface SupplyCollateralParams {
+  protocol: string;
+  asset: Address;
+  amount: bigint;
+  on_behalf_of: Address;
+  market_id: MorphoMarketId;
+}
+
+export interface WithdrawCollateralParams {
+  protocol: string;
+  asset: Address;
+  amount: bigint;
+  to: Address;
+  market_id: MorphoMarketId;
 }
 
 export interface LendingRates {
