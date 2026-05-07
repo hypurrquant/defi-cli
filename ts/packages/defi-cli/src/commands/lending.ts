@@ -24,6 +24,37 @@ function parseAmount(s: string): bigint {
   return BigInt(s);
 }
 
+/**
+ * Resolve `--market` input — either a 32-byte hex marketId or a friendly
+ * name registered under `[[protocol.markets]]` in the protocol TOML. Names
+ * are case-insensitive (`WMON-AUSD` ≡ `wmon-ausd`). When the name doesn't
+ * match a registered market, surface a helpful error listing the valid
+ * choices instead of forwarding garbage to the adapter (which would later
+ * fail with a generic `idToMarketParams reverted`).
+ */
+function resolveMarketInput(
+  adapter: { resolveMarketIdByName?: (n: string) => `0x${string}` | null;
+             listNamedMarkets?: () => ReadonlyArray<{ name: string }> },
+  raw: string | undefined,
+): MorphoMarketId | undefined {
+  if (!raw) return undefined;
+  // 32-byte hex passes through verbatim (66 chars including 0x).
+  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw as MorphoMarketId;
+  if (typeof adapter.resolveMarketIdByName !== "function") {
+    throw new Error(
+      `--market must be a 32-byte hex value; got '${raw}'. ` +
+        `This adapter does not support named-market lookup.`,
+    );
+  }
+  const id = adapter.resolveMarketIdByName(raw);
+  if (id) return id as MorphoMarketId;
+  const known = adapter.listNamedMarkets?.()?.map((m) => m.name).join(", ") ?? "(none)";
+  throw new Error(
+    `--market '${raw}' is not a 32-byte hex and is not registered on this protocol. ` +
+      `Known markets: ${known}.`,
+  );
+}
+
 export function registerLending(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
 
@@ -70,7 +101,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
       const onBehalfOf = resolveWallet(opts.onBehalfOf);
       const tx = await adapter.buildSupply({
         protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount), on_behalf_of: onBehalfOf,
-        market_id: opts.market as MorphoMarketId | undefined,
+        market_id: resolveMarketInput(adapter as never, opts.market as string | undefined),
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -95,7 +126,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
         protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount),
         interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
         on_behalf_of: onBehalfOf,
-        market_id: opts.market as MorphoMarketId | undefined,
+        market_id: resolveMarketInput(adapter as never, opts.market as string | undefined),
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -120,7 +151,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
         protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount),
         interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
         on_behalf_of: onBehalfOf,
-        market_id: opts.market as MorphoMarketId | undefined,
+        market_id: resolveMarketInput(adapter as never, opts.market as string | undefined),
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -142,7 +173,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
       const to = resolveWallet(opts.to);
       const tx = await adapter.buildWithdraw({
         protocol: ctx.protocol!.name, asset, amount: parseAmount(opts.amount), to,
-        market_id: opts.market as MorphoMarketId | undefined,
+        market_id: resolveMarketInput(adapter as never, opts.market as string | undefined),
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -231,7 +262,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
         asset,
         amount: parseAmount(opts.amount),
         on_behalf_of: onBehalfOf,
-        market_id: opts.market as MorphoMarketId,
+        market_id: resolveMarketInput(adapter as never, opts.market as string)!,
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());
@@ -262,7 +293,7 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
         asset,
         amount: parseAmount(opts.amount),
         to,
-        market_id: opts.market as MorphoMarketId,
+        market_id: resolveMarketInput(adapter as never, opts.market as string)!,
       });
       const result = await executor.execute(tx);
       printOutput(result, getOpts());

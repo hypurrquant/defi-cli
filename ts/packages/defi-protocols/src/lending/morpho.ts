@@ -6,6 +6,7 @@ import {
   multicallRead,
   decodeU256,
   type ProtocolEntry,
+  type MarketInfo,
   type SupplyParams,
   type BorrowParams,
   type RepayParams,
@@ -92,6 +93,8 @@ export class MorphoBlueAdapter implements ILending {
   private readonly rpcUrl?: string;
   private readonly metaMorphoVaults: Address[];
   private readonly metaMorphoVaultEntries: Array<{ key: string; addr: Address }>;
+  private readonly namedMarkets: ReadonlyArray<MarketInfo>;
+  private readonly namedMarketByName: ReadonlyMap<string, `0x${string}`>;
   private vaultAssetMap: Map<string, Address> | null = null;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
@@ -107,6 +110,31 @@ export class MorphoBlueAdapter implements ILending {
       .filter(([key]) => /^fe[a-z0-9_]+$/i.test(key) || key === "vault")
       .map(([key, addr]) => ({ key, addr }));
     this.metaMorphoVaults = this.metaMorphoVaultEntries.map((e) => e.addr);
+
+    // Lowercase the lookup key so `--market WMON-AUSD` and `wmon-ausd`
+    // both resolve. `id` stays canonical-case for downstream RPC use.
+    this.namedMarkets = entry.markets ?? [];
+    const byName = new Map<string, `0x${string}`>();
+    for (const m of this.namedMarkets) byName.set(m.name.toLowerCase(), m.id);
+    this.namedMarketByName = byName;
+  }
+
+  /**
+   * Resolve a friendly market name (e.g. `WMON-AUSD`) to its 32-byte
+   * marketId via the per-protocol TOML registry. Returns null when the
+   * adapter has no markets[] block or the name doesn't match any entry —
+   * callers fall back to treating the input as a raw hex marketId.
+   */
+  resolveMarketIdByName(name: string): `0x${string}` | null {
+    return this.namedMarketByName.get(name.toLowerCase()) ?? null;
+  }
+
+  /**
+   * Returns the registered named markets for diagnostics (e.g. CLI error
+   * messages listing valid choices when the user passes an unknown name).
+   */
+  listNamedMarkets(): ReadonlyArray<MarketInfo> {
+    return this.namedMarkets;
   }
 
   private async resolveVault(asset: Address, preferKey?: string): Promise<Address | null> {
