@@ -7,7 +7,7 @@ chain = "hyperevm"
 native = false
 verified = true
 reward_strategy = "lp_fee_only"
-description = "Curve Finance on HyperEVM (StableswapNG + TwoCryptoNG). 38 stable pools + 1 tricrypto pool deployed (verified 2026-04-29). Source: curvefi/curve-core deployments/prod/hyperliquid.yaml. Best for stable LP — low slippage, capital-efficient."
+description = "Curve Finance on HyperEVM (StableswapNG + TwoCryptoNG). 38 stable pools + 1 tricrypto pool deployed (verified 2026-04-29). Source: curvefi/curve-core deployments/prod/hyperliquid.yaml. Best for stable LP — low slippage, capital-efficient. add+remove liquidity (StableswapNG dynamic uint256[] ABI) live-confirmed 2026-05-08 against USDC/USDT0 pool 0x703b14a4…0e9f (add tx 0x308aa7ff…03a5, remove tx 0x2c279341…5211)."
 
 [protocol.contracts]
 router = "0xd2002373543Ce3527023C75e7518C274A51ce712"

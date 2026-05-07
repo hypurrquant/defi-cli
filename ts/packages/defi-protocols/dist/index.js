@@ -1037,8 +1037,8 @@ import { DefiError as DefiError5 } from "@hypurrquant/defi-core";
 var poolAbi = parseAbi5([
   "function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256)",
   "function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256)",
-  "function add_liquidity(uint256[2] amounts, uint256 min_mint_amount) external returns (uint256)",
-  "function remove_liquidity(uint256 amount, uint256[2] min_amounts) external returns (uint256[2])"
+  "function add_liquidity(uint256[] amounts, uint256 min_mint_amount) external returns (uint256)",
+  "function remove_liquidity(uint256 amount, uint256[] min_amounts) external returns (uint256[])"
 ]);
 var CurveStableSwapAdapter = class {
   protocolName;
@@ -1073,17 +1073,22 @@ var CurveStableSwapAdapter = class {
     throw DefiError5.unsupported(`[${this.protocolName}] quote requires RPC connection`);
   }
   async buildAddLiquidity(params) {
+    if (!params.pool) {
+      throw DefiError5.invalidParam(
+        `[${this.protocolName}] Curve add_liquidity needs --pool <address>. The router does not proxy this call; it lives on the pool itself.`
+      );
+    }
     const data = encodeFunctionData5({
       abi: poolAbi,
       functionName: "add_liquidity",
       args: [[params.amount_a, params.amount_b], 0n]
     });
     const approvals = [];
-    if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: this.router, amount: params.amount_a });
-    if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: this.router, amount: params.amount_b });
+    if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: params.pool, amount: params.amount_a });
+    if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: params.pool, amount: params.amount_b });
     return {
-      description: `[${this.protocolName}] Curve add liquidity`,
-      to: this.router,
+      description: `[${this.protocolName}] Curve add liquidity to ${params.pool}`,
+      to: params.pool,
       data,
       value: 0n,
       gas_estimate: 4e5,
@@ -1091,14 +1096,19 @@ var CurveStableSwapAdapter = class {
     };
   }
   async buildRemoveLiquidity(params) {
+    if (!params.pool) {
+      throw DefiError5.invalidParam(
+        `[${this.protocolName}] Curve remove_liquidity needs --pool <address>. The router does not proxy this call.`
+      );
+    }
     const data = encodeFunctionData5({
       abi: poolAbi,
       functionName: "remove_liquidity",
       args: [params.liquidity, [0n, 0n]]
     });
     return {
-      description: `[${this.protocolName}] Curve remove liquidity`,
-      to: this.router,
+      description: `[${this.protocolName}] Curve remove liquidity from ${params.pool}`,
+      to: params.pool,
       data,
       value: 0n,
       gas_estimate: 35e4
