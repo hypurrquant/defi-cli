@@ -8,7 +8,7 @@ native = true
 verified = true
 native_input_style = "algebra-native"
 reward_strategy = "on_chain_farming_center"
-description = "Algebra V3 ve(3,3) DEX on HyperEVM ($1.3M TVL). Eternal farming verified 2026-04-03 (gauge-verification.md)."
+description = "Algebra V3 ve(3,3) DEX on HyperEVM ($1.3M TVL). Eternal farming verified 2026-04-03 (gauge-verification.md). V3 NFT mint+remove (WHYPE/USDC pool 0x12df9913…513e) live-confirmed 2026-05-08 with --range 5 + slippage bypass (tokenId 71058, mint 0x65d7a3f2…5e41, remove 0x590b02eb…085a)."
 
 [protocol.contracts]
 router = "0x4e73E421480a7E0C24fB3c11019254edE194f736"
