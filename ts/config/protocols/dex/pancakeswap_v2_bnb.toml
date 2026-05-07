@@ -7,7 +7,7 @@ chain = "bnb"
 native = true
 verified = true
 reward_strategy = "none"
-description = "PancakeSwap V2 — largest DEX on BNB Chain."
+description = "PancakeSwap V2 — largest DEX on BNB Chain. add+remove liquidity (USDT/USDC pool 0xec655734…5a8c) live-confirmed 2026-05-08 (add tx 0x9cc61459…00f3, remove tx 0x98acd872…e7a1)."
 
 [protocol.contracts]
 router = "0x10ED43C718714eb63d5aA57B78B54704E256024E"
