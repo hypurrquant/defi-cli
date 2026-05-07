@@ -377,6 +377,31 @@ interface NestAprEstimateParams {
     token0Amount: bigint;
     token1Amount: bigint;
 }
+/**
+ * Per-pool emission snapshot returned by /api/blaze/liquidity-pools.
+ * Mirrors the shape `lp discover` consumes for IGauge pools, but populated
+ * from the off-chain blaze API so NEST's read-side surfaces non-zero APR
+ * even though on-chain `gauge.rewardRate` is hard-wired to 0.
+ */
+interface NestLiquidityPool {
+    pool: Address;
+    gauge: Address | null;
+    token0: {
+        address: Address;
+        symbol: string;
+    };
+    token1: {
+        address: Address;
+        symbol: string;
+    };
+    tvlUSD: number;
+    /** APR in % (annualized, including emissions). 0 when pool has no active gauge epoch. */
+    aprPercent: number;
+    /** Current epoch's emission USD (0 if no active emissions). */
+    curEpochEmissionRewardsUSD: number;
+    poolType: string;
+    isStable: boolean;
+}
 declare class NestOffChainAdapter {
     private readonly baseUrl;
     private readonly fallbackUrl;
@@ -394,6 +419,14 @@ declare class NestOffChainAdapter {
     getClaimTicket(wallet: Address): Promise<NestClaimTicket | null>;
     /** APR estimate (percent) for a CL position with given tick range and amounts */
     estimateLpApr(params: NestAprEstimateParams): Promise<number>;
+    /**
+     * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+     * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+     * off-chain via signed claim tickets), so the on-chain Solidly gauge
+     * reader cannot surface real emission APR. This API is the canonical
+     * read source — used by `lp discover` to expose non-zero NEST yields.
+     */
+    getLiquidityPools(): Promise<NestLiquidityPool[]>;
     /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
     getPendingRewards(user: Address): Promise<RewardInfo[]>;
     /** Voter address used by aggregateClaim() — exposed for callers that build the tx themselves */

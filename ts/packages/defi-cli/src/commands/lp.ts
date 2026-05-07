@@ -227,7 +227,7 @@ interface DiscoveredPool {
   pool: string;
   pair?: string;
   type: "FEE" | "EMISSION";
-  source: "gauge" | "farming" | "lb_hooks" | "fee" | "masterchef" | "curve_factory";
+  source: "gauge" | "farming" | "lb_hooks" | "fee" | "masterchef" | "curve_factory" | "off_chain_api";
   apr?: string;
   total_reward?: string;
   bonus_reward?: string;
@@ -247,6 +247,8 @@ interface DiscoveredPool {
   totalStaked?: string;
   rewardToken?: string;
   rewardPerDay?: number;
+  /** USD value of current epoch's emissions (off_chain_api source only). */
+  emissionUsd?: number;
   rewardTokenSymbol?: string;
 }
 
@@ -463,6 +465,28 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       await Promise.allSettled(
         protocols.map(async (protocol) => {
           try {
+            // Off-chain emission protocols (NEST blaze): rewards live in the
+            // backend (signed claim tickets), on-chain `gauge.rewardRate` is
+            // hard-wired to 0. Skip the on-chain gauge reader and pull the
+            // pool snapshot directly from /api/blaze/liquidity-pools.
+            if (protocol.reward_strategy === "off_chain_api") {
+              const adapter = createNestOffChain(protocol);
+              const pools = await adapter.getLiquidityPools();
+              for (const p of pools) {
+                if (p.aprPercent === 0 && opts.emissionOnly) continue;
+                results.push({
+                  protocol: protocol.slug,
+                  pool: p.pool,
+                  pair: `${p.token0.symbol}/${p.token1.symbol}`,
+                  type: p.aprPercent > 0 ? "EMISSION" : "FEE",
+                  source: "off_chain_api",
+                  aprPercent: p.aprPercent,
+                  poolTvlUsd: p.tvlUSD,
+                  emissionUsd: p.curEpochEmissionRewardsUSD,
+                });
+              }
+              return;
+            }
             // Gauge-based protocols (solidly_v2, solidly_cl, algebra_v3, hybra, uniswap_v3 with voter)
             const isGaugeProtocol = ["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(protocol.interface) ||
               (protocol.interface === "uniswap_v3" && protocol.contracts?.["voter"]);
@@ -662,11 +686,16 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       // Sort by APR descending (puts top-yield pools first; pools with no APR sink to bottom)
       results.sort((a, b) => (b.aprPercent ?? 0) - (a.aprPercent ?? 0));
       if (opts.emissionOnly) {
-        // Filter to pools that are actually distributing rewards right now (moePerDay > 0 OR rewardRate > 0)
+        // Filter to pools that are actually distributing rewards right now.
+        // Three signals depending on the source: moePerDay (Merchant Moe LB),
+        // rewardRate (on-chain Solidly/Hybra/Curve gauges), aprPercent
+        // (off-chain emission APIs like Nest blaze).
         printOutput(
           results.filter((r) =>
             r.type === "EMISSION" &&
-            ((r.moePerDay ?? 0) > 0 || (r.rewardRate && BigInt(r.rewardRate) > 0n)),
+            ((r.moePerDay ?? 0) > 0 ||
+              (r.rewardRate && BigInt(r.rewardRate) > 0n) ||
+              (r.aprPercent ?? 0) > 0),
           ),
           getOpts(),
         );

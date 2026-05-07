@@ -5186,6 +5186,34 @@ var init_dist2 = __esm({
         }
         return apr;
       }
+      /**
+       * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+       * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+       * off-chain via signed claim tickets), so the on-chain Solidly gauge
+       * reader cannot surface real emission APR. This API is the canonical
+       * read source — used by `lp discover` to expose non-zero NEST yields.
+       */
+      async getLiquidityPools() {
+        const raw = await this.fetchJson("/liquidity-pools");
+        const out = [];
+        for (const p of raw) {
+          const t0 = p.token0?.basetoken;
+          const t1 = p.token1?.basetoken;
+          if (!t0?.address || !t1?.address) continue;
+          out.push({
+            pool: p.id,
+            gauge: p.gauge ?? null,
+            token0: { address: t0.address, symbol: t0.symbol ?? "?" },
+            token1: { address: t1.address, symbol: t1.symbol ?? "?" },
+            tvlUSD: Number(p.tvlUSD ?? 0),
+            aprPercent: Number(p.apr ?? 0),
+            curEpochEmissionRewardsUSD: Number(p.curEpochEmissionRewardsUSD ?? 0),
+            poolType: p.poolType,
+            isStable: p.isStable
+          });
+        }
+        return out;
+      }
       /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
       async getPendingRewards(user) {
         const status = await this.getClaimStatus(user);

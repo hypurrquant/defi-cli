@@ -5080,6 +5080,34 @@ var init_dist2 = __esm({
         }
         return apr;
       }
+      /**
+       * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+       * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+       * off-chain via signed claim tickets), so the on-chain Solidly gauge
+       * reader cannot surface real emission APR. This API is the canonical
+       * read source — used by `lp discover` to expose non-zero NEST yields.
+       */
+      async getLiquidityPools() {
+        const raw = await this.fetchJson("/liquidity-pools");
+        const out = [];
+        for (const p of raw) {
+          const t0 = p.token0?.basetoken;
+          const t1 = p.token1?.basetoken;
+          if (!t0?.address || !t1?.address) continue;
+          out.push({
+            pool: p.id,
+            gauge: p.gauge ?? null,
+            token0: { address: t0.address, symbol: t0.symbol ?? "?" },
+            token1: { address: t1.address, symbol: t1.symbol ?? "?" },
+            tvlUSD: Number(p.tvlUSD ?? 0),
+            aprPercent: Number(p.apr ?? 0),
+            curEpochEmissionRewardsUSD: Number(p.curEpochEmissionRewardsUSD ?? 0),
+            poolType: p.poolType,
+            isStable: p.isStable
+          });
+        }
+        return out;
+      }
       /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
       async getPendingRewards(user) {
         const status = await this.getClaimStatus(user);
@@ -9016,6 +9044,24 @@ function registerLP(parent, getOpts, makeExecutor2) {
     await Promise.allSettled(
       protocols.map(async (protocol) => {
         try {
+          if (protocol.reward_strategy === "off_chain_api") {
+            const adapter = createNestOffChain(protocol);
+            const pools = await adapter.getLiquidityPools();
+            for (const p of pools) {
+              if (p.aprPercent === 0 && opts.emissionOnly) continue;
+              results.push({
+                protocol: protocol.slug,
+                pool: p.pool,
+                pair: `${p.token0.symbol}/${p.token1.symbol}`,
+                type: p.aprPercent > 0 ? "EMISSION" : "FEE",
+                source: "off_chain_api",
+                aprPercent: p.aprPercent,
+                poolTvlUsd: p.tvlUSD,
+                emissionUsd: p.curEpochEmissionRewardsUSD
+              });
+            }
+            return;
+          }
           const isGaugeProtocol = ["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(protocol.interface) || protocol.interface === "uniswap_v3" && protocol.contracts?.["voter"];
           if (isGaugeProtocol) {
             const chainTokens = registry.tokens.get(chainName)?.map((t) => t.address);
@@ -9198,7 +9244,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
     if (opts.emissionOnly) {
       printOutput(
         results.filter(
-          (r) => r.type === "EMISSION" && ((r.moePerDay ?? 0) > 0 || r.rewardRate && BigInt(r.rewardRate) > 0n)
+          (r) => r.type === "EMISSION" && ((r.moePerDay ?? 0) > 0 || r.rewardRate && BigInt(r.rewardRate) > 0n || (r.aprPercent ?? 0) > 0)
         ),
         getOpts()
       );
