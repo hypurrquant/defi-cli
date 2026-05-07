@@ -1,4 +1,4 @@
-import { IGaugeSystem, ProtocolEntry, GaugedPool, DeFiTx, RewardInfo, IGauge, ICdp, IDerivatives, IDex, ILending, ILiquidStaking, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
+import { IGaugeSystem, ProtocolEntry, GaugedPool, DeFiTx, RewardInfo, IGauge, ICdp, IDerivatives, IDex, ILending, ILiquidStaking, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, SupplyCollateralParams, WithdrawCollateralParams, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
 import { Address, Hex } from 'viem';
 
 /**
@@ -563,6 +563,7 @@ declare class AlgebraV3Adapter implements IDex {
 declare class BalancerV3Adapter implements IDex {
     private readonly protocolName;
     private readonly router;
+    private readonly pool;
     constructor(entry: ProtocolEntry, _rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
@@ -650,6 +651,8 @@ declare class AaveV3Adapter implements ILending {
     buildBorrow(params: BorrowParams): Promise<DeFiTx>;
     buildRepay(params: RepayParams): Promise<DeFiTx>;
     buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
+    buildSetUseReserveAsCollateral(asset: Address, useAsCollateral: boolean): Promise<DeFiTx>;
+    buildSetEMode(categoryId: number): Promise<DeFiTx>;
     getRates(asset: Address): Promise<LendingRates>;
     getUserPosition(user: Address): Promise<UserPosition>;
 }
@@ -684,8 +687,11 @@ declare class CompoundV2Adapter implements ILending {
     private readonly vTokenCandidates;
     private readonly rpcUrl?;
     private vTokenByAsset;
+    private nativeVtoken;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     private resolveVtoken;
+    /** True iff `vtoken` is the cETH/vBNB-style native cToken for this protocol. */
+    private isNativeVtoken;
     name(): string;
     private vtokenFor;
     buildSupply(params: SupplyParams): Promise<DeFiTx>;
@@ -735,9 +741,19 @@ declare class MorphoBlueAdapter implements ILending {
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     private resolveVault;
     name(): string;
+    /**
+     * Resolve a Morpho Blue marketId into the full MarketParams tuple by
+     * calling Morpho.idToMarketParams(id). Used by every direct-market
+     * method (supply / borrow / repay / withdraw / supplyCollateral /
+     * withdrawCollateral) so the caller only has to pass the 32-byte
+     * marketId — same shape as the Morpho UI / API.
+     */
+    private resolveMarketParams;
     buildSupply(params: SupplyParams): Promise<DeFiTx>;
     buildBorrow(params: BorrowParams): Promise<DeFiTx>;
     buildRepay(params: RepayParams): Promise<DeFiTx>;
+    buildSupplyCollateral(params: SupplyCollateralParams): Promise<DeFiTx>;
+    buildWithdrawCollateral(params: WithdrawCollateralParams): Promise<DeFiTx>;
     buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
     getRates(asset: Address): Promise<LendingRates>;
     getUserPosition(_user: Address): Promise<UserPosition>;

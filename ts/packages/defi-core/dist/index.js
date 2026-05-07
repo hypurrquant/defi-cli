@@ -171,11 +171,15 @@ function buildTransfer(token, to, amount) {
 // src/provider.ts
 import { createPublicClient, http } from "viem";
 var providerCache = /* @__PURE__ */ new Map();
-function getProvider(rpcUrl) {
-  const cached = providerCache.get(rpcUrl);
+function getProvider(rpcUrl, chain) {
+  const key = chain ? `${rpcUrl}@${chain.id}` : rpcUrl;
+  const cached = providerCache.get(key);
   if (cached) return cached;
-  const client = createPublicClient({ transport: http(rpcUrl) });
-  providerCache.set(rpcUrl, client);
+  const client = createPublicClient({
+    transport: http(rpcUrl),
+    ...chain ? { chain } : {}
+  });
+  providerCache.set(key, client);
   return client;
 }
 function clearProviderCache() {
@@ -254,6 +258,28 @@ var ChainConfig = class {
   effectiveRpcUrl() {
     const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
     return process.env[chainEnv] ?? this.rpc_url;
+  }
+  /**
+   * Build a viem Chain object pinned to this config so wallet/public clients
+   * can sign with an explicit chainId rather than auto-fetching it from the
+   * RPC. SSOT 7.4: anchoring chainId at client-construction time defends
+   * against an MITM RPC that returns the wrong eth_chainId, and keeps
+   * offline signing safe against RPC drift.
+   */
+  viemChain() {
+    const rpcUrl = this.effectiveRpcUrl();
+    return {
+      id: this.chain_id,
+      name: this.name,
+      nativeCurrency: {
+        name: this.native_token,
+        symbol: this.native_token,
+        decimals: 18
+      },
+      rpcUrls: { default: { http: [rpcUrl] } },
+      ...this.explorer_url ? { blockExplorers: { default: { name: this.name, url: this.explorer_url } } } : {},
+      ...this.multicall3 ? { contracts: { multicall3: { address: this.multicall3 } } } : {}
+    };
   }
 };
 

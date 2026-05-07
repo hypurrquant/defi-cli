@@ -1363,6 +1363,11 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         return;
       }
       const ZERO = "0x0000000000000000000000000000000000000000" as Address;
+      // Solidly-style adapters need the LP pair address to emit an
+      // `approvals[]` entry (the router pulls the LP token via transferFrom
+      // and reverts otherwise). --pool accepts both "TOKEN_A/TOKEN_B" symbol
+      // pairs from the protocol TOML and raw 0x addresses.
+      const removePoolAddr = opts.pool ? resolvePoolAddress(registry, opts.protocol, opts.pool) : undefined;
       const removeTx = await dexAdapter.buildRemoveLiquidity({
         protocol: protocol.name,
         token_a: tokenA ?? ZERO,
@@ -1372,6 +1377,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         token_id: opts.tokenId ? BigInt(opts.tokenId) : undefined,
         amount_a_min: opts.amountAMin !== undefined ? BigInt(opts.amountAMin) : undefined,
         amount_b_min: opts.amountBMin !== undefined ? BigInt(opts.amountBMin) : undefined,
+        pool: removePoolAddr,
       });
       const removeResult = await executor.execute(removeTx);
       printOutput({ step: "lp_remove", ...removeResult }, getOpts());
