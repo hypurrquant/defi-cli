@@ -111,11 +111,15 @@ function buildTransfer(token, to, amount) {
     gas_estimate: 65e3
   };
 }
-function getProvider(rpcUrl) {
-  const cached = providerCache.get(rpcUrl);
+function getProvider(rpcUrl, chain) {
+  const key = chain ? `${rpcUrl}@${chain.id}` : rpcUrl;
+  const cached = providerCache.get(key);
   if (cached) return cached;
-  const client = createPublicClient({ transport: http(rpcUrl) });
-  providerCache.set(rpcUrl, client);
+  const client = createPublicClient({
+    transport: http(rpcUrl),
+    ...chain ? { chain } : {}
+  });
+  providerCache.set(key, client);
   return client;
 }
 function clearProviderCache() {
@@ -340,6 +344,28 @@ var init_dist = __esm({
       effectiveRpcUrl() {
         const chainEnv = this.name.toUpperCase().replace(/ /g, "_") + "_RPC_URL";
         return process.env[chainEnv] ?? this.rpc_url;
+      }
+      /**
+       * Build a viem Chain object pinned to this config so wallet/public clients
+       * can sign with an explicit chainId rather than auto-fetching it from the
+       * RPC. SSOT 7.4: anchoring chainId at client-construction time defends
+       * against an MITM RPC that returns the wrong eth_chainId, and keeps
+       * offline signing safe against RPC drift.
+       */
+      viemChain() {
+        const rpcUrl = this.effectiveRpcUrl();
+        return {
+          id: this.chain_id,
+          name: this.name,
+          nativeCurrency: {
+            name: this.native_token,
+            symbol: this.native_token,
+            decimals: 18
+          },
+          rpcUrls: { default: { http: [rpcUrl] } },
+          ...this.explorer_url ? { blockExplorers: { default: { name: this.name, url: this.explorer_url } } } : {},
+          ...this.multicall3 ? { contracts: { multicall3: { address: this.multicall3 } } } : {}
+        };
       }
     };
     ProtocolCategory = /* @__PURE__ */ ((ProtocolCategory2) => {
@@ -7445,10 +7471,22 @@ var Executor = class _Executor {
   dryRun;
   rpcUrl;
   explorerUrl;
-  constructor(broadcast, rpcUrl, explorerUrl) {
+  /**
+   * Optional viem Chain object. When set, all wallet/public clients built
+   * inside this executor anchor to the explicit chainId at construction
+   * time, defending against MITM RPCs that lie about eth_chainId and
+   * keeping offline-signing safe under RPC drift (SSOT 7.4).
+   */
+  chain;
+  constructor(broadcast, rpcUrl, explorerUrl, chain) {
     this.dryRun = !broadcast;
     this.rpcUrl = rpcUrl;
     this.explorerUrl = explorerUrl;
+    this.chain = chain;
+  }
+  /** Returns the optional `{ chain }` spread for viem client constructors. */
+  chainOpt() {
+    return this.chain ? { chain: this.chain } : {};
   }
   /** Apply 20% buffer to a gas estimate */
   static applyGasBuffer(gas) {
@@ -7572,7 +7610,7 @@ var Executor = class _Executor {
    */
   async fetchEip1559Fees(rpcUrl) {
     try {
-      const client = createPublicClient23({ transport: http23(rpcUrl) });
+      const client = createPublicClient23({ transport: http23(rpcUrl), ...this.chainOpt() });
       let priorityFee = DEFAULT_PRIORITY_FEE_WEI;
       try {
         priorityFee = await client.estimateMaxPriorityFeePerGas();
@@ -7594,7 +7632,7 @@ var Executor = class _Executor {
   /** Estimate gas dynamically with buffer, falling back to a hardcoded estimate */
   async estimateGasWithBuffer(rpcUrl, tx, from) {
     try {
-      const client = createPublicClient23({ transport: http23(rpcUrl) });
+      const client = createPublicClient23({ transport: http23(rpcUrl), ...this.chainOpt() });
       const estimated = await client.estimateGas({
         to: tx.to,
         data: tx.data,
@@ -7618,7 +7656,7 @@ var Executor = class _Executor {
     if (!rpcUrl) {
       throw DefiError.rpcError("No RPC URL \u2014 cannot simulate. Set HYPEREVM_RPC_URL.");
     }
-    const client = createPublicClient23({ transport: http23(rpcUrl) });
+    const client = createPublicClient23({ transport: http23(rpcUrl), ...this.chainOpt() });
     const privateKey = process.env["DEFI_PRIVATE_KEY"];
     const from = privateKey ? privateKeyToAccount(privateKey).address : "0x0000000000000000000000000000000000000001";
     if (tx.approvals && tx.approvals.length > 0) {
@@ -7732,8 +7770,8 @@ var Executor = class _Executor {
     if (!rpcUrl) {
       throw DefiError.rpcError("No RPC URL configured for broadcasting");
     }
-    const publicClient = createPublicClient23({ transport: http23(rpcUrl) });
-    const walletClient = createWalletClient({ account, transport: http23(rpcUrl) });
+    const publicClient = createPublicClient23({ transport: http23(rpcUrl), ...this.chainOpt() });
+    const walletClient = createWalletClient({ account, transport: http23(rpcUrl), ...this.chainOpt() });
     if (tx.pre_txs && tx.pre_txs.length > 0) {
       for (const preTx of tx.pre_txs) {
         process.stderr.write(`  Pre-tx: ${preTx.description}...
