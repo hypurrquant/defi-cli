@@ -7,7 +7,7 @@ chain = "bnb"
 native = false
 verified = true
 reward_strategy = "none"
-description = "FstSwap V2 on BNB Chain. On-chain verified 2026-04-03."
+description = "FstSwap V2 on BNB Chain. On-chain verified 2026-04-03; add+remove liquidity (USDT/USDC pool 0xc6ca8f17…696a) live-confirmed 2026-05-08 (add tx 0xd3f6c74c…66fb, remove tx 0xf6623e53…482f)."
 
 [protocol.contracts]
 router = "0xb3ca4d73b1e0ea2c53b42173388cc01e1c226f40"

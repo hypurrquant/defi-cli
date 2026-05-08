@@ -121,13 +121,20 @@ async function main() {
       result.tests.push({ cmd: "status", result: "fail", detail: JSON.stringify(statusData).slice(0, 80) });
     }
 
-    // Test 2: lending rates (if lending protocols exist)
+    // Test 2: lending rates (if lending protocols exist).
+    // Uses zero-address asset on purpose — the CLI returns all-zero
+    // figures for an unmapped reserve, so a `supply_apy` field of any
+    // type proves the RPC path reached `IPool.getReserveData` and
+    // decoded successfully.
     const hasLending = statusData.protocols?.some((p: any) => p.category === "lending");
     if (hasLending) {
       const lendingProto = statusData.protocols.find((p: any) => p.category === "lending");
-      const lendingSlug = lendingProto?.name?.toLowerCase().replace(/ /g, "-");
-      // Try to get rates - may need actual asset address
-      const ratesData = runCli(`lending rates --json --protocol ${lendingSlug} --asset 0x0000000000000000000000000000000000000000`, envKey, port);
+      const lendingSlug = lendingProto?.slug;
+      const ratesData = runCli(
+        `--chain ${slug} --json lending rates --protocol ${lendingSlug} --asset 0x0000000000000000000000000000000000000000`,
+        envKey,
+        port,
+      );
       if (ratesData.supply_apy !== undefined) {
         result.tests.push({ cmd: "lending rates", result: "pass", detail: `apy=${ratesData.supply_apy}` });
       } else if (ratesData.error) {
@@ -137,12 +144,18 @@ async function main() {
       }
     }
 
-    // Test 3: scan
-    const scanData = runCli(`scan --json --chain ${slug} --once`, envKey, port);
-    if (scanData.timestamp || scanData.chain) {
-      result.tests.push({ cmd: "scan", result: "pass", detail: `findings=${(scanData.findings ?? []).length}` });
-    } else if (scanData.error) {
-      result.tests.push({ cmd: "scan", result: "error", detail: scanData.error.slice(0, 60) });
+    // Test 3: agent-schema sanity. `defi --json schema status` is RPC-free
+    // (no Anvil traffic) but exercises the registerSchema -> printOutput
+    // contract that the agent integration relies on. Replaces the prior
+    // `scan` step which referred to a non-existent command and
+    // accidentally exercised the landing-page wallet check instead.
+    const schemaData = runCli(`--json schema status`, envKey, port);
+    if (schemaData.action === "status" && typeof schemaData.cli === "string") {
+      result.tests.push({ cmd: "schema status", result: "pass", detail: `cli=${schemaData.cli}` });
+    } else if (schemaData.error) {
+      result.tests.push({ cmd: "schema status", result: "error", detail: String(schemaData.error).slice(0, 60) });
+    } else {
+      result.tests.push({ cmd: "schema status", result: "fail", detail: JSON.stringify(schemaData).slice(0, 60) });
     }
 
     // Determine overall status

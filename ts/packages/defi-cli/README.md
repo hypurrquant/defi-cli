@@ -21,7 +21,7 @@ npx -y @hypurrquant/defi-cli --json status
 | HyperEVM | 999 | 🟢 production | 11 |
 | Mantle | 5000 | 🟢 production | 3 |
 | Base | 8453 | 🟢 production | 5 |
-| BNB | 56 | 🟡 staged | 16 |
+| BNB | 56 | 🟢 production | 16 |
 | Monad | 143 | 🟡 staged | 4 |
 
 🟢 = full lifecycle broadcast verified (mint/supply → claim → withdraw)
@@ -112,7 +112,7 @@ defi setup
 | `lending` | rates / position / supply / borrow / repay / withdraw |
 | `yield` | compare / scan (cross-chain) / optimize / execute |
 | `swap` | DEX aggregator (kyber, openocean, liquid, lifi, relay) |
-| `bridge` | Cross-chain (lifi, debridge, cctp) |
+| `bridge` | Cross-chain (lifi, relay, debridge, cctp) |
 | `portfolio` | show / snapshot / pnl / history |
 | `price` | Oracle + DEX prices |
 | `wallet` | Address management |
@@ -162,6 +162,13 @@ defi --chain base lp claim --protocol aerodrome-cl \
 defi --chain mantle swap --provider lifi --from MOE --to WMNT --amount <wei> --broadcast
 defi --chain base swap --provider kyber --from WETH --to USDC --amount <wei> --broadcast
 defi --chain bnb swap --provider relay --from WBNB --to USDT --amount <wei> --broadcast
+```
+
+### Cross-chain bridge
+```bash
+# Providers: lifi (default), relay (fast native, ~3s), debridge, cctp
+defi --chain base bridge --token USDC --amount 100000000 --to-chain ethereum --provider lifi --broadcast
+defi --chain base bridge --token 0x0000000000000000000000000000000000000000 --amount 1000000000000000 --to-chain bnb --provider relay --broadcast
 ```
 
 ## Agent-First Design

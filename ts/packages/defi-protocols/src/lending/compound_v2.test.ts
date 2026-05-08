@@ -163,6 +163,110 @@ describe("CompoundV2Adapter — v1.0.8 builder regressions", () => {
   });
 });
 
+// --- 2026-05-07 native cToken (vBNB / cETH) routing ---
+//
+// Pre-2026-05-07 behaviour: `lending supply --asset BNB` (which resolves to
+// the 0x0 native sentinel) failed with `[Venus] no vToken for asset 0x0…`
+// because resolveVtoken's `underlying()` lookup reverted on vBNB and the
+// adapter quietly dropped vBNB from the cache. Reproduced live during the
+// multi-chain broadcast verification.
+const NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000" as Address;
+
+/**
+ * Inject the cache with a native cToken mapping so the buildSupply /
+ * buildRepay native branches can be tested without RPC. Mirrors what
+ * resolveVtoken() builds on its first call when one of the candidates'
+ * underlying() reverts.
+ */
+function injectNativeCache(adapter: unknown): void {
+  const a = adapter as { vTokenByAsset: Map<string, Address>; nativeVtoken: Address };
+  a.vTokenByAsset = new Map<string, Address>([
+    [USDT_UNDERLYING.toLowerCase(), VUSDT],
+    [USDC_UNDERLYING.toLowerCase(), VUSDC],
+    [NATIVE_SENTINEL.toLowerCase(), VBNB],
+  ]);
+  a.nativeVtoken = VBNB;
+}
+
+describe("CompoundV2Adapter — 2026-05-07 native cToken (vBNB / cETH)", () => {
+  beforeEach(() => readContractMock.mockReset());
+
+  it("buildSupply for native sentinel emits payable mint() (selector 0x1249c58b)", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    injectNativeCache(adapter);
+    const tx = await adapter.buildSupply({
+      protocol: "Venus",
+      asset: NATIVE_SENTINEL,
+      amount: 1_000_000_000_000_000n, // 0.001 BNB
+      on_behalf_of: "0x000000000000000000000000000000000000dEaD" as Address,
+    });
+    expect(tx.to).toBe(VBNB);
+    // mint() with no args = 0x1249c58b. mint(uint256) is 0xa0712d68.
+    expect(tx.data.slice(0, 10).toLowerCase()).toBe("0x1249c58b");
+    expect(tx.value).toBe(1_000_000_000_000_000n);
+    expect(tx.approvals).toBeUndefined();
+  });
+
+  it("buildRepay for native sentinel emits payable repayBorrow() (selector 0x4e4d9fea)", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    injectNativeCache(adapter);
+    const tx = await adapter.buildRepay({
+      protocol: "Venus",
+      asset: NATIVE_SENTINEL,
+      amount: 500_000_000_000_000n,
+      interest_rate_mode: InterestRateMode.Variable,
+      on_behalf_of: "0x000000000000000000000000000000000000dEaD" as Address,
+    });
+    expect(tx.to).toBe(VBNB);
+    // repayBorrow() with no args = 0x4e4d9fea. repayBorrow(uint256) is 0x0e752702.
+    expect(tx.data.slice(0, 10).toLowerCase()).toBe("0x4e4d9fea");
+    expect(tx.value).toBe(500_000_000_000_000n);
+    expect(tx.approvals).toBeUndefined();
+  });
+
+  it("ERC20 supply still uses mint(uint256) (selector 0xa0712d68) — no regression", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    injectNativeCache(adapter);
+    const tx = await adapter.buildSupply({
+      protocol: "Venus",
+      asset: USDT_UNDERLYING,
+      amount: 1_000n,
+      on_behalf_of: "0x000000000000000000000000000000000000dEaD" as Address,
+    });
+    expect(tx.to).toBe(VUSDT);
+    expect(tx.data.slice(0, 10).toLowerCase()).toBe("0xa0712d68");
+    expect(tx.value).toBe(0n);
+    expect(tx.approvals).toEqual([
+      { token: USDT_UNDERLYING, spender: VUSDT, amount: 1_000n },
+    ]);
+  });
+
+  it("resolveVtoken auto-detects the native cToken when its underlying() reverts", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    // Simulate the on-chain reality: vUSDT/vUSDC return their underlyings,
+    // vBNB's underlying() reverts because there isn't one.
+    readContractMock
+      .mockResolvedValueOnce(USDT_UNDERLYING) // vusdt.underlying()
+      .mockResolvedValueOnce(USDC_UNDERLYING) // vusdc.underlying()
+      .mockRejectedValueOnce(new Error("execution reverted")) // vbnb.underlying()
+      // After cache built, the supply path issues no further reads.
+      ;
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    const tx = await adapter.buildSupply({
+      protocol: "Venus",
+      asset: NATIVE_SENTINEL,
+      amount: 1_000n,
+      on_behalf_of: "0x000000000000000000000000000000000000dEaD" as Address,
+    });
+    expect(tx.to).toBe(VBNB);
+    expect(tx.data.slice(0, 10).toLowerCase()).toBe("0x1249c58b");
+    expect(tx.value).toBe(1_000n);
+  });
+});
+
 describe("CompoundV2Adapter — v1.0.5 per-asset getRates routing", () => {
   beforeEach(() => readContractMock.mockReset());
 
@@ -200,6 +304,53 @@ describe("CompoundV2Adapter — v1.0.5 per-asset getRates routing", () => {
     expect(rates.supply_apy).toBe(0);
     expect(rates.utilization).toBe(0);
     expect(rates.total_supply).toBe(0n);
+  });
+});
+
+describe("CompoundV2Adapter — buildEnterMarkets (Comptroller toggle)", () => {
+  beforeEach(() => readContractMock.mockReset());
+
+  it("encodes Comptroller.enterMarkets([vToken]) and targets the registered comptroller", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    const tx = await adapter.buildEnterMarkets!([VUSDT]);
+    // Tx target must be the Comptroller, not the cToken — entering markets is
+    // an account-level Comptroller call, not a per-cToken state mutation.
+    expect(tx.to).toBe(COMPTROLLER);
+    expect(tx.value).toBe(0n);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function enterMarkets(address[] cTokens)"]),
+      data: tx.data,
+    });
+    expect(decoded.functionName).toBe("enterMarkets");
+    expect((decoded.args![0] as readonly Address[])).toEqual([VUSDT]);
+  });
+
+  it("supports batch enterMarkets across multiple vTokens", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    const tx = await adapter.buildEnterMarkets!([VUSDT, VUSDC, VBNB]);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function enterMarkets(address[] cTokens)"]),
+      data: tx.data,
+    });
+    expect((decoded.args![0] as readonly Address[]).length).toBe(3);
+  });
+
+  it("rejects empty cTokens[] (Comptroller would no-op)", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    await expect(adapter.buildEnterMarkets!([])).rejects.toThrow(/at least one cToken/i);
+  });
+
+  it("rejects when comptroller is missing from the protocol entry", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const entryNoComptroller = {
+      ...makeEntry(),
+      contracts: { vusdt: VUSDT, vusdc: VUSDC, vbnb: VBNB }, // no comptroller
+    } as ProtocolEntry;
+    const adapter = new CompoundV2Adapter(entryNoComptroller, "https://example/bnb");
+    await expect(adapter.buildEnterMarkets!([VUSDT])).rejects.toThrow(/Comptroller/);
   });
 });
 

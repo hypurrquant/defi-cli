@@ -83,8 +83,8 @@ The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integ
 | **HyperEVM** | 999 | 🟢 production | 11 | HYPE | All protocols mainnet-verified incl. emission token receipt |
 | **Mantle** | 5000 | 🟢 production | 3 | MNT | Aave V3 + Uniswap V3 + Merchant Moe LB (MOE emission verified) |
 | **Base** | 8453 | 🟢 production | 5 | ETH | Aerodrome V2/CL (AERO emission) + Uniswap V3 + Aave V3 + Compound V3 |
-| **BNB** | 56 | 🟡 staged | 16 | BNB | Read-only verified, broadcast pending |
-| **Monad** | 143 | 🟡 staged | 4 | MON | TraderJoe LB pools active, broadcast pending |
+| **BNB** | 56 | 🟢 production | 16 | BNB | 13/16 lifecycle-verified (Aave V3, Venus, Kinza, Pancakeswap V2/V3, Uniswap V3, Thena V1, Biswap, ApeSwap, BakerySwap, BSCSwap, BabyDogeSwap, FstSwap); `venus-flux-bnb` (no USDT in stablecoins pool), `thena-fusion`, `beefy-bnb` deferred for funding |
+| **Monad** | 143 | 🟡 staged | 4 | MON | Uniswap V3/V2 lifecycle-verified; `traderjoe-monad`, `morpho-blue-monad` await mainnet launch + funding |
 | **Arbitrum** | 42161 | 🟡 staged | 3 | ETH | Read-only + aggregator quotes verified |
 | **Ethereum** | 1 | 🟡 staged | 6 | ETH | Read-only + aggregator quotes verified |
 
@@ -93,7 +93,7 @@ The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integ
 
 ## Supported Protocols
 
-### HyperEVM (11)
+### HyperEVM (10)
 
 | Slug | Category | Interface | Notes |
 |---|---|---|---|
@@ -101,13 +101,13 @@ The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integ
 | `hypurrfi` | Lending | aave_v3 | Aave V3 fork |
 | `felix-morpho` | Lending | morpho_blue | MetaMorpho ERC-4626 vault routing |
 | `project-x` | DEX | uniswap_v3 | V3 fee-only |
-| `hyperswap` | DEX | uniswap_v3 | V3 fee-only |
+| `hyperswap-v3` | DEX | uniswap_v3 | V3 fee-only |
 | `curve-hyperevm` | DEX | curve_stableswap | StableswapNG |
 | `ramses-cl` | DEX | uniswap_v3 + cl_style="ramses" | x(3,3) auto-stake, NPM.getPeriodReward |
 | `ramses-hl` | DEX | solidly_v2 | ve(3,3) gauge, RAM emission |
 | `kittenswap` | DEX | algebra_v3 + farming_center | Eternal farming, KITTEN/WHYPE rewards |
 | `hybra` | DEX | hybra (V4 CL) | GaugeManager + 2-year veHYBR lock (default) |
-| `nest` | DEX | algebra_v3 | Off-chain ticket-based NEST claim |
+| `nest-v1` | DEX | algebra_v3 | NEST V1 — claim path verified live 2026-05-07 (off-chain ticket via `blaze.nest.aegas.it` / `usenest.xyz/api/blaze`). LP/farm read-paths still return zero (`gauge.rewardRate = 0`); only `lp claim` is functional. |
 
 ### Mantle (3)
 
@@ -224,7 +224,10 @@ defi --chain bnb swap --provider relay --from WBNB --to USDT --amount <wei> --br
 
 ```bash
 defi --chain base bridge --token USDC --amount 100000000 --to-chain ethereum --provider lifi --broadcast
+defi --chain base bridge --token 0x0000000000000000000000000000000000000000 --amount 1000000000000000 --to-chain bnb --provider relay --broadcast
 ```
+
+Providers: `lifi` (default, broad coverage), `relay` (fast native-token routes, ~3s settle), `debridge` (DLN intent), `cctp` (Circle native USDC).
 
 ## Command Reference
 
@@ -242,7 +245,7 @@ defi --chain base bridge --token USDC --amount 100000000 --to-chain ethereum --p
 | `lending` | rates / position / supply / borrow / repay / withdraw |
 | `yield` | compare / scan (cross-chain) / optimize / execute |
 | `swap` | DEX aggregator swap (kyber, openocean, liquid, lifi, relay) |
-| `bridge` | Cross-chain transfer (lifi, debridge, cctp) |
+| `bridge` | Cross-chain transfer (lifi, relay, debridge, cctp) |
 | `portfolio` | show / snapshot / pnl / history |
 | `price` | Oracle + DEX prices |
 | `wallet` | Address management |

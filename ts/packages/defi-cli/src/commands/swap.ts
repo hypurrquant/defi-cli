@@ -219,7 +219,14 @@ export function registerSwap(
     .requiredOption("--to <token>", "Output token symbol or address")
     .requiredOption("--amount <amount>", "Amount of input token in wei")
     .option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber")
-    .option("--slippage <bps>", "Slippage tolerance in bps", "50")
+    // Default 100 bps (1%) is the SSOT 7.3 ceiling for "safe default" and
+    // the sweet spot for thin-liquidity chains like Monad where the previous
+    // 50 bps default produced revert-on-broadcast even when the dry-run
+    // simulated successfully. Live re-verification on 2026-05-07 reproduced
+    // the issue: kyber dry-run succeeded but the actual on-chain tx reverted
+    // inside the router's minOut check (Monad tx 0x4fe39977…). Users wanting
+    // tighter control still pass --slippage explicitly.
+    .option("--slippage <bps>", "Slippage tolerance in bps", "100")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = requireChain(parent, getOpts);
@@ -257,12 +264,28 @@ export function registerSwap(
             slippageBps,
           );
 
+          // Native gas tokens (0x0 internal sentinel, 0xeeee… external
+          // 1inch/KyberSwap convention) move via msg.value, not via an ERC20
+          // transferFrom. KyberSwap's response sometimes echoes value="0"
+          // for native input on chains where the router infers value at
+          // execution time — but the actual router call requires
+          // msg.value === amount_in, so we force it here. We also skip
+          // approvals[] because there's no ERC20 contract to approve.
+          // Mirrors the openocean branch's handling at swap.ts:316-328.
+          const fromLowerKyber = (fromAddr as string).toLowerCase();
+          const isNativeInputKyber =
+            fromLowerKyber === "0x0000000000000000000000000000000000000000" ||
+            fromLowerKyber === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
           const tx = {
             description: `KyberSwap: swap ${opts.amount} of ${fromAddr} -> ${toAddr}`,
             to: txData.to as Address,
             data: txData.data as `0x${string}`,
-            value: parseBigIntValue(txData.value),
-            approvals: [{ token: fromAddr as Address, spender: txData.to as Address, amount: BigInt(opts.amount as string) }],
+            value: isNativeInputKyber
+              ? BigInt(opts.amount as string)
+              : parseBigIntValue(txData.value),
+            ...(isNativeInputKyber
+              ? {}
+              : { approvals: [{ token: fromAddr as Address, spender: txData.to as Address, amount: BigInt(opts.amount as string) }] }),
           };
 
           const result = await executor.execute(tx);
