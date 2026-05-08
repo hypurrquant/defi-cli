@@ -5,7 +5,8 @@ category = "dex"
 interface = "uniswap_v2"
 chain = "monad"
 native = false
-description = "Uniswap V2 on Monad"
+verified = true
+description = "Uniswap V2 on Monad. add+remove liquidity (WMON/AUSD pool 0x84d8901d…ca25) live-confirmed 2026-05-08 (add tx 0xf052493c…a324, remove tx 0x0f7b3f7b…b553)."
 
 [protocol.contracts]
 router = "0x4B2ab38DBF28D31D467aA8993f6c2585981D6804"

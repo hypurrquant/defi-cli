@@ -5,7 +5,8 @@ category = "dex"
 interface = "solidly_v2"
 chain = "bnb"
 native = true
-description = "Thena V1 (Solidly) on BNB ($2M TVL) [gauge emissions inactive: rewardRate=0 for all reward tokens as of 2026-04-03]"
+verified = true
+description = "Thena V1 (Solidly) on BNB ($2M TVL) [gauge emissions inactive: rewardRate=0 for all reward tokens as of 2026-04-03; voter.gauges(0x262029c9…013a) returns 0x0 — vAMM-USDT/USDC has no registered gauge, so stake/claim cycle is N/A]. add+remove liquidity live-confirmed 2026-05-08 (add tx 0xfcf9d05d…f45e, remove tx 0x6ce8e6b3…4965)."
 [protocol.contracts]
 router = "0x20a304a7d126758dfe6B243D0fc515F83bCA8431"
 factory = "0xAFD89d21BdB66d00817d4153E055830B1c2B3970"
