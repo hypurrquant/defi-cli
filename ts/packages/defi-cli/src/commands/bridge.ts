@@ -348,6 +348,23 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
         return;
       }
       const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
+      // Resolve the destination-chain equivalent of `--token`. Cross-chain
+      // bridges need separate src/dst addresses because the same symbol (USDC,
+      // USDT, WETH, …) lives at different contract addresses on each chain.
+      // Symbol input → registry lookup on dst (if registered) → source-addr
+      // fallback. Hex input → reuse on dst (caller knows what they want).
+      let dstTokenAddr = tokenAddr;
+      if (!opts.token.startsWith("0x")) {
+        try {
+          dstTokenAddr = registry.resolveToken(opts.toChain, opts.token).address;
+        } catch {
+          // Destination chain isn't registered or symbol not listed on it.
+          // Fall back to the source address — works for native bridges (LI.FI,
+          // Relay) where the protocol may emit the wrapped/native equivalent
+          // automatically; will surface a route error from the provider when
+          // the same address truly doesn't exist on the destination.
+        }
+      }
       const recipient = resolveWallet(opts.recipient);
       const provider = (opts.provider as string).toLowerCase();
 
@@ -355,7 +372,7 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
         try {
           const result = await getRelayBridgeQuote(
             fromChain.chain_id, toChain.chain_id,
-            tokenAddr, tokenAddr,
+            tokenAddr, dstTokenAddr,
             opts.amount,
             recipient, recipient,
           );
@@ -394,7 +411,7 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
 
           const result = await getDebridgeQuote(
             srcId, dstId,
-            tokenAddr, tokenAddr,
+            tokenAddr, dstTokenAddr,
             opts.amount,
             recipient,
           );
@@ -555,7 +572,7 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
       try {
         const params = new URLSearchParams({
           fromChain: String(fromChain.chain_id), toChain: String(toChain.chain_id),
-          fromToken: tokenAddr, toToken: tokenAddr,
+          fromToken: tokenAddr, toToken: dstTokenAddr,
           fromAmount: opts.amount, fromAddress: recipient,
           slippage: String(parseInt(opts.slippage) / 10000),
         });
