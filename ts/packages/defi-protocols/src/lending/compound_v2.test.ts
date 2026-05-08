@@ -307,6 +307,53 @@ describe("CompoundV2Adapter — v1.0.5 per-asset getRates routing", () => {
   });
 });
 
+describe("CompoundV2Adapter — buildEnterMarkets (Comptroller toggle)", () => {
+  beforeEach(() => readContractMock.mockReset());
+
+  it("encodes Comptroller.enterMarkets([vToken]) and targets the registered comptroller", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    const tx = await adapter.buildEnterMarkets!([VUSDT]);
+    // Tx target must be the Comptroller, not the cToken — entering markets is
+    // an account-level Comptroller call, not a per-cToken state mutation.
+    expect(tx.to).toBe(COMPTROLLER);
+    expect(tx.value).toBe(0n);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function enterMarkets(address[] cTokens)"]),
+      data: tx.data,
+    });
+    expect(decoded.functionName).toBe("enterMarkets");
+    expect((decoded.args![0] as readonly Address[])).toEqual([VUSDT]);
+  });
+
+  it("supports batch enterMarkets across multiple vTokens", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    const tx = await adapter.buildEnterMarkets!([VUSDT, VUSDC, VBNB]);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function enterMarkets(address[] cTokens)"]),
+      data: tx.data,
+    });
+    expect((decoded.args![0] as readonly Address[]).length).toBe(3);
+  });
+
+  it("rejects empty cTokens[] (Comptroller would no-op)", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const adapter = new CompoundV2Adapter(makeEntry(), "https://example/bnb");
+    await expect(adapter.buildEnterMarkets!([])).rejects.toThrow(/at least one cToken/i);
+  });
+
+  it("rejects when comptroller is missing from the protocol entry", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const entryNoComptroller = {
+      ...makeEntry(),
+      contracts: { vusdt: VUSDT, vusdc: VUSDC, vbnb: VBNB }, // no comptroller
+    } as ProtocolEntry;
+    const adapter = new CompoundV2Adapter(entryNoComptroller, "https://example/bnb");
+    await expect(adapter.buildEnterMarkets!([VUSDT])).rejects.toThrow(/Comptroller/);
+  });
+});
+
 describe("CompoundV2Adapter — v1.0.6 utilization unit conversion", () => {
   beforeEach(() => readContractMock.mockReset());
 

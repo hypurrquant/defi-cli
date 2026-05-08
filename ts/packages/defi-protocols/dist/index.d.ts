@@ -732,6 +732,7 @@ declare class CompoundV2Adapter implements ILending {
     private readonly protocolName;
     private readonly defaultVtoken;
     private readonly vTokenCandidates;
+    private readonly comptroller;
     private readonly rpcUrl?;
     private vTokenByAsset;
     private nativeVtoken;
@@ -745,6 +746,14 @@ declare class CompoundV2Adapter implements ILending {
     buildBorrow(params: BorrowParams): Promise<DeFiTx>;
     buildRepay(params: RepayParams): Promise<DeFiTx>;
     buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
+    /**
+     * Compound V2 family: enter cTokens as collateral via Comptroller.
+     * Without this call, supplied assets sit dormant in the Comptroller's
+     * accountAssets[] and `getAccountLiquidity` reports zero collateral —
+     * any borrow then reverts. Mirrors the role of Aave V3's
+     * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
+     */
+    buildEnterMarkets(cTokens: Address[]): Promise<DeFiTx>;
     getRates(asset: Address): Promise<LendingRates>;
     getUserPosition(user: Address): Promise<UserPosition>;
 }

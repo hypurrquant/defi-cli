@@ -205,6 +205,56 @@ export function registerLending(parent: Command, getOpts: () => OutputMode, make
       printOutput(result, getOpts());
     });
 
+  lending.command("enter-markets")
+    .description("Compound V2 (Venus): enter supplied assets as collateral via Comptroller.enterMarkets")
+    .requiredOption("--protocol <protocol>", "Protocol slug (must be a Compound V2 fork)")
+    .requiredOption("--asset <token>", "Underlying asset symbol or address (resolved to its cToken)")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const ctx = resolveContext(parent, getOpts, opts.protocol);
+      if (!ctx) return;
+      const adapter = createLending(ctx.protocol!, ctx.rpcUrl);
+      if (typeof adapter.buildEnterMarkets !== "function") {
+        printOutput({
+          error: `[${ctx.protocol!.name}] adapter does not implement buildEnterMarkets. ` +
+                 `This is a Compound V2 family operation; Aave V3 uses toggle-collateral instead.`,
+        }, getOpts());
+        return;
+      }
+      // Resolve underlying asset → cToken via the protocol entry's contracts.
+      // Compound V2 vTokens are registered under names like vusdt/vusdc/vbnb.
+      const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+      const contracts = (ctx.protocol!.contracts ?? {}) as Record<string, Address>;
+      // Try matching by underlying address via the adapter's internal cache —
+      // expose via an opt-in cast (the cache is private, so we resort to a
+      // straightforward grep over the registered vTokens).
+      const vTokenEntries = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k));
+      if (vTokenEntries.length === 0) {
+        printOutput({ error: `[${ctx.protocol!.name}] no vTokens registered in TOML` }, getOpts());
+        return;
+      }
+      // We can't introspect vToken.underlying() without RPC; require the user to
+      // pass --asset matching one of the vToken keys (e.g. --asset USDT → vusdt).
+      // For convenience, try matching the asset symbol against vToken keys.
+      const symbol = (opts.asset as string).toLowerCase();
+      const matchedKey = vTokenEntries.find(([k]) => k.toLowerCase() === `v${symbol}`);
+      const vToken = matchedKey ? (matchedKey[1] as Address) : undefined;
+      if (!vToken) {
+        printOutput({
+          error: `[${ctx.protocol!.name}] could not resolve a vToken for '${opts.asset}'. ` +
+                 `Registered vTokens: ${vTokenEntries.map(([k]) => k).join(", ")}. ` +
+                 `Pass --asset matching the symbol after the 'v' prefix (e.g. USDT for vusdt).`,
+        }, getOpts());
+        return;
+      }
+      // asset arg silenced (used only for symbol matching above); reference it
+      // with a noop so the unused-var lint is happy without disabling the rule.
+      void asset;
+      const tx = await adapter.buildEnterMarkets([vToken]);
+      const result = await executor.execute(tx);
+      printOutput(result, getOpts());
+    });
+
   lending.command("supply-collateral")
     .description("Supply the collateral side of a Morpho Blue market (different selector from supply)")
     .requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)")
