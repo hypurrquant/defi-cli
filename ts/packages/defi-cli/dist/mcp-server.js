@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-#!/usr/bin/env node
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {
@@ -8529,19 +8528,20 @@ server.tool(
 );
 server.tool(
   "defi_bridge",
-  "Get a cross-chain bridge quote via LI.FI, deBridge DLN, or Circle CCTP. Returns estimated output amount and fees",
+  "Get a cross-chain bridge quote via LI.FI (default) or Relay. Returns estimated output and fees. For deBridge / CCTP quotes plus broadcast use the `defi bridge --provider <name>` CLI directly.",
   {
     from_chain: z.string().describe("Source chain name (supported source chains: hyperevm, mantle, base, bnb, monad)"),
-    to_chain: z.string().describe("Destination chain name. CCTP V2 destinations include ethereum, arbitrum, optimism, polygon, avalanche; LI.FI/deBridge accept any chain"),
-    token: z.string().optional().describe("Token symbol to bridge (default: USDC). Use native for native token"),
+    to_chain: z.string().describe("Destination chain name. CCTP V2 destinations include ethereum, arbitrum, optimism, polygon, avalanche; LI.FI/Relay/deBridge accept any chain they route to"),
+    token: z.string().optional().describe("Token symbol or address to bridge (default: USDC). Use 0x0\u20260 for native gas token. Relay rejects some ERC20s (e.g. BNB USDC/USDT) with INVALID_INPUT_CURRENCY \u2014 fall back to native or LI.FI"),
     amount: z.string().describe("Amount in human-readable units, e.g. '100' for 100 USDC"),
-    recipient: z.string().optional().describe("Recipient address on destination chain")
+    recipient: z.string().optional().describe("Recipient address on destination chain"),
+    provider: z.enum(["lifi", "relay"]).optional().describe("Bridge provider for the quote (default: lifi). For debridge/cctp use the CLI.")
   },
-  async ({ from_chain, to_chain, token, amount, recipient }) => {
+  async ({ from_chain, to_chain, token, amount, recipient, provider }) => {
     try {
       const tokenSymbol = token ?? "USDC";
       const recipientAddr = recipient ?? process.env["DEFI_WALLET_ADDRESS"] ?? "0x0000000000000000000000000000000000000001";
-      const LIFI_API = "https://li.quest/v1";
+      const selectedProvider = provider ?? "lifi";
       const registry = getRegistry();
       let fromChainId;
       let toChainId;
@@ -8553,13 +8553,56 @@ server.tool(
         toChainId = registry.getChain(to_chain).chain_id;
       } catch {
       }
+      if (selectedProvider === "relay") {
+        const RELAY_API = "https://api.relay.link";
+        if (!fromChainId || !toChainId) {
+          throw new Error("Relay requires resolvable numeric chain IDs for both source and destination");
+        }
+        const isAddr = tokenSymbol.startsWith("0x");
+        const tokenAddr = isAddr ? tokenSymbol : "0x0000000000000000000000000000000000000000";
+        const decimals = isAddr ? 18 : 6;
+        const amountRaw = String(BigInt(Math.round(parseFloat(amount) * Math.pow(10, decimals))));
+        const res2 = await fetch(`${RELAY_API}/quote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            user: recipientAddr,
+            recipient: recipientAddr,
+            originChainId: fromChainId,
+            destinationChainId: toChainId,
+            originCurrency: tokenAddr,
+            destinationCurrency: tokenAddr,
+            tradeType: "EXACT_INPUT",
+            amount: amountRaw
+          })
+        });
+        if (!res2.ok) {
+          const text = await res2.text();
+          throw new Error(`Relay quote failed (${res2.status}): ${text.slice(0, 200)}`);
+        }
+        const data2 = await res2.json();
+        const details = data2.details;
+        const fees = data2.fees;
+        const quote2 = {
+          from_chain,
+          to_chain,
+          token: tokenSymbol,
+          amount_in: amount,
+          amount_out: details?.currencyOut?.amountFormatted ?? "unknown",
+          fees,
+          execution_duration_seconds: details?.timeEstimate ?? "unknown",
+          tool: "relay",
+          raw: data2
+        };
+        return { content: [{ type: "text", text: ok(quote2, { from_chain, to_chain, token: tokenSymbol, provider: "relay" }) }] };
+      }
+      const LIFI_API = "https://li.quest/v1";
       const params = new URLSearchParams({
         fromChain: fromChainId ? String(fromChainId) : from_chain,
         toChain: toChainId ? String(toChainId) : to_chain,
         fromToken: tokenSymbol,
         toToken: tokenSymbol,
         fromAmount: String(Math.round(parseFloat(amount) * 1e6)),
-        // USDC decimals
         toAddress: recipientAddr
       });
       const res = await fetch(`${LIFI_API}/quote?${params}`, {
@@ -8583,7 +8626,7 @@ server.tool(
         tool: data.tool ?? "unknown",
         raw: data
       };
-      return { content: [{ type: "text", text: ok(quote, { from_chain, to_chain, token: tokenSymbol }) }] };
+      return { content: [{ type: "text", text: ok(quote, { from_chain, to_chain, token: tokenSymbol, provider: "lifi" }) }] };
     } catch (e) {
       return { content: [{ type: "text", text: err(e instanceof Error ? e.message : String(e), { from_chain, to_chain }) }], isError: true };
     }
