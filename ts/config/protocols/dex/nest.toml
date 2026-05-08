@@ -5,7 +5,7 @@ category = "dex"
 interface = "algebra_v3"
 chain = "hyperevm"
 native = true
-is_active = false  # ve(3,3) gauges return rewardRate=0; emissions tracked off-chain via blaze.nest.aegas.it
+is_active = true  # claim path verified live 2026-05-07 via NestOffChainAdapter.buildClaim (tx 0xacb5a608b6ba4e9d63ecc63aa1cdca098133c36a801a741834e074b9e2f7950a). Note: ve(3,3) gauge.rewardRate is still 0 — LP/farm read-paths return zero emissions; only the off_chain_api claim route is functional.
 reward_strategy = "off_chain_api"
 description = "Algebra V3 ve(3,3) MetaDEX on HyperEVM ($4M TVL). Rewards via NestOffChainAdapter (usenest.xyz/api/blaze)."
 
