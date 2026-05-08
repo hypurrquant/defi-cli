@@ -1,7 +1,11 @@
 import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParameters } from "viem";
 import type { Address } from "viem";
 
-import { DefiError } from "@hypurrquant/defi-core";
+import {
+  DefiError,
+  applyMinSlippage,
+  defaultSwapSlippage,
+} from "@hypurrquant/defi-core";
 import type {
   IDex,
   ProtocolEntry,
@@ -51,6 +55,14 @@ const slipstreamMintAbi = parseAbi([
   "function mint(SlipstreamMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
 ]);
 
+// Ramses CL NPM mint — 11-field struct (no sqrtPriceX96), int24 tickSpacing (replaces fee).
+// Selector 0x6d70c415, verified against Ramses NPM 0xB3F7…ED51 bytecode dispatch on HyperEVM 2026-05-08.
+// Pool init is a separate call (createAndInitializePoolIfNecessary, selector 0xf126fb67).
+const ramsesMintAbi = parseAbi([
+  "struct RamsesMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
+  "function mint(RamsesMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+]);
+
 export class UniswapV3Adapter implements IDex {
   private readonly protocolName: string;
   private readonly router: Address;
@@ -60,6 +72,7 @@ export class UniswapV3Adapter implements IDex {
   private readonly fee: number;
   private readonly rpcUrl: string | undefined;
   private readonly useTickSpacingQuoter: boolean;
+  private readonly clStyle: string | undefined;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
@@ -73,6 +86,7 @@ export class UniswapV3Adapter implements IDex {
     this.factory = entry.contracts?.["factory"];
     this.fee = DEFAULT_FEE;
     this.rpcUrl = rpcUrl;
+    this.clStyle = entry.cl_style;
     // CL dialect: Slipstream/Ramses use tickSpacing in MintParams instead of fee.
     // Prefer explicit `cl_style` config over the legacy heuristic of pool_deployer/gauge_factory.
     this.useTickSpacingQuoter = entry.cl_style === "slipstream"
@@ -87,7 +101,23 @@ export class UniswapV3Adapter implements IDex {
 
   async buildSwap(params: SwapParams): Promise<DeFiTx> {
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-    const amountOutMinimum = 0n;
+    // SSOT Section 7.3: never broadcast `amountOutMinimum: 0n`. If the
+    // caller pinned an explicit floor (e.g. from an aggregator quote),
+    // honor it verbatim. Otherwise derive a floor from a live quote so
+    // the user is protected even if they forgot the --slippage flag.
+    const amountOutMinimum =
+      params.amount_out_min ??
+      applyMinSlippage(
+        params.slippage,
+        (
+          await this.quote({
+            protocol: this.protocolName,
+            token_in: params.token_in,
+            token_out: params.token_out,
+            amount_in: params.amount_in,
+          })
+        ).amount_out,
+      );
 
     const data = encodeFunctionData({
       abi: swapRouterAbi,
@@ -280,15 +310,23 @@ export class UniswapV3Adapter implements IDex {
     }
 
     // Sort tokens (Uniswap V3 requires token0 < token1)
-    const [token0, token1, rawAmount0, rawAmount1] =
-      params.token_a.toLowerCase() < params.token_b.toLowerCase()
-        ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
-        : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [token0, token1, rawAmount0, rawAmount1] = isAFirst
+      ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
+      : [params.token_b, params.token_a, params.amount_b, params.amount_a];
 
     // V3 NPM mint: getLiquidityForAmounts uses min(L0, L1), so if either is 0
     // then liquidity=0 → revert. Use 1 wei minimum for single-side LP.
     const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
     const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
+
+    // SSOT 7.3: derive amount{0,1}Min from caller's per-side override or
+    // applyMinSlippage(slippage, desired). Single-side mints (where one
+    // side is 0) yield a 0n minimum — this is correct, not a regression.
+    const slippage = params.slippage ?? defaultSwapSlippage();
+    const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+    const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+    const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
 
     // Default: full range, configured fee tier
     let thirdField: number = this.fee;
@@ -297,17 +335,18 @@ export class UniswapV3Adapter implements IDex {
 
     // When --pool provided + RPC, read pool's actual tickSpacing/fee + current tick.
     // For Slipstream-style forks (useTickSpacingQuoter=true), MintParams' third field is tickSpacing, not fee.
+    // Ramses CL pool slot0 returns 7 fields (extra uint32 feeProtocol) vs standard V3's 6 — decode the
+    // current tick from the raw int24 word at offset 1 to be tolerant of fork-specific slot0 shapes.
     if (params.pool && this.rpcUrl) {
       const poolAbi = parseAbi([
         "function fee() view returns (uint24)",
         "function tickSpacing() view returns (int24)",
-        "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, bool)",
       ]);
       const client = createPublicClient({ transport: http(this.rpcUrl) });
-      const [poolFee, poolTs, slot0] = await Promise.all([
+      const [poolFee, poolTs, slot0Raw] = await Promise.all([
         client.readContract({ address: params.pool, abi: poolAbi, functionName: "fee" }).catch(() => null) as Promise<number | null>,
         client.readContract({ address: params.pool, abi: poolAbi, functionName: "tickSpacing" }).catch(() => null) as Promise<number | null>,
-        client.readContract({ address: params.pool, abi: poolAbi, functionName: "slot0" }).catch(() => null) as Promise<readonly [bigint, number, number, number, number, boolean] | null>,
+        client.call({ to: params.pool, data: "0x3850c7bd" }).then((r) => r.data ?? null).catch(() => null),
       ]);
       if (this.useTickSpacingQuoter && poolTs !== null) {
         thirdField = poolTs;
@@ -315,8 +354,11 @@ export class UniswapV3Adapter implements IDex {
         thirdField = poolFee;
       }
       // Compute concentrated range from --range_pct
-      if (params.range_pct !== undefined && slot0 && poolTs !== null) {
-        const currentTick = slot0[1];
+      if (params.range_pct !== undefined && slot0Raw && poolTs !== null) {
+        // slot0() second word (offset 0x22..0x42) holds int24 tick (sign-extended in 32 bytes).
+        const tickWord = slot0Raw.slice(2 + 64, 2 + 128);
+        const tickU = BigInt("0x" + tickWord);
+        const currentTick = tickU >= (1n << 255n) ? Number(tickU - (1n << 256n)) : Number(tickU);
         // Approximation: 1 tick ≈ 0.01% (1.0001x). ±N% → ±N*100 ticks.
         const rangeTicks = Math.floor(params.range_pct * 100);
         tickLower = Math.floor((currentTick - rangeTicks) / poolTs) * poolTs;
@@ -327,7 +369,31 @@ export class UniswapV3Adapter implements IDex {
     if (params.tick_lower !== undefined) tickLower = params.tick_lower;
     if (params.tick_upper !== undefined) tickUpper = params.tick_upper;
 
-    const data = this.useTickSpacingQuoter
+    // Mint dispatch:
+    //   - cl_style="ramses"     → 11-field MintParams (no sqrtPriceX96), selector 0x6d70c415
+    //   - cl_style="slipstream" or default tickSpacing-quoter → 12-field SlipstreamMintParams (with sqrtPriceX96), selector 0xb5007d1f
+    //   - else                  → 11-field Uniswap V3 MintParams (uint24 fee), selector 0x88316456
+    const data = this.clStyle === "ramses"
+      ? encodeFunctionData({
+          abi: ramsesMintAbi,
+          functionName: "mint",
+          args: [
+            {
+              token0,
+              token1,
+              tickSpacing: thirdField,
+              tickLower,
+              tickUpper,
+              amount0Desired: amount0,
+              amount1Desired: amount1,
+              amount0Min,
+              amount1Min,
+              recipient: params.recipient,
+              deadline: BigInt("18446744073709551615"),
+            },
+          ],
+        })
+      : this.useTickSpacingQuoter
       ? encodeFunctionData({
           abi: slipstreamMintAbi,
           functionName: "mint",
@@ -340,8 +406,8 @@ export class UniswapV3Adapter implements IDex {
               tickUpper,
               amount0Desired: amount0,
               amount1Desired: amount1,
-              amount0Min: 0n,
-              amount1Min: 0n,
+              amount0Min,
+              amount1Min,
               recipient: params.recipient,
               deadline: BigInt("18446744073709551615"),
               sqrtPriceX96: 0n,
@@ -360,8 +426,8 @@ export class UniswapV3Adapter implements IDex {
               tickUpper,
               amount0Desired: amount0,
               amount1Desired: amount1,
-              amount0Min: 0n,
-              amount1Min: 0n,
+              amount0Min,
+              amount1Min,
               recipient: params.recipient,
               deadline: BigInt("18446744073709551615"),
             },
@@ -397,10 +463,26 @@ export class UniswapV3Adapter implements IDex {
     const liquidity = params.liquidity;
     const MAX_UINT128 = (1n << 128n) - 1n;
     const deadline = BigInt("18446744073709551615");
+    // SSOT 7.3: caller must pin amount{0,1}Min when removing liquidity.
+    // Computing them from on-chain state would require sqrtPriceMath +
+    // tick math; we leave that to the caller (lp.ts CLI) and refuse to
+    // ship a 0n floor. token_a/token_b carry the unsorted symbol pair so
+    // we map amount_{a,b}_min back to the sorted token0/token1 here.
+    if (params.amount_a_min === undefined || params.amount_b_min === undefined) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] V3 remove_liquidity requires amount_a_min and amount_b_min for ` +
+          `slippage protection (SSOT 7.3). Caller must compute expected token outputs from the ` +
+          `pool state and apply a slippage tolerance before calling buildRemoveLiquidity.`,
+      );
+    }
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [amount0Min, amount1Min] = isAFirst
+      ? [params.amount_a_min, params.amount_b_min]
+      : [params.amount_b_min, params.amount_a_min];
     const decreaseData = encodeFunctionData({
       abi: positionManagerAbi,
       functionName: "decreaseLiquidity",
-      args: [{ tokenId, liquidity, amount0Min: 0n, amount1Min: 0n, deadline }],
+      args: [{ tokenId, liquidity, amount0Min, amount1Min, deadline }],
     });
     const collectData = encodeFunctionData({
       abi: positionManagerAbi,

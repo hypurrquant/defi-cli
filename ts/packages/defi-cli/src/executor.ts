@@ -1,5 +1,5 @@
 import { createPublicClient, createWalletClient, http, parseAbi, encodeFunctionData } from "viem";
-import type { Address } from "viem";
+import type { Address, Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { DefiError } from "@hypurrquant/defi-core";
 import { TxStatus } from "@hypurrquant/defi-core";
@@ -23,11 +23,24 @@ export class Executor {
   readonly dryRun: boolean;
   readonly rpcUrl: string | undefined;
   readonly explorerUrl: string | undefined;
+  /**
+   * Optional viem Chain object. When set, all wallet/public clients built
+   * inside this executor anchor to the explicit chainId at construction
+   * time, defending against MITM RPCs that lie about eth_chainId and
+   * keeping offline-signing safe under RPC drift (SSOT 7.4).
+   */
+  readonly chain: Chain | undefined;
 
-  constructor(broadcast: boolean, rpcUrl?: string, explorerUrl?: string) {
+  constructor(broadcast: boolean, rpcUrl?: string, explorerUrl?: string, chain?: Chain) {
     this.dryRun = !broadcast;
     this.rpcUrl = rpcUrl;
     this.explorerUrl = explorerUrl;
+    this.chain = chain;
+  }
+
+  /** Returns the optional `{ chain }` spread for viem client constructors. */
+  private chainOpt(): { chain: Chain } | Record<string, never> {
+    return this.chain ? { chain: this.chain } : {};
   }
 
   /** Apply 20% buffer to a gas estimate */
@@ -182,7 +195,7 @@ export class Executor {
    */
   private async fetchEip1559Fees(rpcUrl: string): Promise<[bigint, bigint]> {
     try {
-      const client = createPublicClient({ transport: http(rpcUrl) });
+      const client = createPublicClient({ transport: http(rpcUrl), ...this.chainOpt() });
       let priorityFee = DEFAULT_PRIORITY_FEE_WEI;
       try {
         priorityFee = await client.estimateMaxPriorityFeePerGas();
@@ -216,7 +229,7 @@ export class Executor {
     from: `0x${string}`,
   ): Promise<bigint> {
     try {
-      const client = createPublicClient({ transport: http(rpcUrl) });
+      const client = createPublicClient({ transport: http(rpcUrl), ...this.chainOpt() });
       const estimated = await client.estimateGas({
         to: tx.to,
         data: tx.data,
@@ -243,7 +256,7 @@ export class Executor {
       throw DefiError.rpcError("No RPC URL — cannot simulate. Set HYPEREVM_RPC_URL.");
     }
 
-    const client = createPublicClient({ transport: http(rpcUrl) });
+    const client = createPublicClient({ transport: http(rpcUrl), ...this.chainOpt() });
 
     const privateKey = process.env["DEFI_PRIVATE_KEY"];
     const from: `0x${string}` = privateKey
@@ -373,8 +386,8 @@ export class Executor {
       throw DefiError.rpcError("No RPC URL configured for broadcasting");
     }
 
-    const publicClient = createPublicClient({ transport: http(rpcUrl) });
-    const walletClient = createWalletClient({ account, transport: http(rpcUrl) });
+    const publicClient = createPublicClient({ transport: http(rpcUrl), ...this.chainOpt() });
+    const walletClient = createWalletClient({ account, transport: http(rpcUrl), ...this.chainOpt() });
 
     // Execute pre-transactions (e.g. farming approval)
     if (tx.pre_txs && tx.pre_txs.length > 0) {

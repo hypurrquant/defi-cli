@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { createRequire } from "node:module";
+import type { Chain } from "viem";
 import { Executor } from "./executor.js";
 import { parseOutputMode } from "./output.js";
 import type { OutputMode } from "./output.js";
@@ -86,7 +87,12 @@ function makeExecutor(): Executor {
     process.exit(1);
   }
   const chain = registry.getChain(opts.chain);
-  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url);
+  // SSOT 7.4: anchor wallet/public clients to this chainId at construction
+  // time so RPC drift / MITM can't sign a tx for a different chain.
+  // ChainConfig.viemChain() returns a viem-compatible Chain shape; the cast
+  // bridges defi-core's local type (no viem dep) and viem's full Chain type.
+  const viemChain = chain.viemChain() as unknown as Chain;
+  return new Executor(!!opts.broadcast, chain.effectiveRpcUrl(), chain.explorer_url, viemChain);
 }
 
 // Register all commands
@@ -99,7 +105,7 @@ registerPortfolio(program, getOutputMode);
 registerPrice(program, getOutputMode);
 registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
-registerBridge(program, getOutputMode);
+registerBridge(program, getOutputMode, makeExecutor);
 registerSwap(program, getOutputMode, makeExecutor);
 registerSetup(program);
 registerOws(program, getOutputMode);

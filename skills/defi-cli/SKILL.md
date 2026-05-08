@@ -54,7 +54,7 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 | `hyperevm` | HyperEVM | 999 | 🟢 production |
 | `mantle` | Mantle | 5000 | 🟢 production |
 | `base` | Base | 8453 | 🟢 production |
-| `bnb` | BNB Chain | 56 | 🟡 staged |
+| `bnb` | BNB Chain | 56 | 🟢 production |
 | `monad` | Monad | 143 | 🟡 staged |
 
 🟢 = mainnet broadcast verified | 🟡 = configs verified, awaiting funded broadcast
@@ -86,8 +86,8 @@ All `*-quote.sh` and `lending-supply-flow.sh` scripts are **dry-run only** — t
 
 For full protocol list see `references/protocols.md`. High-level summary:
 
-### HyperEVM (11)
-**Lending**: `hyperlend`, `hypurrfi`, `felix-morpho` · **DEX**: `project-x`, `hyperswap`, `curve-hyperevm`, `ramses-cl`, `ramses-hl`, `kittenswap`, `hybra`, `nest`
+### HyperEVM (10)
+**Lending**: `hyperlend`, `hypurrfi`, `felix-morpho` · **DEX**: `project-x`, `hyperswap-v3`, `curve-hyperevm`, `ramses-cl`, `ramses-hl`, `kittenswap`, `hybra`
 
 ### Mantle (3)
 **Lending**: `aave-v3-mantle` · **DEX**: `uniswap-v3-mantle`, `merchantmoe-mantle` (LB + MOE emission)
@@ -162,12 +162,21 @@ For full protocol list see `references/protocols.md`. High-level summary:
 
 ## Core Workflow: Cross-chain Bridge
 
-Bridge **source** must be a supported chain (hyperevm/mantle/base/bnb/monad). Bridge **destination** can be any chain LI.FI/deBridge route to, or any CCTP V2 chain (ethereum, arbitrum, optimism, polygon, avalanche, base).
+Bridge **source** must be a supported chain (hyperevm/mantle/base/bnb/monad). Bridge **destination** can be any chain LI.FI / Relay / deBridge route to, or any CCTP V2 chain (ethereum, arbitrum, optimism, polygon, avalanche, base).
+
+Providers: `lifi` (default, broad coverage), `relay` (fast native-token routes, ~3s settle), `debridge` (DLN intent), `cctp` (Circle native USDC).
 
 ```
 1. defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider lifi   # dry-run
 2. [confirm cost + ETA]
 3. defi --json --chain base bridge --token USDC --amount 100000000 --to-chain arbitrum --provider lifi --broadcast
+```
+
+Relay native-token example (USDC/USDT often blocked by Relay's currency registry — use native sentinel `0x0…0`):
+
+```
+defi --json --chain base bridge --token 0x0000000000000000000000000000000000000000 \
+  --amount 1000000000000000 --to-chain bnb --provider relay --broadcast
 ```
 
 ## Core Workflow: Yield Comparison
@@ -186,6 +195,7 @@ Bridge **source** must be a supported chain (hyperevm/mantle/base/bnb/monad). Br
 | `Protocol not found: X` | run `defi --json status` to list valid slugs for the chain |
 | `KyberSwap: unsupported chain` | use openocean, lifi, or relay |
 | `AMOUNT_TOO_LOW` (Relay) | increase amount or switch provider |
+| `INVALID_INPUT_CURRENCY` (Relay bridge) | source token not in Relay's registry; use native sentinel `0x0…0` or switch provider |
 | `No fees to compound` | V3 position has no accumulated fees yet — wait for swaps to cross range |
 | `No pools found` | protocol may be inactive on this chain or discover branch missing config |
 | `DEFI_WALLET_ADDRESS not set` | set env var or pass `--address` |
@@ -201,6 +211,9 @@ Bridge **source** must be a supported chain (hyperevm/mantle/base/bnb/monad). Br
 - **`portfolio show` / `snapshot`** prices each asset via its own oracle (ERC20s no longer mispriced at the native rate) and includes the native gas-token balance in `total_value_usd`.
 - **`wallet address`** with no wallet returns `{ "address": null, "source": "none" }` (machine-parseable; the legacy `"(not set)"` sentinel is gone).
 - **`bridge --provider cctp`** below the protocol min-fee returns a structured error envelope with `minimum_amount_wei` / `minimum_amount_usdc` (no broadcast attempt).
+- **`bridge --provider relay`** wires the Executor when `--broadcast` is set (native tokens skip approve; ERC20 paths add a single approval to the relay-returned `to`). Relay's currency registry rejects some ERC20 inputs — e.g. BNB USDC/USDT return `INVALID_INPUT_CURRENCY`; switch to native sentinel `0x0…0` or another provider. Tiny amounts may surface `AMOUNT_TOO_LOW` (Relay's fee floor). Verified live both directions on Base ↔ BNB native (~3s settle).
+- **`bridge --provider lifi` / `--provider debridge`** are now Executor-wired too (previously quote-only). LI.FI uses `quote.estimate.approvalAddress` as the ERC20 spender; deBridge uses the create-tx `to` address. Verified live Base ETH → BNB native: LI.FI tx `0xc2d2…1a80`, deBridge tx `0x2bd8…2827`.
+- **`bridge --provider cctp --auto-receive`** polls Circle's Iris API after the burn confirms (`https://iris-api.circle.com/v2/messages/{srcDomain}?transactionHash=…`), then submits `MessageTransmitter.receiveMessage(message, attestation)` on the destination chain (V2 contract `0x81D40F21F12A8F0E3252Bccb954D722d4c464B64`, same address on every EVM V2 chain). Destination chains in `DEST_CHAIN_META` (ethereum, arbitrum, optimism, polygon, avalanche, linea, zksync) resolve their RPC from `<UPPER>_RPC_URL` env vars first, then fall back to public drpc/merkle endpoints. Auto-receive **requires destination-chain native gas** for the receive tx — a separate funding prerequisite. Without `--auto-receive` only the burn fires; the user must manually finalize on the destination later.
 - **`setup`** masks API keys when displaying RPC URLs and suppresses key-echo when prompting for a private key; only `http://`/`https://` URLs are accepted.
 
 ## Examples

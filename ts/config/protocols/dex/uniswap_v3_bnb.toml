@@ -5,9 +5,11 @@ category = "dex"
 interface = "uniswap_v3"
 chain = "bnb"
 native = false
-description = "Uniswap V3 on BNB Chain ($100M TVL)"
+verified = true
+description = "Uniswap V3 on BNB Chain ($100M TVL). V3 NFT mint+remove (USDT/USDC fee=100 pool 0x2c3c320d…7d68) live-confirmed 2026-05-08 with --range 5 (tokenId 1912084, mint 0x9c5027bf…250f, remove 0x504ab401…2287)."
 
 [protocol.contracts]
 router = "0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2"
 factory = "0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7"
 quoter = "0x78D78E420Da98ad378D7799bE8f4AF69033EB077"
+position_manager = "0x7b8A01B39D58278b5DE7e48c8449c9f4F5170613"

@@ -2,7 +2,11 @@ import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParame
 import type { Address } from "viem";
 import { rangeToTicks, alignTickUp, alignTickDown } from "./tick_math.js";
 
-import { DefiError } from "@hypurrquant/defi-core";
+import {
+  DefiError,
+  applyMinSlippage,
+  defaultSwapSlippage,
+} from "@hypurrquant/defi-core";
 import type {
   IDex,
   ProtocolEntry,
@@ -83,7 +87,24 @@ export class AlgebraV3Adapter implements IDex {
 
   async buildSwap(params: SwapParams): Promise<DeFiTx> {
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-    const amountOutMinimum = 0n;
+    // SSOT 7.3: never broadcast amountOutMinimum = 0n. Use the explicit
+    // override if given; otherwise fall back to a live quote (which
+    // requires this.quoter + this.rpcUrl) and apply the caller's
+    // slippage tolerance. Quote failures bubble up so a misconfigured
+    // adapter never silently broadcasts an unprotected swap.
+    const amountOutMinimum =
+      params.amount_out_min ??
+      applyMinSlippage(
+        params.slippage,
+        (
+          await this.quote({
+            protocol: this.protocolName,
+            token_in: params.token_in,
+            token_out: params.token_out,
+            amount_in: params.amount_in,
+          })
+        ).amount_out,
+      );
 
     const data = encodeFunctionData({
       abi,
@@ -218,10 +239,17 @@ export class AlgebraV3Adapter implements IDex {
     }
 
     // Sort tokens (Algebra requires token0 < token1)
-    const [token0, token1, rawAmount0, rawAmount1] =
-      params.token_a.toLowerCase() < params.token_b.toLowerCase()
-        ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
-        : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [token0, token1, rawAmount0, rawAmount1] = isAFirst
+      ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
+      : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+
+    // SSOT 7.3: derive amount{0,1}Min per side. Caller per-side override
+    // wins; otherwise apply slippage (default 50 bps) to amountDesired.
+    const slippage = params.slippage ?? defaultSwapSlippage();
+    const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+    const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+    const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
 
     let tickLower = params.tick_lower ?? -887220;
     let tickUpper = params.tick_upper ?? 887220;
@@ -270,12 +298,12 @@ export class AlgebraV3Adapter implements IDex {
       ? encodeFunctionData({
           abi: algebraV2PmAbi,
           functionName: "mint",
-          args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }],
+          args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, recipient: params.recipient, deadline: BigInt("18446744073709551615") }],
         })
       : encodeFunctionData({
           abi: algebraIntegralPmAbi,
           functionName: "mint",
-          args: [{ token0, token1, deployer: zeroAddress as Address, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }],
+          args: [{ token0, token1, deployer: zeroAddress as Address, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, recipient: params.recipient, deadline: BigInt("18446744073709551615") }],
         });
 
     // Only add approvals for non-zero amounts
@@ -297,11 +325,24 @@ export class AlgebraV3Adapter implements IDex {
     const pm = this.positionManager;
     if (!pm) throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager'`);
     if (!params.token_id) throw DefiError.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+    // SSOT 7.3: caller must pin amount_{a,b}_min, sorted onto token0/token1
+    // by token_a/token_b lex order. We refuse to ship a 0n floor.
+    if (params.amount_a_min === undefined || params.amount_b_min === undefined) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] remove_liquidity requires amount_a_min and amount_b_min for ` +
+          `slippage protection (SSOT 7.3). Compute expected outputs from positions(tokenId) + ` +
+          `pool.globalState off-chain and apply tolerance.`,
+      );
+    }
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [amount0Min, amount1Min] = isAFirst
+      ? [params.amount_a_min, params.amount_b_min]
+      : [params.amount_b_min, params.amount_a_min];
     const MAX_UINT128 = (1n << 128n) - 1n;
     const deadline = BigInt("18446744073709551615");
     const decreaseData = encodeFunctionData({
       abi: algebraSharedPmAbi, functionName: "decreaseLiquidity",
-      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }],
+      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min, amount1Min, deadline }],
     });
     const collectData = encodeFunctionData({
       abi: algebraSharedPmAbi, functionName: "collect",

@@ -117,8 +117,8 @@ defi --json --chain hyperevm lp claim --protocol kittenswap --pool <addr> --toke
 # Merchant Moe LB (auto-detects user's actual bins)
 defi --json --chain mantle lp claim --protocol merchantmoe-mantle --pool <addr>
 
-# Off-chain Nest ticket
-defi --json --chain hyperevm lp claim --protocol nest --address <wallet>
+# Nest is inactive (is_active = false in config); CLI rejects "--protocol nest".
+# Off-chain claim via the Nest UI at blaze.nest.aegas.it.
 ```
 
 ### Compound (V3 fee auto-compound)

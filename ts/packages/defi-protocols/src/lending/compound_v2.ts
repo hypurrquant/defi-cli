@@ -29,6 +29,30 @@ const CTOKEN_ABI = parseAbi([
   "function repayBorrow(uint256 repayAmount) external returns (uint256)",
 ]);
 
+// cETH / vBNB-style "native" cToken — same Compound V2 family but the
+// payable mint/repayBorrow variants take no args (msg.value carries the
+// underlying). Different selector from the ERC20 variants above.
+//   mint()         -> 0x1249c58b
+//   repayBorrow()  -> 0x4e4d9fea
+const NATIVE_CTOKEN_ABI = parseAbi([
+  "function mint() external payable",
+  "function repayBorrow() external payable",
+]);
+
+// Comptroller toggle. enterMarkets is the Compound V2 family equivalent
+// of Aave V3's setUserUseReserveAsCollateral — without an explicit
+// enterMarkets call, supplied assets DO NOT count as collateral and
+// any borrow reverts with `getAccountLiquidity` shortfall.
+//   enterMarkets(address[]) -> 0xc2998238
+const COMPTROLLER_ABI = parseAbi([
+  "function enterMarkets(address[] cTokens) external returns (uint256[])",
+  "function exitMarket(address cToken) external returns (uint256)",
+]);
+
+// defi-cli's internal sentinel for native gas tokens (registry uses 0x0
+// for HYPE / MNT / ETH / BNB / MON in tokens/*.toml).
+const NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000" as const;
+
 // ~3s blocks on BSC
 const BSC_BLOCKS_PER_YEAR = 10_512_000;
 
@@ -36,9 +60,17 @@ export class CompoundV2Adapter implements ILending {
   private readonly protocolName: string;
   private readonly defaultVtoken: Address;
   private readonly vTokenCandidates: Address[];
+  private readonly comptroller: Address | undefined;
   private readonly rpcUrl?: string;
-  // Lazy cache: underlying asset address (lowercased) → vToken address
+  // Lazy cache: underlying asset address (lowercased) → vToken address.
+  // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
+  // when one is detected during resolveVtoken().
   private vTokenByAsset: Map<string, Address> | null = null;
+  // The cETH/vBNB-style vToken whose underlying() reverts (it has no
+  // ERC20 underlying — the underlying is the chain's native gas token).
+  // Set lazily by resolveVtoken() and consulted by buildSupply/buildRepay
+  // to switch to the payable mint() / repayBorrow() variants.
+  private nativeVtoken: Address | null = null;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
     this.protocolName = entry.name;
@@ -51,6 +83,9 @@ export class CompoundV2Adapter implements ILending {
       contracts["comptroller"];
     if (!vtoken) throw DefiError.contractError("Missing vToken or comptroller address");
     this.defaultVtoken = vtoken;
+    // Comptroller is required for `buildEnterMarkets`. Optional otherwise
+    // (rates / position / supply / withdraw / repay / borrow don't need it).
+    this.comptroller = contracts["comptroller"];
     // Collect all keys that look like vTokens (`v<symbol>`) — used by getRates
     // to resolve the per-asset market. Falls back to defaultVtoken if empty.
     this.vTokenCandidates = Object.entries(contracts)
@@ -64,18 +99,46 @@ export class CompoundV2Adapter implements ILending {
     if (!this.vTokenByAsset) {
       const client = createPublicClient({ transport: http(this.rpcUrl) });
       const map = new Map<string, Address>();
+      let nativeVtoken: Address | null = null;
       const lookups = await Promise.allSettled(
         this.vTokenCandidates.map(async (v) => {
-          const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" }) as Address;
-          return [u.toLowerCase(), v] as const;
+          try {
+            const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" }) as Address;
+            return { vtoken: v, underlying: u };
+          } catch {
+            // underlying() reverts → cETH/vBNB-style native cToken. The
+            // contract has no ERC20 underlying; supply/repay flows through
+            // the payable mint() / repayBorrow() variants and msg.value.
+            return { vtoken: v, underlying: null };
+          }
         }),
       );
       for (const r of lookups) {
-        if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
+        if (r.status !== "fulfilled") continue;
+        const { vtoken, underlying } = r.value;
+        if (underlying) {
+          map.set(underlying.toLowerCase(), vtoken);
+        } else if (!nativeVtoken) {
+          // First native cToken wins. A protocol with multiple native
+          // cTokens would be unusual; guard with the nullish check anyway
+          // so we don't silently overwrite.
+          nativeVtoken = vtoken;
+        }
+      }
+      if (nativeVtoken) {
+        // Map defi-cli's 0x0 native sentinel to the native cToken so
+        // `lending supply --asset BNB` (which resolves to 0x0) finds vBNB.
+        map.set(NATIVE_SENTINEL, nativeVtoken);
       }
       this.vTokenByAsset = map;
+      this.nativeVtoken = nativeVtoken;
     }
     return this.vTokenByAsset.get(asset.toLowerCase()) ?? null;
+  }
+
+  /** True iff `vtoken` is the cETH/vBNB-style native cToken for this protocol. */
+  private isNativeVtoken(vtoken: Address): boolean {
+    return this.nativeVtoken !== null && vtoken.toLowerCase() === this.nativeVtoken.toLowerCase();
   }
 
   name(): string {
@@ -93,6 +156,18 @@ export class CompoundV2Adapter implements ILending {
 
   async buildSupply(params: SupplyParams): Promise<DeFiTx> {
     const vtoken = await this.vtokenFor(params.asset);
+    if (this.isNativeVtoken(vtoken)) {
+      // cETH/vBNB pattern: mint() takes no args, native amount via msg.value.
+      // No ERC20 approval is possible (or needed) for native gas tokens.
+      const data = encodeFunctionData({ abi: NATIVE_CTOKEN_ABI, functionName: "mint" });
+      return {
+        description: `[${this.protocolName}] Supply ${params.amount} (native) to Venus`,
+        to: vtoken,
+        data,
+        value: params.amount,
+        gas_estimate: 300_000,
+      };
+    }
     const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "mint", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to Venus`,
@@ -118,6 +193,19 @@ export class CompoundV2Adapter implements ILending {
 
   async buildRepay(params: RepayParams): Promise<DeFiTx> {
     const vtoken = await this.vtokenFor(params.asset);
+    if (this.isNativeVtoken(vtoken)) {
+      // cETH/vBNB pattern: repayBorrow() takes no args, native amount via
+      // msg.value. The contract refunds excess to the sender, so the user
+      // can pass repay-all amounts safely.
+      const data = encodeFunctionData({ abi: NATIVE_CTOKEN_ABI, functionName: "repayBorrow" });
+      return {
+        description: `[${this.protocolName}] Repay ${params.amount} (native) to Venus`,
+        to: vtoken,
+        data,
+        value: params.amount,
+        gas_estimate: 300_000,
+      };
+    }
     const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "repayBorrow", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to Venus`,
@@ -134,6 +222,47 @@ export class CompoundV2Adapter implements ILending {
     // CLI's `--amount` semantics). redeem() takes vToken units which would
     // require an extra exchangeRateStored conversion at the call site.
     const vtoken = await this.vtokenFor(params.asset);
+    const MAX_UINT256 = (1n << 256n) - 1n;
+
+    // uint256.max ("withdraw all") cannot use redeemUnderlying — it overflows
+    // when the contract converts max underlying back to vToken units. Read the
+    // user's full vToken balance and call redeem() with that exact amount.
+    if (params.amount === MAX_UINT256 && this.rpcUrl) {
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const [vtokenBalance, borrowBalance] = await Promise.all([
+        client.readContract({
+          address: vtoken,
+          abi: CTOKEN_ABI,
+          functionName: "balanceOf",
+          args: [params.to],
+        }) as Promise<bigint>,
+        client.readContract({
+          address: vtoken,
+          abi: CTOKEN_ABI,
+          functionName: "borrowBalanceStored",
+          args: [params.to],
+        }).catch(() => 0n) as Promise<bigint>,
+      ]);
+      // If the user has any outstanding borrow, redeeming the entire vToken
+      // balance leaves zero collateral and the Comptroller's hypothetical
+      // liquidity check rejects with a generic "math error" (Compound V2 forks
+      // bubble Comptroller errors as opaque math errors). Refuse explicitly so
+      // the caller knows to repay first or pass an exact underlying amount.
+      if (borrowBalance > 0n) {
+        throw DefiError.contractError(
+          `[${this.protocolName}] Cannot withdraw all (uint256.max) — wallet has an outstanding borrow of ${borrowBalance} on this market. Repay the borrow first, or pass an explicit --amount that leaves enough collateral.`,
+        );
+      }
+      const redeemData = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "redeem", args: [vtokenBalance] });
+      return {
+        description: `[${this.protocolName}] Withdraw all (auto-max, ${vtokenBalance} vTokens) of ${params.asset} from Venus`,
+        to: vtoken,
+        data: redeemData,
+        value: 0n,
+        gas_estimate: 350_000,
+      };
+    }
+
     const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "redeemUnderlying", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from Venus`,
@@ -141,6 +270,39 @@ export class CompoundV2Adapter implements ILending {
       data,
       value: 0n,
       gas_estimate: 250_000,
+    };
+  }
+
+  /**
+   * Compound V2 family: enter cTokens as collateral via Comptroller.
+   * Without this call, supplied assets sit dormant in the Comptroller's
+   * accountAssets[] and `getAccountLiquidity` reports zero collateral —
+   * any borrow then reverts. Mirrors the role of Aave V3's
+   * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
+   */
+  async buildEnterMarkets(cTokens: Address[]): Promise<DeFiTx> {
+    if (!this.comptroller) {
+      throw DefiError.contractError(
+        `[${this.protocolName}] enterMarkets requires the Comptroller address ` +
+          `to be registered under [protocol.contracts] as 'comptroller'.`,
+      );
+    }
+    if (cTokens.length === 0) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] enterMarkets requires at least one cToken address.`,
+      );
+    }
+    const data = encodeFunctionData({
+      abi: COMPTROLLER_ABI,
+      functionName: "enterMarkets",
+      args: [cTokens],
+    });
+    return {
+      description: `[${this.protocolName}] Enter ${cTokens.length} market(s) as collateral`,
+      to: this.comptroller,
+      data,
+      value: 0n,
+      gas_estimate: 200_000,
     };
   }
 

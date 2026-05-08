@@ -197,6 +197,13 @@ export class SolidlyAdapter implements IDex {
       data,
       value: 0n,
       gas_estimate: 300_000,
+      // The router pulls the LP token via transferFrom; without this approval
+      // the tx reverts at gas ~42k. Caller must pass --pool so we know which
+      // LP pair to approve. Discovered live on Aerodrome USDC/USDT 2026-05-08
+      // (failed tx 0x6d052e0a…3298 → recovered with manual approve 0xa126fc3a).
+      ...(params.pool
+        ? { approvals: [{ token: params.pool, spender: this.router, amount: params.liquidity }] }
+        : {}),
     };
   }
 }

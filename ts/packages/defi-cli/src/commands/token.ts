@@ -3,7 +3,7 @@ import type { OutputMode } from "../output.js";
 import type { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
 import { Registry, buildApprove, buildTransfer, erc20Abi } from "@hypurrquant/defi-core";
-import { createPublicClient, http, maxUint256 } from "viem";
+import { createPublicClient, encodeFunctionData, http, maxUint256, parseAbi } from "viem";
 import type { Address } from "viem";
 import { requireChain, resolveTokenAddress } from "../utils.js";
 
@@ -83,6 +83,68 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
       });
 
       printOutput({ token: tokenAddr, owner, spender: opts.spender, allowance }, getOpts());
+    });
+
+  // WETH9-shape wrapped-native interface (deposit/withdraw). Every chain we
+  // support exposes `wrapped_native` in chains.toml as the WETH9 fork's
+  // address; selectors below are stable across that family:
+  //   deposit()             → 0xd0e30db0
+  //   withdraw(uint256)     → 0x2e1a7d4d
+  const WETH9_ABI = parseAbi([
+    "function deposit() payable",
+    "function withdraw(uint256 amount)",
+  ]);
+
+  token
+    .command("wrap")
+    .description("Wrap native gas token into its ERC-20 wrapped form (WrappedNative.deposit())")
+    .requiredOption("--amount <amount>", "Amount of native token to wrap (in wei)")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
+      const registry = Registry.loadEmbedded();
+      const chain = registry.getChain(chainName);
+      if (!chain.wrapped_native) {
+        printOutput({ error: `[${chainName}] no wrapped_native registered in chains.toml` }, getOpts());
+        return;
+      }
+      const amount = BigInt(opts.amount);
+      const data = encodeFunctionData({ abi: WETH9_ABI, functionName: "deposit" });
+      const result = await executor.execute({
+        description: `[${chainName}] Wrap ${opts.amount} ${chain.native_token} → W${chain.native_token}`,
+        to: chain.wrapped_native as Address,
+        data,
+        value: amount,
+        gas_estimate: 80_000,
+      });
+      printOutput(result, getOpts());
+    });
+
+  token
+    .command("unwrap")
+    .description("Unwrap wrapped-native ERC-20 back into native gas token (WrappedNative.withdraw(amount))")
+    .requiredOption("--amount <amount>", "Amount of wrapped token to unwrap (in wei)")
+    .action(async (opts) => {
+      const executor = makeExecutor();
+      const chainName = requireChain(parent, getOpts);
+      if (!chainName) return;
+      const registry = Registry.loadEmbedded();
+      const chain = registry.getChain(chainName);
+      if (!chain.wrapped_native) {
+        printOutput({ error: `[${chainName}] no wrapped_native registered in chains.toml` }, getOpts());
+        return;
+      }
+      const amount = BigInt(opts.amount);
+      const data = encodeFunctionData({ abi: WETH9_ABI, functionName: "withdraw", args: [amount] });
+      const result = await executor.execute({
+        description: `[${chainName}] Unwrap ${opts.amount} W${chain.native_token} → ${chain.native_token}`,
+        to: chain.wrapped_native as Address,
+        data,
+        value: 0n,
+        gas_estimate: 80_000,
+      });
+      printOutput(result, getOpts());
     });
 
   token

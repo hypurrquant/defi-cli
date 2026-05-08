@@ -13,13 +13,13 @@
 | Slug | Name | Interface | Notes |
 |------|------|-----------|-------|
 | `project-x` | Project X | uniswap_v3 | V3 fee-only |
-| `hyperswap` | HyperSwap | uniswap_v3 | V3 fee-only |
+| `hyperswap-v3` | HyperSwap V3 | uniswap_v3 | V3 fee-only |
 | `curve-hyperevm` | Curve | curve_stableswap | StableswapNG factory |
 | `ramses-cl` | Ramses CL | uniswap_v3 + cl_style="ramses" | x(3,3) auto-stake, NPM.getPeriodReward |
 | `ramses-hl` | Ramses HL | solidly_v2 | ve(3,3) gauge, RAM emission |
 | `kittenswap` | KittenSwap | algebra_v3 + farming_center | KITTEN/WHYPE eternal farming |
 | `hybra` | Hybra V4 | hybra | CL gauge + GaugeManager + 2-year veHYBR lock (default) |
-| `nest` | NEST | algebra_v3 | Off-chain ticket NEST claim |
+| `nest-v1` | NEST V1 | algebra_v3 | Claim path verified live 2026-05-07 (off-chain ticket via `blaze.nest.aegas.it` / `usenest.xyz/api/blaze`). LP/farm read-paths still return zero (`gauge.rewardRate = 0`); only `lp claim` is functional. |
 
 ---
 

@@ -9,7 +9,7 @@ native = false
 verified = true
 reward_strategy = "auto_stake"
 reward_tokens = ["xRAM", "WHYPE"]
-description = "Ramses V3 concentrated liquidity (x(3,3) model) on HyperEVM ($2.8M TVL). factory bytecode + NPM.WETH9 = WHYPE + WHYPE/USDT0 pool slot0 active verified 2026-04-29. NPM.factory()/voter.length() revert by design (uses pool_deployer + gaugeForPool, non-standard but documented x(3,3) interface). 'Auto-stake' = no separate deposit; rewards via gauge.getReward(account, tokens[])."
+description = "Ramses V3 concentrated liquidity (x(3,3) model) on HyperEVM ($2.8M TVL). factory bytecode + NPM.WETH9 = WHYPE + WHYPE/USDT0 pool slot0 active verified 2026-04-29. NPM.factory()/voter.length() revert by design (uses pool_deployer + gaugeForPool, non-standard but documented x(3,3) interface). 'Auto-stake' = no separate deposit; rewards via gauge.getReward(account, tokens[]). V3 NFT mint+remove (USDC/USDT0 pool 0x46abBdfC…E63e) live-confirmed 2026-05-08 with corrected adapter (Ramses-specific 11-field MintParams + selector 0x6d70c415, no sqrtPriceX96; tickSpacing-aware slot0 7-field decoder). tokenId 182740, mint 0x8cdf9c53…66aa, remove 0xa569bf21…da69."
 
 [protocol.contracts]
 # V3 CL AMM
