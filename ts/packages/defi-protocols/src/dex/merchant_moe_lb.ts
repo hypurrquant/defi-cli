@@ -14,6 +14,11 @@ import type { ProtocolEntry, DeFiTx, RewardInfo } from "@hypurrquant/defi-core";
 // ABIs
 // ============================================================
 
+// Merchant Moe LB Router (Mantle) — selector for addLiquidity is 0xa3c7271a,
+// which corresponds to all-uint256 fields in LiquidityParameters (verified by
+// inspecting the deployed router bytecode at 0x013e138E…21E3a). TraderJoe
+// LBRouterV2.2 uses uint16/uint24 (selector 0xce1911ee) — do not confuse the
+// two; Merchant Moe is on its own fork.
 const lbRouterAbi = parseAbi([
   "struct LiquidityParameters { address tokenX; address tokenY; uint256 binStep; uint256 amountX; uint256 amountY; uint256 amountXMin; uint256 amountYMin; uint256 activeIdDesired; uint256 idSlippage; int256[] deltaIds; uint256[] distributionX; uint256[] distributionY; address to; address refundTo; uint256 deadline; }",
   "function addLiquidity(LiquidityParameters calldata liquidityParameters) external returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] memory depositIds, uint256[] memory liquidityMinted)",
@@ -93,6 +98,9 @@ export interface LBAddLiquidityParams {
 }
 
 export interface LBRemoveLiquidityParams {
+  /** Optional pool address. When provided, the adapter realigns tokenX/tokenY
+   * to the pool's actual ordering (LB pairs are not address-sorted). */
+  pool?: Address;
   tokenX: Address;
   tokenY: Address;
   binStep: number;
@@ -321,22 +329,55 @@ export class MerchantMoeLBAdapter {
   /**
    * Build an addLiquidity transaction for a Liquidity Book pair.
    * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+   *
+   * The LB pair stores tokenX/tokenY in the order set at factory creation,
+   * which is **not** address-sorted. Callers may pass tokens in either order;
+   * we always re-align with the pool's `getTokenX/getTokenY` (and swap amounts
+   * accordingly) so the router's `if (tokenX != pair.tokenX) revert` path is
+   * never hit.
    */
   async buildAddLiquidity(params: LBAddLiquidityParams): Promise<DeFiTx> {
     const numBins = params.numBins ?? 5;
     const deadline = params.deadline ?? BigInt("18446744073709551615");
 
-    // Resolve active bin id
-    let activeIdDesired = params.activeIdDesired;
-    if (activeIdDesired === undefined) {
-      const rpcUrl = this.requireRpc();
-      const client = createPublicClient({ transport: http(rpcUrl) });
-      const activeId = await client.readContract({
-        address: params.pool,
-        abi: lbPairAbi,
-        functionName: "getActiveId",
-      });
-      activeIdDesired = activeId as number;
+    // Resolve pool ordering + active bin id from on-chain state. We always
+    // need the RPC client here — even when activeIdDesired is provided —
+    // because the caller's tokenX/tokenY may not match the pool's stored
+    // ordering and we have to reconcile.
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient({ transport: http(rpcUrl) });
+
+    const [poolTokenX, poolTokenY, onChainActiveId] = await Promise.all([
+      client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }) as Promise<Address>,
+      client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" }) as Promise<Address>,
+      params.activeIdDesired === undefined
+        ? client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getActiveId" }) as Promise<number>
+        : Promise.resolve(params.activeIdDesired),
+    ]);
+
+    const activeIdDesired = onChainActiveId as number;
+
+    const inX = params.tokenX.toLowerCase();
+    const inY = params.tokenY.toLowerCase();
+    const poolX = poolTokenX.toLowerCase();
+    const poolY = poolTokenY.toLowerCase();
+
+    let tokenX: Address;
+    let tokenY: Address;
+    let amountX: bigint;
+    let amountY: bigint;
+    if (inX === poolX && inY === poolY) {
+      tokenX = params.tokenX; tokenY = params.tokenY;
+      amountX = params.amountX; amountY = params.amountY;
+    } else if (inX === poolY && inY === poolX) {
+      // Caller swapped — realign to pool ordering so the router accepts the call
+      tokenX = poolTokenX; tokenY = poolTokenY;
+      amountX = params.amountY; amountY = params.amountX;
+    } else {
+      throw new DefiError(
+        "CONTRACT_ERROR",
+        `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`,
+      );
     }
 
     // Build delta IDs: [-numBins, ..., -1, 0, 1, ..., numBins]
@@ -352,11 +393,11 @@ export class MerchantMoeLBAdapter {
       functionName: "addLiquidity",
       args: [
         {
-          tokenX: params.tokenX,
-          tokenY: params.tokenY,
+          tokenX,
+          tokenY,
           binStep: BigInt(params.binStep),
-          amountX: params.amountX,
-          amountY: params.amountY,
+          amountX,
+          amountY,
           amountXMin: 0n,
           amountYMin: 0n,
           activeIdDesired: BigInt(activeIdDesired),
@@ -372,33 +413,64 @@ export class MerchantMoeLBAdapter {
     });
 
     return {
-      description: `[${this.protocolName}] LB addLiquidity ${params.amountX} tokenX + ${params.amountY} tokenY across ${deltaIds.length} bins`,
+      description: `[${this.protocolName}] LB addLiquidity ${amountX} tokenX + ${amountY} tokenY across ${deltaIds.length} bins`,
       to: this.lbRouter,
       data,
       value: 0n,
       gas_estimate: 800_000,
       approvals: [
-        { token: params.tokenX, spender: this.lbRouter, amount: params.amountX },
-        { token: params.tokenY, spender: this.lbRouter, amount: params.amountY },
+        { token: tokenX, spender: this.lbRouter, amount: amountX },
+        { token: tokenY, spender: this.lbRouter, amount: amountY },
       ],
     };
   }
 
   /**
    * Build a removeLiquidity transaction for specific LB bins.
+   *
+   * When `pool` is supplied, the adapter realigns tokenX/tokenY (and
+   * amountXMin/amountYMin) to the pool's actual ordering. Otherwise it trusts
+   * the caller — the router will revert if the order is wrong.
    */
   async buildRemoveLiquidity(params: LBRemoveLiquidityParams): Promise<DeFiTx> {
     const deadline = params.deadline ?? BigInt("18446744073709551615");
+
+    let tokenX = params.tokenX;
+    let tokenY = params.tokenY;
+    let amountXMin = params.amountXMin ?? 0n;
+    let amountYMin = params.amountYMin ?? 0n;
+
+    if (params.pool) {
+      const rpcUrl = this.requireRpc();
+      const client = createPublicClient({ transport: http(rpcUrl) });
+      const [poolTokenX, poolTokenY] = await Promise.all([
+        client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }) as Promise<Address>,
+        client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" }) as Promise<Address>,
+      ]);
+      const inX = params.tokenX.toLowerCase();
+      const inY = params.tokenY.toLowerCase();
+      const poolX = poolTokenX.toLowerCase();
+      const poolY = poolTokenY.toLowerCase();
+      if (inX === poolY && inY === poolX) {
+        tokenX = poolTokenX; tokenY = poolTokenY;
+        const x = amountXMin; amountXMin = amountYMin; amountYMin = x;
+      } else if (!(inX === poolX && inY === poolY)) {
+        throw new DefiError(
+          "CONTRACT_ERROR",
+          `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`,
+        );
+      }
+    }
 
     const data = encodeFunctionData({
       abi: lbRouterAbi,
       functionName: "removeLiquidity",
       args: [
-        params.tokenX,
-        params.tokenY,
+        tokenX,
+        tokenY,
         params.binStep,
-        params.amountXMin ?? 0n,
-        params.amountYMin ?? 0n,
+        amountXMin,
+        amountYMin,
         params.binIds.map(BigInt),
         params.amounts,
         params.recipient,

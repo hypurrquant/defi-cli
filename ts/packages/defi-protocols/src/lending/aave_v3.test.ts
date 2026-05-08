@@ -133,3 +133,60 @@ describe("AaveV3Adapter — v1.0.9 buildWithdraw auto-cap", () => {
     expect(tx.to).toBe(POOL);
   });
 });
+
+// 2026-05-07 borrow-lifecycle unblocking. Pre-fix the BNB Aave V3 borrow
+// path reverted because the adapter never emitted the
+// `setUserUseReserveAsCollateral` toggle that isolation-mode reserves
+// require before non-isolation borrows are allowed. Live verification
+// post-fix on BNB:
+//   supply  0x5b4481dc…  toggle  0x1c078498…  borrow  0xb7b34740…
+//   repay   0xe294a035…  withdraw 0xf5ef3065…  (block 96,854,907 area)
+describe("AaveV3Adapter — Pool toggles for isolation/eMode", () => {
+  beforeEach(() => readContractMock.mockReset());
+
+  it("buildSetUseReserveAsCollateral encodes (asset, true) and targets the Pool", async () => {
+    const { AaveV3Adapter } = await import("./aave_v3.js");
+    const adapter = new AaveV3Adapter(makeEntry()); // offline; no RPC needed
+    const tx = await adapter.buildSetUseReserveAsCollateral(USDC, true);
+    expect(tx.to).toBe(POOL);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function setUserUseReserveAsCollateral(address asset, bool useAsCollateral)"]),
+      data: tx.data,
+    });
+    expect(decoded.args).toEqual([USDC, true]);
+    expect(tx.description).toContain("Enable");
+    expect(tx.value).toBe(0n);
+  });
+
+  it("buildSetUseReserveAsCollateral encodes (asset, false) on disable", async () => {
+    const { AaveV3Adapter } = await import("./aave_v3.js");
+    const adapter = new AaveV3Adapter(makeEntry());
+    const tx = await adapter.buildSetUseReserveAsCollateral(USDC, false);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function setUserUseReserveAsCollateral(address asset, bool useAsCollateral)"]),
+      data: tx.data,
+    });
+    expect(decoded.args).toEqual([USDC, false]);
+    expect(tx.description).toContain("Disable");
+  });
+
+  it("buildSetEMode encodes the right uint8 category id", async () => {
+    const { AaveV3Adapter } = await import("./aave_v3.js");
+    const adapter = new AaveV3Adapter(makeEntry());
+    const tx = await adapter.buildSetEMode(2);
+    expect(tx.to).toBe(POOL);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function setUserEMode(uint8 categoryId)"]),
+      data: tx.data,
+    });
+    expect(decoded.args).toEqual([2]);
+    expect(tx.description).toContain("category to 2");
+  });
+
+  it("buildSetEMode 0 description marks the opt-out", async () => {
+    const { AaveV3Adapter } = await import("./aave_v3.js");
+    const adapter = new AaveV3Adapter(makeEntry());
+    const tx = await adapter.buildSetEMode(0);
+    expect(tx.description).toContain("opt out");
+  });
+});

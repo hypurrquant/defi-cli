@@ -7,7 +7,7 @@ chain = "hyperevm"
 native = true
 verified = true
 reward_strategy = "lp_fee_only"
-description = "First native DEX on HyperEVM — Uniswap V3 fork. NPM↔factory cross-verified on-chain 2026-04-28; WETH9 = WHYPE (0x5555...5555). Quoter address pending."
+description = "First native DEX on HyperEVM — Uniswap V3 fork. NPM↔factory cross-verified on-chain 2026-04-28; WETH9 = WHYPE (0x5555...5555). Quoter address pending. V3 NFT mint+remove (USDC/USDT0 fee=100 pool) live-confirmed 2026-05-08 (tokenId 174094, mint 0xd9a078bf…0184, remove 0x6c5733cc…1d81)."
 
 [protocol.contracts]
 router = "0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D"

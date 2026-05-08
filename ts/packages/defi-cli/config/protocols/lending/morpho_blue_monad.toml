@@ -9,3 +9,20 @@ description = "Morpho Blue on Monad — permissionless lending primitive"
 
 [protocol.contracts]
 morpho_blue = "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee"
+
+# Named-market shortcuts so the CLI doesn't need a 32-byte hex on every call.
+# Resolved against `markets[]` by MorphoBlueAdapter.resolveMarketIdByName().
+# Source: blue-api.morpho.org, verified 2026-05-07.
+[[protocol.markets]]
+name = "WMON-AUSD"
+id = "0xfa0b720389b546fcf8562c18cda8c00460072b63776add7fbfe8cd4f06d7c3ba"
+loan_asset = "AUSD"
+collateral_asset = "WMON"
+lltv = "770000000000000000"
+
+[[protocol.markets]]
+name = "TETH-TUSD"
+id = "0xfdfec1ced463198bba499c38a43c04a5919cab0472a298c4c68041b225d16563"
+loan_asset = "TUSD"
+collateral_asset = "TETH"
+lltv = "860000000000000000"

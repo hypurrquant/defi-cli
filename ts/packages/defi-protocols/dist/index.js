@@ -3,7 +3,11 @@ import { DefiError as DefiError35 } from "@hypurrquant/defi-core";
 
 // src/dex/uniswap_v3.ts
 import { encodeFunctionData, parseAbi, createPublicClient, http, decodeAbiParameters } from "viem";
-import { DefiError } from "@hypurrquant/defi-core";
+import {
+  DefiError,
+  applyMinSlippage,
+  defaultSwapSlippage
+} from "@hypurrquant/defi-core";
 var DEFAULT_FEE = 3e3;
 var swapRouterAbi = parseAbi([
   "struct ExactInputSingleParams { address tokenIn; address tokenOut; uint24 fee; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96; }",
@@ -33,6 +37,10 @@ var slipstreamMintAbi = parseAbi([
   "struct SlipstreamMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
   "function mint(SlipstreamMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
 ]);
+var ramsesMintAbi = parseAbi([
+  "struct RamsesMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
+  "function mint(RamsesMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+]);
 var UniswapV3Adapter = class {
   protocolName;
   router;
@@ -42,6 +50,7 @@ var UniswapV3Adapter = class {
   fee;
   rpcUrl;
   useTickSpacingQuoter;
+  clStyle;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
     const router = entry.contracts?.["router"];
@@ -54,6 +63,7 @@ var UniswapV3Adapter = class {
     this.factory = entry.contracts?.["factory"];
     this.fee = DEFAULT_FEE;
     this.rpcUrl = rpcUrl;
+    this.clStyle = entry.cl_style;
     this.useTickSpacingQuoter = entry.cl_style === "slipstream" || entry.cl_style === "ramses" || entry.contracts?.["pool_deployer"] !== void 0 || entry.contracts?.["gauge_factory"] !== void 0;
   }
   name() {
@@ -61,7 +71,15 @@ var UniswapV3Adapter = class {
   }
   async buildSwap(params) {
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-    const amountOutMinimum = 0n;
+    const amountOutMinimum = params.amount_out_min ?? applyMinSlippage(
+      params.slippage,
+      (await this.quote({
+        protocol: this.protocolName,
+        token_in: params.token_in,
+        token_out: params.token_out,
+        amount_in: params.amount_in
+      })).amount_out
+    );
     const data = encodeFunctionData({
       abi: swapRouterAbi,
       functionName: "exactInputSingle",
@@ -227,31 +245,37 @@ var UniswapV3Adapter = class {
     if (!pm) {
       throw new DefiError("CONTRACT_ERROR", "Position manager address not configured");
     }
-    const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [token0, token1, rawAmount0, rawAmount1] = isAFirst ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
     const amount0 = rawAmount0 === 0n && rawAmount1 > 0n ? 1n : rawAmount0;
     const amount1 = rawAmount1 === 0n && rawAmount0 > 0n ? 1n : rawAmount1;
+    const slippage = params.slippage ?? defaultSwapSlippage();
+    const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+    const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+    const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
     let thirdField = this.fee;
     let tickLower = -887220;
     let tickUpper = 887220;
     if (params.pool && this.rpcUrl) {
       const poolAbi2 = parseAbi([
         "function fee() view returns (uint24)",
-        "function tickSpacing() view returns (int24)",
-        "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, bool)"
+        "function tickSpacing() view returns (int24)"
       ]);
       const client = createPublicClient({ transport: http(this.rpcUrl) });
-      const [poolFee, poolTs, slot0] = await Promise.all([
+      const [poolFee, poolTs, slot0Raw] = await Promise.all([
         client.readContract({ address: params.pool, abi: poolAbi2, functionName: "fee" }).catch(() => null),
         client.readContract({ address: params.pool, abi: poolAbi2, functionName: "tickSpacing" }).catch(() => null),
-        client.readContract({ address: params.pool, abi: poolAbi2, functionName: "slot0" }).catch(() => null)
+        client.call({ to: params.pool, data: "0x3850c7bd" }).then((r) => r.data ?? null).catch(() => null)
       ]);
       if (this.useTickSpacingQuoter && poolTs !== null) {
         thirdField = poolTs;
       } else if (poolFee !== null) {
         thirdField = poolFee;
       }
-      if (params.range_pct !== void 0 && slot0 && poolTs !== null) {
-        const currentTick = slot0[1];
+      if (params.range_pct !== void 0 && slot0Raw && poolTs !== null) {
+        const tickWord = slot0Raw.slice(2 + 64, 2 + 128);
+        const tickU = BigInt("0x" + tickWord);
+        const currentTick = tickU >= 1n << 255n ? Number(tickU - (1n << 256n)) : Number(tickU);
         const rangeTicks = Math.floor(params.range_pct * 100);
         tickLower = Math.floor((currentTick - rangeTicks) / poolTs) * poolTs;
         tickUpper = Math.ceil((currentTick + rangeTicks) / poolTs) * poolTs;
@@ -259,7 +283,25 @@ var UniswapV3Adapter = class {
     }
     if (params.tick_lower !== void 0) tickLower = params.tick_lower;
     if (params.tick_upper !== void 0) tickUpper = params.tick_upper;
-    const data = this.useTickSpacingQuoter ? encodeFunctionData({
+    const data = this.clStyle === "ramses" ? encodeFunctionData({
+      abi: ramsesMintAbi,
+      functionName: "mint",
+      args: [
+        {
+          token0,
+          token1,
+          tickSpacing: thirdField,
+          tickLower,
+          tickUpper,
+          amount0Desired: amount0,
+          amount1Desired: amount1,
+          amount0Min,
+          amount1Min,
+          recipient: params.recipient,
+          deadline: BigInt("18446744073709551615")
+        }
+      ]
+    }) : this.useTickSpacingQuoter ? encodeFunctionData({
       abi: slipstreamMintAbi,
       functionName: "mint",
       args: [
@@ -271,8 +313,8 @@ var UniswapV3Adapter = class {
           tickUpper,
           amount0Desired: amount0,
           amount1Desired: amount1,
-          amount0Min: 0n,
-          amount1Min: 0n,
+          amount0Min,
+          amount1Min,
           recipient: params.recipient,
           deadline: BigInt("18446744073709551615"),
           sqrtPriceX96: 0n
@@ -290,8 +332,8 @@ var UniswapV3Adapter = class {
           tickUpper,
           amount0Desired: amount0,
           amount1Desired: amount1,
-          amount0Min: 0n,
-          amount1Min: 0n,
+          amount0Min,
+          amount1Min,
           recipient: params.recipient,
           deadline: BigInt("18446744073709551615")
         }
@@ -325,10 +367,17 @@ var UniswapV3Adapter = class {
     const liquidity = params.liquidity;
     const MAX_UINT128 = (1n << 128n) - 1n;
     const deadline = BigInt("18446744073709551615");
+    if (params.amount_a_min === void 0 || params.amount_b_min === void 0) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] V3 remove_liquidity requires amount_a_min and amount_b_min for slippage protection (SSOT 7.3). Caller must compute expected token outputs from the pool state and apply a slippage tolerance before calling buildRemoveLiquidity.`
+      );
+    }
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [amount0Min, amount1Min] = isAFirst ? [params.amount_a_min, params.amount_b_min] : [params.amount_b_min, params.amount_a_min];
     const decreaseData = encodeFunctionData({
       abi: positionManagerAbi,
       functionName: "decreaseLiquidity",
-      args: [{ tokenId, liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+      args: [{ tokenId, liquidity, amount0Min, amount1Min, deadline }]
     });
     const collectData = encodeFunctionData({
       abi: positionManagerAbi,
@@ -630,7 +679,13 @@ var UniswapV2Adapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 25e4
+      gas_estimate: 25e4,
+      // Same LP-approval requirement as Solidly forks: the V2 router pulls the
+      // LP pair token via transferFrom and reverts at gas ~42k otherwise.
+      // Caller passes --pool so we can target the pair contract for approval.
+      // Discovered live on Uniswap V2 Monad WMON/AUSD 2026-05-08
+      // (failed tx 0x2268659a…09ae → recovered with this fix).
+      ...params.pool ? { approvals: [{ token: params.pool, spender: this.router, amount: params.liquidity }] } : {}
     };
   }
 };
@@ -657,7 +712,11 @@ function rangeToTicks(currentTick, rangePct, tickSpacing) {
 }
 
 // src/dex/algebra_v3.ts
-import { DefiError as DefiError3 } from "@hypurrquant/defi-core";
+import {
+  DefiError as DefiError3,
+  applyMinSlippage as applyMinSlippage2,
+  defaultSwapSlippage as defaultSwapSlippage2
+} from "@hypurrquant/defi-core";
 var abi2 = parseAbi3([
   "struct ExactInputSingleParams { address tokenIn; address tokenOut; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 limitSqrtPrice; }",
   "function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut)"
@@ -709,7 +768,15 @@ var AlgebraV3Adapter = class {
   }
   async buildSwap(params) {
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
-    const amountOutMinimum = 0n;
+    const amountOutMinimum = params.amount_out_min ?? applyMinSlippage2(
+      params.slippage,
+      (await this.quote({
+        protocol: this.protocolName,
+        token_in: params.token_in,
+        token_out: params.token_out,
+        amount_in: params.amount_in
+      })).amount_out
+    );
     const data = encodeFunctionData3({
       abi: abi2,
       functionName: "exactInputSingle",
@@ -823,7 +890,12 @@ var AlgebraV3Adapter = class {
     if (!pm) {
       throw new DefiError3("CONTRACT_ERROR", "Position manager address not configured");
     }
-    const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [token0, token1, rawAmount0, rawAmount1] = isAFirst ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const slippage = params.slippage ?? defaultSwapSlippage2();
+    const minA = params.amount_a_min ?? applyMinSlippage2(slippage, params.amount_a);
+    const minB = params.amount_b_min ?? applyMinSlippage2(slippage, params.amount_b);
+    const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
     let tickLower = params.tick_lower ?? -887220;
     let tickUpper = params.tick_upper ?? 887220;
     const isSingleSide = rawAmount0 === 0n || rawAmount1 === 0n;
@@ -860,11 +932,11 @@ var AlgebraV3Adapter = class {
     const data = this.useSingleQuoter ? encodeFunctionData3({
       abi: algebraV2PmAbi,
       functionName: "mint",
-      args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
+      args: [{ token0, token1, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
     }) : encodeFunctionData3({
       abi: algebraIntegralPmAbi,
       functionName: "mint",
-      args: [{ token0, token1, deployer: zeroAddress, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min: 0n, amount1Min: 0n, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
+      args: [{ token0, token1, deployer: zeroAddress, tickLower, tickUpper, amount0Desired: amount0, amount1Desired: amount1, amount0Min, amount1Min, recipient: params.recipient, deadline: BigInt("18446744073709551615") }]
     });
     const approvals = [];
     if (amount0 > 0n) approvals.push({ token: token0, spender: pm, amount: amount0 });
@@ -882,12 +954,19 @@ var AlgebraV3Adapter = class {
     const pm = this.positionManager;
     if (!pm) throw DefiError3.contractError(`[${this.protocolName}] Missing 'position_manager'`);
     if (!params.token_id) throw DefiError3.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+    if (params.amount_a_min === void 0 || params.amount_b_min === void 0) {
+      throw DefiError3.invalidParam(
+        `[${this.protocolName}] remove_liquidity requires amount_a_min and amount_b_min for slippage protection (SSOT 7.3). Compute expected outputs from positions(tokenId) + pool.globalState off-chain and apply tolerance.`
+      );
+    }
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [amount0Min, amount1Min] = isAFirst ? [params.amount_a_min, params.amount_b_min] : [params.amount_b_min, params.amount_a_min];
     const MAX_UINT128 = (1n << 128n) - 1n;
     const deadline = BigInt("18446744073709551615");
     const decreaseData = encodeFunctionData3({
       abi: algebraSharedPmAbi,
       functionName: "decreaseLiquidity",
-      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min, amount1Min, deadline }]
     });
     const collectData = encodeFunctionData3({
       abi: algebraSharedPmAbi,
@@ -910,7 +989,7 @@ var AlgebraV3Adapter = class {
 };
 
 // src/dex/balancer_v3.ts
-import { encodeFunctionData as encodeFunctionData4, parseAbi as parseAbi4, zeroAddress as zeroAddress2 } from "viem";
+import { encodeFunctionData as encodeFunctionData4, parseAbi as parseAbi4 } from "viem";
 import { DefiError as DefiError4 } from "@hypurrquant/defi-core";
 var abi3 = parseAbi4([
   "function swapSingleTokenExactIn(address pool, address tokenIn, address tokenOut, uint256 exactAmountIn, uint256 minAmountOut, uint256 deadline, bool wethIsEth, bytes calldata userData) external returns (uint256 amountOut)"
@@ -918,6 +997,7 @@ var abi3 = parseAbi4([
 var BalancerV3Adapter = class {
   protocolName;
   router;
+  pool;
   constructor(entry, _rpcUrl) {
     this.protocolName = entry.name;
     const router = entry.contracts?.["router"];
@@ -925,19 +1005,29 @@ var BalancerV3Adapter = class {
       throw new DefiError4("CONTRACT_ERROR", "Missing 'router' contract");
     }
     this.router = router;
+    this.pool = entry.contracts?.["pool"];
   }
   name() {
     return this.protocolName;
   }
   async buildSwap(params) {
-    const minAmountOut = 0n;
+    if (params.amount_out_min === void 0) {
+      throw DefiError4.invalidParam(
+        `[${this.protocolName}] buildSwap requires amount_out_min for slippage protection (SSOT 7.3) \u2014 Balancer V3 has no on-chain quoter wired in this adapter. Compute the floor off-chain (e.g. via the Vault's static-call simulation) and pass it explicitly.`
+      );
+    }
+    if (!this.pool) {
+      throw DefiError4.invalidParam(
+        `[${this.protocolName}] buildSwap requires a pool address. Register the pool under [protocol.contracts] as \`pool = "0x..."\` in the protocol's TOML config. Multi-pool routing is intentionally not implemented in this adapter \u2014 for that, quote against the Balancer V3 BatchRouter off-chain and route via a different surface.`
+      );
+    }
+    const minAmountOut = params.amount_out_min;
     const deadline = BigInt(params.deadline ?? 18446744073709551615n);
     const data = encodeFunctionData4({
       abi: abi3,
       functionName: "swapSingleTokenExactIn",
       args: [
-        zeroAddress2,
-        // TODO: resolve pool from registry
+        this.pool,
         params.token_in,
         params.token_out,
         params.amount_in,
@@ -948,7 +1038,7 @@ var BalancerV3Adapter = class {
       ]
     });
     return {
-      description: `[${this.protocolName}] Swap ${params.amount_in} via Balancer V3`,
+      description: `[${this.protocolName}] Swap ${params.amount_in} via Balancer V3 pool ${this.pool}`,
       to: this.router,
       data,
       value: 0n,
@@ -972,8 +1062,8 @@ import { DefiError as DefiError5 } from "@hypurrquant/defi-core";
 var poolAbi = parseAbi5([
   "function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256)",
   "function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256)",
-  "function add_liquidity(uint256[2] amounts, uint256 min_mint_amount) external returns (uint256)",
-  "function remove_liquidity(uint256 amount, uint256[2] min_amounts) external returns (uint256[2])"
+  "function add_liquidity(uint256[] amounts, uint256 min_mint_amount) external returns (uint256)",
+  "function remove_liquidity(uint256 amount, uint256[] min_amounts) external returns (uint256[])"
 ]);
 var CurveStableSwapAdapter = class {
   protocolName;
@@ -1008,17 +1098,22 @@ var CurveStableSwapAdapter = class {
     throw DefiError5.unsupported(`[${this.protocolName}] quote requires RPC connection`);
   }
   async buildAddLiquidity(params) {
+    if (!params.pool) {
+      throw DefiError5.invalidParam(
+        `[${this.protocolName}] Curve add_liquidity needs --pool <address>. The router does not proxy this call; it lives on the pool itself.`
+      );
+    }
     const data = encodeFunctionData5({
       abi: poolAbi,
       functionName: "add_liquidity",
       args: [[params.amount_a, params.amount_b], 0n]
     });
     const approvals = [];
-    if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: this.router, amount: params.amount_a });
-    if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: this.router, amount: params.amount_b });
+    if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: params.pool, amount: params.amount_a });
+    if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: params.pool, amount: params.amount_b });
     return {
-      description: `[${this.protocolName}] Curve add liquidity`,
-      to: this.router,
+      description: `[${this.protocolName}] Curve add liquidity to ${params.pool}`,
+      to: params.pool,
       data,
       value: 0n,
       gas_estimate: 4e5,
@@ -1026,14 +1121,19 @@ var CurveStableSwapAdapter = class {
     };
   }
   async buildRemoveLiquidity(params) {
+    if (!params.pool) {
+      throw DefiError5.invalidParam(
+        `[${this.protocolName}] Curve remove_liquidity needs --pool <address>. The router does not proxy this call.`
+      );
+    }
     const data = encodeFunctionData5({
       abi: poolAbi,
       functionName: "remove_liquidity",
       args: [params.liquidity, [0n, 0n]]
     });
     return {
-      description: `[${this.protocolName}] Curve remove liquidity`,
-      to: this.router,
+      description: `[${this.protocolName}] Curve remove liquidity from ${params.pool}`,
+      to: params.pool,
       data,
       value: 0n,
       gas_estimate: 35e4
@@ -1203,14 +1303,23 @@ var SolidlyAdapter = class {
       to: this.router,
       data,
       value: 0n,
-      gas_estimate: 3e5
+      gas_estimate: 3e5,
+      // The router pulls the LP token via transferFrom; without this approval
+      // the tx reverts at gas ~42k. Caller must pass --pool so we know which
+      // LP pair to approve. Discovered live on Aerodrome USDC/USDT 2026-05-08
+      // (failed tx 0x6d052e0a…3298 → recovered with manual approve 0xa126fc3a).
+      ...params.pool ? { approvals: [{ token: params.pool, spender: this.router, amount: params.liquidity }] } : {}
     };
   }
 };
 
 // src/dex/thena_cl.ts
-import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, createPublicClient as createPublicClient4, http as http4, zeroAddress as zeroAddress3 } from "viem";
-import { DefiError as DefiError7 } from "@hypurrquant/defi-core";
+import { encodeFunctionData as encodeFunctionData7, parseAbi as parseAbi7, createPublicClient as createPublicClient4, http as http4, zeroAddress as zeroAddress2 } from "viem";
+import {
+  DefiError as DefiError7,
+  applyMinSlippage as applyMinSlippage3,
+  defaultSwapSlippage as defaultSwapSlippage3
+} from "@hypurrquant/defi-core";
 var thenaPmAbi = parseAbi7([
   "struct MintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
   "function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
@@ -1254,6 +1363,11 @@ var ThenaCLAdapter = class {
     return this.protocolName;
   }
   async buildSwap(params) {
+    if (params.amount_out_min === void 0) {
+      throw DefiError7.invalidParam(
+        `[${this.protocolName}] buildSwap requires amount_out_min for slippage protection (SSOT 7.3) \u2014 Thena CL has no on-chain quoter. Compute the floor off-chain (e.g. via the router's static-call simulation) and pass it explicitly.`
+      );
+    }
     const data = encodeFunctionData7({
       abi: thenaRouterAbi,
       functionName: "exactInputSingle",
@@ -1264,7 +1378,7 @@ var ThenaCLAdapter = class {
         recipient: params.recipient,
         deadline: BigInt(params.deadline ?? 18446744073709551615n),
         amountIn: params.amount_in,
-        amountOutMinimum: 0n,
+        amountOutMinimum: params.amount_out_min,
         sqrtPriceLimitX96: 0n
       }]
     });
@@ -1284,7 +1398,12 @@ var ThenaCLAdapter = class {
     const pm = this.positionManager;
     if (!pm) throw new DefiError7("CONTRACT_ERROR", "Position manager not configured");
     if (!this.rpcUrl) throw DefiError7.rpcError("RPC URL required");
-    const [token0, token1, rawAmount0, rawAmount1] = params.token_a.toLowerCase() < params.token_b.toLowerCase() ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [token0, token1, rawAmount0, rawAmount1] = isAFirst ? [params.token_a, params.token_b, params.amount_a, params.amount_b] : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const slippage = params.slippage ?? defaultSwapSlippage3();
+    const minA = params.amount_a_min ?? applyMinSlippage3(slippage, params.amount_a);
+    const minB = params.amount_b_min ?? applyMinSlippage3(slippage, params.amount_b);
+    const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
     const client = createPublicClient4({ transport: http4(this.rpcUrl) });
     const poolAddr = params.pool;
     let tickSpacing = this.defaultTickSpacing;
@@ -1299,7 +1418,7 @@ var ThenaCLAdapter = class {
           functionName: "getPool",
           args: [token0, token1, tickSpacing]
         });
-        if (pool === zeroAddress3) throw new DefiError7("CONTRACT_ERROR", "Pool not found");
+        if (pool === zeroAddress2) throw new DefiError7("CONTRACT_ERROR", "Pool not found");
       }
       if (pool) {
         const [slot0, ts] = await Promise.all([
@@ -1342,8 +1461,8 @@ var ThenaCLAdapter = class {
         tickUpper,
         amount0Desired: rawAmount0,
         amount1Desired: rawAmount1,
-        amount0Min: 0n,
-        amount1Min: 0n,
+        amount0Min,
+        amount1Min,
         recipient: params.recipient,
         deadline: BigInt("18446744073709551615"),
         sqrtPriceX96: 0n
@@ -1365,12 +1484,19 @@ var ThenaCLAdapter = class {
     const pm = this.positionManager;
     if (!pm) throw DefiError7.contractError(`[${this.protocolName}] Missing 'position_manager'`);
     if (!params.token_id) throw DefiError7.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+    if (params.amount_a_min === void 0 || params.amount_b_min === void 0) {
+      throw DefiError7.invalidParam(
+        `[${this.protocolName}] remove_liquidity requires amount_a_min and amount_b_min for slippage protection (SSOT 7.3). Compute expected outputs from positions(tokenId) + pool.slot0 off-chain and apply tolerance.`
+      );
+    }
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [amount0Min, amount1Min] = isAFirst ? [params.amount_a_min, params.amount_b_min] : [params.amount_b_min, params.amount_a_min];
     const MAX_UINT128 = (1n << 128n) - 1n;
     const deadline = BigInt("18446744073709551615");
     const decreaseData = encodeFunctionData7({
       abi: thenaPmAbi,
       functionName: "decreaseLiquidity",
-      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }]
+      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min, amount1Min, deadline }]
     });
     const collectData = encodeFunctionData7({
       abi: thenaPmAbi,
@@ -1393,7 +1519,7 @@ var ThenaCLAdapter = class {
 };
 
 // src/dex/hybra_gauge.ts
-import { createPublicClient as createPublicClient5, decodeFunctionResult as decodeFunctionResult2, encodeFunctionData as encodeFunctionData8, http as http5, parseAbi as parseAbi8, zeroAddress as zeroAddress4 } from "viem";
+import { createPublicClient as createPublicClient5, decodeFunctionResult as decodeFunctionResult2, encodeFunctionData as encodeFunctionData8, http as http5, parseAbi as parseAbi8, zeroAddress as zeroAddress3 } from "viem";
 import { DefiError as DefiError8, multicallRead as multicallRead2 } from "@hypurrquant/defi-core";
 var _addressDecodeAbi = parseAbi8(["function f() external view returns (address)"]);
 function decodeAddress(data) {
@@ -1457,8 +1583,8 @@ var HybraGaugeAdapter = class {
     const ve = entry.contracts?.["ve_token"];
     if (!ve) throw new DefiError8("CONTRACT_ERROR", "Missing 've_token' contract");
     this.veToken = ve;
-    this.voter = entry.contracts?.["voter"] ?? zeroAddress4;
-    this.positionManager = entry.contracts?.["position_manager"] ?? zeroAddress4;
+    this.voter = entry.contracts?.["voter"] ?? zeroAddress3;
+    this.positionManager = entry.contracts?.["position_manager"] ?? zeroAddress3;
     this.poolFactory = entry.contracts?.["pool_factory"];
     this.rpcUrl = rpcUrl;
   }
@@ -1500,7 +1626,7 @@ var HybraGaugeAdapter = class {
       ]);
     }
     const poolAddressResults = await multicallRead2(this.rpcUrl, poolAddressCalls);
-    const pools = poolAddressResults.map((r) => decodeAddress(r)).filter((a) => a !== null && a !== zeroAddress4);
+    const pools = poolAddressResults.map((r) => decodeAddress(r)).filter((a) => a !== null && a !== zeroAddress3);
     if (pools.length === 0) return [];
     const gaugeCalls = pools.map((pool) => [
       this.gaugeManager,
@@ -1510,7 +1636,7 @@ var HybraGaugeAdapter = class {
     const gaugedPools = [];
     for (let i = 0; i < pools.length; i++) {
       const gauge = decodeAddress(gaugeResults[i] ?? null);
-      if (gauge && gauge !== zeroAddress4) {
+      if (gauge && gauge !== zeroAddress3) {
         gaugedPools.push({ pool: pools[i], gauge });
       }
     }
@@ -1525,8 +1651,8 @@ var HybraGaugeAdapter = class {
     for (let i = 0; i < gaugedPools.length; i++) {
       const t0 = decodeAddress(tokenResults[i * 2] ?? null);
       const t1 = decodeAddress(tokenResults[i * 2 + 1] ?? null);
-      if (t0 && t0 !== zeroAddress4) tokenAddrs.add(t0);
-      if (t1 && t1 !== zeroAddress4) tokenAddrs.add(t1);
+      if (t0 && t0 !== zeroAddress3) tokenAddrs.add(t0);
+      if (t1 && t1 !== zeroAddress3) tokenAddrs.add(t1);
     }
     const uniqueTokens = Array.from(tokenAddrs);
     const symbolCalls = uniqueTokens.map((t) => [
@@ -1565,7 +1691,7 @@ var HybraGaugeAdapter = class {
       functionName: "gauges",
       args: [pool]
     });
-    if (gauge === zeroAddress4) throw new DefiError8("CONTRACT_ERROR", `No gauge for pool ${pool}`);
+    if (gauge === zeroAddress3) throw new DefiError8("CONTRACT_ERROR", `No gauge for pool ${pool}`);
     return gauge;
   }
   // ─── CL Gauge: NFT Deposit/Withdraw ──────────────────────────
@@ -1701,7 +1827,7 @@ var HybraGaugeAdapter = class {
 };
 
 // src/dex/woofi.ts
-import { encodeFunctionData as encodeFunctionData9, parseAbi as parseAbi9, zeroAddress as zeroAddress5 } from "viem";
+import { encodeFunctionData as encodeFunctionData9, parseAbi as parseAbi9, zeroAddress as zeroAddress4 } from "viem";
 import { DefiError as DefiError9 } from "@hypurrquant/defi-core";
 var abi5 = parseAbi9([
   "function swap(address fromToken, address toToken, uint256 fromAmount, uint256 minToAmount, address to, address rebateTo) external payable returns (uint256 realToAmount)"
@@ -1731,7 +1857,7 @@ var WooFiAdapter = class {
         params.amount_in,
         minToAmount,
         params.recipient,
-        zeroAddress5
+        zeroAddress4
       ]
     });
     return {
@@ -1754,7 +1880,7 @@ var WooFiAdapter = class {
 };
 
 // src/dex/solidly_gauge.ts
-import { createPublicClient as createPublicClient6, decodeFunctionResult as decodeFunctionResult3, encodeFunctionData as encodeFunctionData10, http as http6, parseAbi as parseAbi10, zeroAddress as zeroAddress6 } from "viem";
+import { createPublicClient as createPublicClient6, decodeFunctionResult as decodeFunctionResult3, encodeFunctionData as encodeFunctionData10, http as http6, parseAbi as parseAbi10, zeroAddress as zeroAddress5 } from "viem";
 import { DefiError as DefiError10, multicallRead as multicallRead3 } from "@hypurrquant/defi-core";
 var gaugeAbi = parseAbi10([
   "function deposit(uint256 amount) external",
@@ -1983,7 +2109,7 @@ var SolidlyGaugeAdapter = class {
         poolCalls.push([this.voter, encodeFunctionData10({ abi: voterPoolsAbi, functionName: "pools", args: [BigInt(i)] })]);
       }
       const poolResults = await multicallRead3(this.rpcUrl, poolCalls);
-      pairs = poolResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress6);
+      pairs = poolResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress5);
     } else {
       const v2FactoryAbi = parseAbi10(["function allPairsLength() view returns (uint256)", "function allPairs(uint256) view returns (address)"]);
       const solidlyFactoryAbi = parseAbi10(["function allPoolsLength() view returns (uint256)", "function allPools(uint256) view returns (address)"]);
@@ -2008,17 +2134,17 @@ var SolidlyGaugeAdapter = class {
       const pairCalls = [];
       for (let i = startIdx; i < count; i++) pairCalls.push([this.v2Factory, encodeFunctionData10({ abi: fetchAbi, functionName: fetchFn, args: [BigInt(i)] })]);
       const pairResults = await multicallRead3(this.rpcUrl, pairCalls);
-      pairs = pairResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress6);
+      pairs = pairResults.map((r) => decodeAddress2(r)).filter((a) => a !== null && a !== zeroAddress5);
     }
     if (pairs.length === 0) return;
     const gaugeCalls = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [p] })]);
     let gaugeResults = await multicallRead3(this.rpcUrl, gaugeCalls);
-    const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+    const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress5 || decodeAddress2(r) === null);
     if (allNull) {
       const fb1 = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: poolToGaugeAbi, functionName: "poolToGauge", args: [p] })]);
       gaugeResults = await multicallRead3(this.rpcUrl, fb1);
     }
-    const allNull2 = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+    const allNull2 = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress5 || decodeAddress2(r) === null);
     if (allNull2) {
       const fb2 = pairs.map((p) => [this.voter, encodeFunctionData10({ abi: gaugesAbi, functionName: "gauges", args: [p] })]);
       gaugeResults = await multicallRead3(this.rpcUrl, fb2);
@@ -2026,7 +2152,7 @@ var SolidlyGaugeAdapter = class {
     const gaugedPairs = [];
     for (let i = 0; i < pairs.length; i++) {
       const gauge = decodeAddress2(gaugeResults[i] ?? null);
-      if (gauge && gauge !== zeroAddress6) {
+      if (gauge && gauge !== zeroAddress5) {
         gaugedPairs.push({ pair: pairs[i], gauge });
       }
     }
@@ -2042,8 +2168,8 @@ var SolidlyGaugeAdapter = class {
     for (let i = 0; i < gaugedPairs.length; i++) {
       const t0 = decodeAddress2(metaResults[i * 3] ?? null);
       const t1 = decodeAddress2(metaResults[i * 3 + 1] ?? null);
-      if (t0 && t0 !== zeroAddress6) tokenAddrs.add(t0);
-      if (t1 && t1 !== zeroAddress6) tokenAddrs.add(t1);
+      if (t0 && t0 !== zeroAddress5) tokenAddrs.add(t0);
+      if (t1 && t1 !== zeroAddress5) tokenAddrs.add(t1);
     }
     const uniqueTokens = Array.from(tokenAddrs);
     const symbolCalls = uniqueTokens.map((t) => [
@@ -2133,7 +2259,7 @@ var SolidlyGaugeAdapter = class {
     const candidatePools = [];
     for (let i = 0; i < getPoolCalls.length; i++) {
       const pool = decodeAddress2(getPoolResults[i] ?? null);
-      if (pool && pool !== zeroAddress6) {
+      if (pool && pool !== zeroAddress5) {
         const { pairIdx, tickSpacing } = callMeta[i];
         const [tokenA, tokenB] = pairs[pairIdx];
         candidatePools.push({ pool, tokenA, tokenB, tickSpacing });
@@ -2145,7 +2271,7 @@ var SolidlyGaugeAdapter = class {
       encodeFunctionData10({ abi: gaugeForPoolAbi, functionName: "gaugeForPool", args: [pool] })
     ]);
     let gaugeResults = await multicallRead3(this.rpcUrl, gaugeCalls);
-    const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress6 || decodeAddress2(r) === null);
+    const allNull = gaugeResults.every((r) => !r || decodeAddress2(r) === zeroAddress5 || decodeAddress2(r) === null);
     if (allNull) {
       const fallbackCalls = candidatePools.map(({ pool }) => [
         this.voter,
@@ -2156,7 +2282,7 @@ var SolidlyGaugeAdapter = class {
     const gaugedCL = [];
     for (let i = 0; i < candidatePools.length; i++) {
       const gauge = decodeAddress2(gaugeResults[i] ?? null);
-      if (gauge && gauge !== zeroAddress6) {
+      if (gauge && gauge !== zeroAddress5) {
         gaugedCL.push({ ...candidatePools[i], gauge });
       }
     }
@@ -2186,8 +2312,8 @@ var SolidlyGaugeAdapter = class {
       const { pool, gauge, tokenA, tokenB, tickSpacing } = gaugedCL[i];
       const rawT0 = decodeAddress2(poolTokenResults[i * 2] ?? null);
       const rawT1 = decodeAddress2(poolTokenResults[i * 2 + 1] ?? null);
-      const t0 = rawT0 && rawT0 !== zeroAddress6 ? rawT0 : tokenA;
-      const t1 = rawT1 && rawT1 !== zeroAddress6 ? rawT1 : tokenB;
+      const t0 = rawT0 && rawT0 !== zeroAddress5 ? rawT0 : tokenA;
+      const t1 = rawT1 && rawT1 !== zeroAddress5 ? rawT1 : tokenB;
       out.push({
         pool,
         gauge,
@@ -2289,7 +2415,7 @@ var SolidlyGaugeAdapter = class {
           functionName: fn,
           args: [pool]
         });
-        if (gauge !== zeroAddress6) return gauge;
+        if (gauge !== zeroAddress5) return gauge;
       } catch {
       }
     }
@@ -2343,7 +2469,7 @@ var SolidlyGaugeAdapter = class {
         abi: gaugeAbi,
         functionName: "rewardToken"
       });
-      if (rt !== zeroAddress6) return { tokens: [rt], multiToken: false };
+      if (rt !== zeroAddress5) return { tokens: [rt], multiToken: false };
     } catch {
     }
     return { tokens: [], multiToken: false };
@@ -2353,7 +2479,7 @@ var SolidlyGaugeAdapter = class {
       const data = encodeFunctionData10({
         abi: gaugeAbi,
         functionName: "getReward",
-        args: [account ?? zeroAddress6]
+        args: [account ?? zeroAddress5]
       });
       return { description: `[${this.protocolName}] Claim gauge rewards`, to: gauge, data, value: 0n, gas_estimate: 2e5 };
     }
@@ -2577,7 +2703,7 @@ var SolidlyGaugeAdapter = class {
           functionName: "earned",
           args: [user]
         });
-        results.push({ token: zeroAddress6, symbol: "unknown", amount: earned });
+        results.push({ token: zeroAddress5, symbol: "unknown", amount: earned });
       } catch {
       }
     }
@@ -3044,20 +3170,47 @@ var MerchantMoeLBAdapter = class {
   /**
    * Build an addLiquidity transaction for a Liquidity Book pair.
    * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+   *
+   * The LB pair stores tokenX/tokenY in the order set at factory creation,
+   * which is **not** address-sorted. Callers may pass tokens in either order;
+   * we always re-align with the pool's `getTokenX/getTokenY` (and swap amounts
+   * accordingly) so the router's `if (tokenX != pair.tokenX) revert` path is
+   * never hit.
    */
   async buildAddLiquidity(params) {
     const numBins = params.numBins ?? 5;
     const deadline = params.deadline ?? BigInt("18446744073709551615");
-    let activeIdDesired = params.activeIdDesired;
-    if (activeIdDesired === void 0) {
-      const rpcUrl = this.requireRpc();
-      const client = createPublicClient8({ transport: http8(rpcUrl) });
-      const activeId = await client.readContract({
-        address: params.pool,
-        abi: lbPairAbi,
-        functionName: "getActiveId"
-      });
-      activeIdDesired = activeId;
+    const rpcUrl = this.requireRpc();
+    const client = createPublicClient8({ transport: http8(rpcUrl) });
+    const [poolTokenX, poolTokenY, onChainActiveId] = await Promise.all([
+      client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }),
+      client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" }),
+      params.activeIdDesired === void 0 ? client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getActiveId" }) : Promise.resolve(params.activeIdDesired)
+    ]);
+    const activeIdDesired = onChainActiveId;
+    const inX = params.tokenX.toLowerCase();
+    const inY = params.tokenY.toLowerCase();
+    const poolX = poolTokenX.toLowerCase();
+    const poolY = poolTokenY.toLowerCase();
+    let tokenX;
+    let tokenY;
+    let amountX;
+    let amountY;
+    if (inX === poolX && inY === poolY) {
+      tokenX = params.tokenX;
+      tokenY = params.tokenY;
+      amountX = params.amountX;
+      amountY = params.amountY;
+    } else if (inX === poolY && inY === poolX) {
+      tokenX = poolTokenX;
+      tokenY = poolTokenY;
+      amountX = params.amountY;
+      amountY = params.amountX;
+    } else {
+      throw new DefiError12(
+        "CONTRACT_ERROR",
+        `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`
+      );
     }
     const deltaIds = [];
     for (let d = -numBins; d <= numBins; d++) {
@@ -3069,11 +3222,11 @@ var MerchantMoeLBAdapter = class {
       functionName: "addLiquidity",
       args: [
         {
-          tokenX: params.tokenX,
-          tokenY: params.tokenY,
+          tokenX,
+          tokenY,
           binStep: BigInt(params.binStep),
-          amountX: params.amountX,
-          amountY: params.amountY,
+          amountX,
+          amountY,
           amountXMin: 0n,
           amountYMin: 0n,
           activeIdDesired: BigInt(activeIdDesired),
@@ -3088,31 +3241,63 @@ var MerchantMoeLBAdapter = class {
       ]
     });
     return {
-      description: `[${this.protocolName}] LB addLiquidity ${params.amountX} tokenX + ${params.amountY} tokenY across ${deltaIds.length} bins`,
+      description: `[${this.protocolName}] LB addLiquidity ${amountX} tokenX + ${amountY} tokenY across ${deltaIds.length} bins`,
       to: this.lbRouter,
       data,
       value: 0n,
       gas_estimate: 8e5,
       approvals: [
-        { token: params.tokenX, spender: this.lbRouter, amount: params.amountX },
-        { token: params.tokenY, spender: this.lbRouter, amount: params.amountY }
+        { token: tokenX, spender: this.lbRouter, amount: amountX },
+        { token: tokenY, spender: this.lbRouter, amount: amountY }
       ]
     };
   }
   /**
    * Build a removeLiquidity transaction for specific LB bins.
+   *
+   * When `pool` is supplied, the adapter realigns tokenX/tokenY (and
+   * amountXMin/amountYMin) to the pool's actual ordering. Otherwise it trusts
+   * the caller — the router will revert if the order is wrong.
    */
   async buildRemoveLiquidity(params) {
     const deadline = params.deadline ?? BigInt("18446744073709551615");
+    let tokenX = params.tokenX;
+    let tokenY = params.tokenY;
+    let amountXMin = params.amountXMin ?? 0n;
+    let amountYMin = params.amountYMin ?? 0n;
+    if (params.pool) {
+      const rpcUrl = this.requireRpc();
+      const client = createPublicClient8({ transport: http8(rpcUrl) });
+      const [poolTokenX, poolTokenY] = await Promise.all([
+        client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }),
+        client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" })
+      ]);
+      const inX = params.tokenX.toLowerCase();
+      const inY = params.tokenY.toLowerCase();
+      const poolX = poolTokenX.toLowerCase();
+      const poolY = poolTokenY.toLowerCase();
+      if (inX === poolY && inY === poolX) {
+        tokenX = poolTokenX;
+        tokenY = poolTokenY;
+        const x = amountXMin;
+        amountXMin = amountYMin;
+        amountYMin = x;
+      } else if (!(inX === poolX && inY === poolY)) {
+        throw new DefiError12(
+          "CONTRACT_ERROR",
+          `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`
+        );
+      }
+    }
     const data = encodeFunctionData12({
       abi: lbRouterAbi,
       functionName: "removeLiquidity",
       args: [
-        params.tokenX,
-        params.tokenY,
+        tokenX,
+        tokenY,
         params.binStep,
-        params.amountXMin ?? 0n,
-        params.amountYMin ?? 0n,
+        amountXMin,
+        amountYMin,
         params.binIds.map(BigInt),
         params.amounts,
         params.recipient,
@@ -3738,7 +3923,7 @@ import {
   keccak256,
   parseAbi as parseAbi13,
   decodeFunctionResult as decodeFunctionResult5,
-  zeroAddress as zeroAddress7
+  zeroAddress as zeroAddress6
 } from "viem";
 import { DefiError as DefiError13, multicallRead as multicallRead5 } from "@hypurrquant/defi-core";
 var KITTEN_TOKEN = "0x618275f8efe54c2afa87bfb9f210a52f0ff89364";
@@ -4093,7 +4278,7 @@ var KittenSwapFarmingAdapter = class {
     const poolSet = /* @__PURE__ */ new Set();
     for (const data of poolResults) {
       const addr = decodeAddress3(data);
-      if (addr && addr !== zeroAddress7) {
+      if (addr && addr !== zeroAddress6) {
         poolSet.add(addr.toLowerCase());
       }
     }
@@ -4261,6 +4446,34 @@ var NestOffChainAdapter = class {
     }
     return apr;
   }
+  /**
+   * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+   * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+   * off-chain via signed claim tickets), so the on-chain Solidly gauge
+   * reader cannot surface real emission APR. This API is the canonical
+   * read source — used by `lp discover` to expose non-zero NEST yields.
+   */
+  async getLiquidityPools() {
+    const raw = await this.fetchJson("/liquidity-pools");
+    const out = [];
+    for (const p of raw) {
+      const t0 = p.token0?.basetoken;
+      const t1 = p.token1?.basetoken;
+      if (!t0?.address || !t1?.address) continue;
+      out.push({
+        pool: p.id,
+        gauge: p.gauge ?? null,
+        token0: { address: t0.address, symbol: t0.symbol ?? "?" },
+        token1: { address: t1.address, symbol: t1.symbol ?? "?" },
+        tvlUSD: Number(p.tvlUSD ?? 0),
+        aprPercent: Number(p.apr ?? 0),
+        curEpochEmissionRewardsUSD: Number(p.curEpochEmissionRewardsUSD ?? 0),
+        poolType: p.poolType,
+        isStable: p.isStable
+      });
+    }
+    return out;
+  }
   /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
   async getPendingRewards(user) {
     const status = await this.getClaimStatus(user);
@@ -4413,7 +4626,7 @@ var NestOffChainAdapter = class {
 };
 
 // src/lending/aave_v3.ts
-import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult6, zeroAddress as zeroAddress8 } from "viem";
+import { createPublicClient as createPublicClient10, http as http10, parseAbi as parseAbi14, encodeFunctionData as encodeFunctionData14, decodeFunctionResult as decodeFunctionResult6, zeroAddress as zeroAddress7 } from "viem";
 import {
   DefiError as DefiError15,
   multicallRead as multicallRead6,
@@ -4425,6 +4638,16 @@ var POOL_ABI = parseAbi14([
   "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
   "function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
   "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
+  // Toggles required to actually borrow against an isolation-mode reserve
+  // (https://aave.com/docs/aave-v3/smart-contracts/pool):
+  //   - setUserUseReserveAsCollateral: an isolation reserve can be enabled
+  //     only if no other asset is enabled; LTV=0 reserves can never be
+  //     enabled; disable reverts if the resulting HF would drop below the
+  //     liquidation threshold.
+  //   - setUserEMode: reverts if the user is borrowing a non-eMode-
+  //     compatible asset, or if the change would push HF below threshold.
+  "function setUserUseReserveAsCollateral(address asset, bool useAsCollateral) external",
+  "function setUserEMode(uint8 categoryId) external",
   "function getUserAccountData(address user) external view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)",
   "function getReservesList() external view returns (address[])",
   "function getReserveData(address asset) external view returns (uint256 configuration, uint128 liquidityIndex, uint128 currentLiquidityRate, uint128 variableBorrowIndex, uint128 currentVariableBorrowRate, uint128 currentStableBorrowRate, uint40 lastUpdateTimestamp, uint16 id, address aTokenAddress, address stableDebtTokenAddress, address variableDebtTokenAddress, address interestRateStrategyAddress, uint128 accruedToTreasury, uint128 unbacked, uint128 isolationModeTotalDebt)"
@@ -4595,6 +4818,34 @@ var AaveV3Adapter = class {
       gas_estimate: 25e4
     };
   }
+  async buildSetUseReserveAsCollateral(asset, useAsCollateral) {
+    const data = encodeFunctionData14({
+      abi: POOL_ABI,
+      functionName: "setUserUseReserveAsCollateral",
+      args: [asset, useAsCollateral]
+    });
+    return {
+      description: `[${this.protocolName}] ${useAsCollateral ? "Enable" : "Disable"} ${asset} as collateral`,
+      to: this.pool,
+      data,
+      value: 0n,
+      gas_estimate: 1e5
+    };
+  }
+  async buildSetEMode(categoryId) {
+    const data = encodeFunctionData14({
+      abi: POOL_ABI,
+      functionName: "setUserEMode",
+      args: [categoryId]
+    });
+    return {
+      description: `[${this.protocolName}] Set eMode category to ${categoryId}${categoryId === 0 ? " (opt out)" : ""}`,
+      to: this.pool,
+      data,
+      value: 0n,
+      gas_estimate: 15e4
+    };
+  }
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError15.rpcError("No RPC URL configured");
     const reserveCallData = encodeFunctionData14({
@@ -4639,7 +4890,7 @@ var AaveV3Adapter = class {
         [aTokenAddress, encodeFunctionData14({ abi: INCENTIVES_ABI, functionName: "getIncentivesController" })]
       ]);
       const controllerAddr = decodeAddress4(controllerRaw ?? null);
-      if (controllerAddr && controllerAddr !== zeroAddress8) {
+      if (controllerAddr && controllerAddr !== zeroAddress7) {
         const [supplyRewardsRaw, borrowRewardsRaw] = await multicallRead6(this.rpcUrl, [
           [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [aTokenAddress] })],
           [controllerAddr, encodeFunctionData14({ abi: REWARDS_CONTROLLER_ABI, functionName: "getRewardsByAsset", args: [variableDebtTokenAddress] })]
@@ -4835,8 +5086,8 @@ var AaveV3Adapter = class {
         if (p.value.borrow > 0n) borrows.push({ asset: p.value.asset, symbol: p.value.symbol, amount: p.value.borrow });
       }
     } catch {
-      if (collateralUsd > 0) supplies.push({ asset: zeroAddress8, symbol: "Total Collateral (per-asset breakdown unavailable)", amount: totalCollateralBase });
-      if (debtUsd > 0) borrows.push({ asset: zeroAddress8, symbol: "Total Debt (per-asset breakdown unavailable)", amount: totalDebtBase });
+      if (collateralUsd > 0) supplies.push({ asset: zeroAddress7, symbol: "Total Collateral (per-asset breakdown unavailable)", amount: totalCollateralBase });
+      if (debtUsd > 0) borrows.push({ asset: zeroAddress7, symbol: "Total Debt (per-asset breakdown unavailable)", amount: totalDebtBase });
     }
     return {
       protocol: this.protocolName,
@@ -4852,7 +5103,7 @@ var AaveV3Adapter = class {
 };
 
 // src/lending/aave_v2.ts
-import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData15, zeroAddress as zeroAddress9 } from "viem";
+import { createPublicClient as createPublicClient11, http as http11, parseAbi as parseAbi15, encodeFunctionData as encodeFunctionData15, zeroAddress as zeroAddress8 } from "viem";
 import {
   DefiError as DefiError16,
   InterestRateMode as InterestRateMode2
@@ -5015,8 +5266,8 @@ var AaveV2Adapter = class {
     const collateralUsd = u256ToF642(totalCollateralBase) / 1e18;
     const debtUsd = u256ToF642(totalDebtBase) / 1e18;
     const ltvBps = u256ToF642(ltv);
-    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress9, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
-    const borrows = debtUsd > 0 ? [{ asset: zeroAddress9, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
+    const supplies = collateralUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Collateral", amount: totalCollateralBase, value_usd: collateralUsd }] : [];
+    const borrows = debtUsd > 0 ? [{ asset: zeroAddress8, symbol: "Total Debt", amount: totalDebtBase, value_usd: debtUsd }] : [];
     return {
       protocol: this.protocolName,
       user,
@@ -5129,14 +5380,26 @@ var CTOKEN_ABI = parseAbi17([
   "function borrow(uint256 borrowAmount) external returns (uint256)",
   "function repayBorrow(uint256 repayAmount) external returns (uint256)"
 ]);
+var NATIVE_CTOKEN_ABI = parseAbi17([
+  "function mint() external payable",
+  "function repayBorrow() external payable"
+]);
+var NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000";
 var BSC_BLOCKS_PER_YEAR = 10512e3;
 var CompoundV2Adapter = class {
   protocolName;
   defaultVtoken;
   vTokenCandidates;
   rpcUrl;
-  // Lazy cache: underlying asset address (lowercased) → vToken address
+  // Lazy cache: underlying asset address (lowercased) → vToken address.
+  // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
+  // when one is detected during resolveVtoken().
   vTokenByAsset = null;
+  // The cETH/vBNB-style vToken whose underlying() reverts (it has no
+  // ERC20 underlying — the underlying is the chain's native gas token).
+  // Set lazily by resolveVtoken() and consulted by buildSupply/buildRepay
+  // to switch to the payable mint() / repayBorrow() variants.
+  nativeVtoken = null;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
     this.rpcUrl = rpcUrl;
@@ -5152,18 +5415,37 @@ var CompoundV2Adapter = class {
     if (!this.vTokenByAsset) {
       const client = createPublicClient13({ transport: http13(this.rpcUrl) });
       const map = /* @__PURE__ */ new Map();
+      let nativeVtoken = null;
       const lookups = await Promise.allSettled(
         this.vTokenCandidates.map(async (v) => {
-          const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" });
-          return [u.toLowerCase(), v];
+          try {
+            const u = await client.readContract({ address: v, abi: CTOKEN_ABI, functionName: "underlying" });
+            return { vtoken: v, underlying: u };
+          } catch {
+            return { vtoken: v, underlying: null };
+          }
         })
       );
       for (const r of lookups) {
-        if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
+        if (r.status !== "fulfilled") continue;
+        const { vtoken, underlying } = r.value;
+        if (underlying) {
+          map.set(underlying.toLowerCase(), vtoken);
+        } else if (!nativeVtoken) {
+          nativeVtoken = vtoken;
+        }
+      }
+      if (nativeVtoken) {
+        map.set(NATIVE_SENTINEL, nativeVtoken);
       }
       this.vTokenByAsset = map;
+      this.nativeVtoken = nativeVtoken;
     }
     return this.vTokenByAsset.get(asset.toLowerCase()) ?? null;
+  }
+  /** True iff `vtoken` is the cETH/vBNB-style native cToken for this protocol. */
+  isNativeVtoken(vtoken) {
+    return this.nativeVtoken !== null && vtoken.toLowerCase() === this.nativeVtoken.toLowerCase();
   }
   name() {
     return this.protocolName;
@@ -5178,6 +5460,16 @@ var CompoundV2Adapter = class {
   }
   async buildSupply(params) {
     const vtoken = await this.vtokenFor(params.asset);
+    if (this.isNativeVtoken(vtoken)) {
+      const data2 = encodeFunctionData16({ abi: NATIVE_CTOKEN_ABI, functionName: "mint" });
+      return {
+        description: `[${this.protocolName}] Supply ${params.amount} (native) to Venus`,
+        to: vtoken,
+        data: data2,
+        value: params.amount,
+        gas_estimate: 3e5
+      };
+    }
     const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "mint", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to Venus`,
@@ -5201,6 +5493,16 @@ var CompoundV2Adapter = class {
   }
   async buildRepay(params) {
     const vtoken = await this.vtokenFor(params.asset);
+    if (this.isNativeVtoken(vtoken)) {
+      const data2 = encodeFunctionData16({ abi: NATIVE_CTOKEN_ABI, functionName: "repayBorrow" });
+      return {
+        description: `[${this.protocolName}] Repay ${params.amount} (native) to Venus`,
+        to: vtoken,
+        data: data2,
+        value: params.amount,
+        gas_estimate: 3e5
+      };
+    }
     const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "repayBorrow", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to Venus`,
@@ -5599,7 +5901,7 @@ var EulerV2Adapter = class {
 };
 
 // src/lending/morpho.ts
-import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult7, zeroAddress as zeroAddress10 } from "viem";
+import { parseAbi as parseAbi20, encodeFunctionData as encodeFunctionData19, decodeFunctionResult as decodeFunctionResult7, zeroAddress as zeroAddress9, createPublicClient as createPublicClient16, http as http16 } from "viem";
 import {
   DefiError as DefiError21,
   multicallRead as multicallRead7,
@@ -5609,9 +5911,11 @@ var MORPHO_ABI = parseAbi20([
   "function market(bytes32 id) external view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee)",
   "function idToMarketParams(bytes32 id) external view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)",
   "function supply((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsSupplied, uint256 sharesSupplied)",
+  "function supplyCollateral((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, address onBehalf, bytes data) external",
   "function borrow((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsBorrowed, uint256 sharesBorrowed)",
   "function repay((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) external returns (uint256 assetsRepaid, uint256 sharesRepaid)",
-  "function withdraw((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)"
+  "function withdraw((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) external returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)",
+  "function withdrawCollateral((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, address onBehalf, address receiver) external"
 ]);
 var META_MORPHO_ABI = parseAbi20([
   "function supplyQueueLength() external view returns (uint256)",
@@ -5631,15 +5935,6 @@ var IRM_ABI = parseAbi20([
   "function borrowRateView((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee) market) external view returns (uint256)"
 ]);
 var SECONDS_PER_YEAR3 = 365.25 * 24 * 3600;
-function defaultMarketParams(loanToken = zeroAddress10) {
-  return {
-    loanToken,
-    collateralToken: zeroAddress10,
-    oracle: zeroAddress10,
-    irm: zeroAddress10,
-    lltv: 0n
-  };
-}
 function decodeMarket(data) {
   if (!data) return null;
   try {
@@ -5715,10 +6010,61 @@ var MorphoBlueAdapter = class {
   name() {
     return this.protocolName;
   }
+  /**
+   * Resolve a Morpho Blue marketId into the full MarketParams tuple by
+   * calling Morpho.idToMarketParams(id). Used by every direct-market
+   * method (supply / borrow / repay / withdraw / supplyCollateral /
+   * withdrawCollateral) so the caller only has to pass the 32-byte
+   * marketId — same shape as the Morpho UI / API.
+   */
+  async resolveMarketParams(marketId) {
+    if (!this.rpcUrl) {
+      throw DefiError21.rpcError(
+        `[${this.protocolName}] No RPC URL configured \u2014 cannot resolve marketId ${marketId}`
+      );
+    }
+    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    let result;
+    try {
+      result = await client.readContract({
+        address: this.morpho,
+        abi: MORPHO_ABI,
+        functionName: "idToMarketParams",
+        args: [marketId]
+      });
+    } catch (e) {
+      throw DefiError21.rpcError(
+        `[${this.protocolName}] idToMarketParams(${marketId}) failed: ${e}`
+      );
+    }
+    const [loanToken, collateralToken, oracle, irm, lltv] = result;
+    if (loanToken === zeroAddress9 || collateralToken === zeroAddress9 || lltv === 0n) {
+      throw DefiError21.invalidParam(
+        `[${this.protocolName}] marketId ${marketId} resolves to an empty MarketParams (loan=${loanToken}, collateral=${collateralToken}, lltv=${lltv}). Verify the id matches a registered market on this chain.`
+      );
+    }
+    return { loanToken, collateralToken, oracle, irm, lltv };
+  }
   async buildSupply(params) {
+    if (params.market_id) {
+      const market = await this.resolveMarketParams(params.market_id);
+      const data = encodeFunctionData19({
+        abi: MORPHO_ABI,
+        functionName: "supply",
+        args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
+      });
+      return {
+        description: `[${this.protocolName}] Supply ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}\u2026`,
+        to: this.morpho,
+        data,
+        value: 0n,
+        gas_estimate: 35e4,
+        approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }]
+      };
+    }
     const vault = await this.resolveVault(params.asset);
     if (vault) {
-      const data2 = encodeFunctionData19({
+      const data = encodeFunctionData19({
         abi: ERC4626_ABI,
         functionName: "deposit",
         args: [params.amount, params.on_behalf_of]
@@ -5726,50 +6072,82 @@ var MorphoBlueAdapter = class {
       return {
         description: `[${this.protocolName}] Deposit ${params.amount} into MetaMorpho vault`,
         to: vault,
-        data: data2,
+        data,
         value: 0n,
         gas_estimate: 4e5,
         approvals: [{ token: params.asset, spender: vault, amount: params.amount }]
       };
     }
-    const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData19({
-      abi: MORPHO_ABI,
-      functionName: "supply",
-      args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
-    });
-    return {
-      description: `[${this.protocolName}] Supply ${params.amount} to Morpho market`,
-      to: this.morpho,
-      data,
-      value: 0n,
-      gas_estimate: 3e5
-    };
+    throw DefiError21.invalidParam(
+      `[${this.protocolName}] supply requires either a registered MetaMorpho vault for ${params.asset} or an explicit --market <marketId>. The legacy zero-MarketParams stub was removed (it always reverted on-chain).`
+    );
   }
   async buildBorrow(params) {
-    const market = defaultMarketParams(params.asset);
+    if (!params.market_id) {
+      throw DefiError21.invalidParam(
+        `[${this.protocolName}] Morpho Blue borrow requires --market <marketId>. Find one via the Morpho API (https://blue-api.morpho.org/graphql).`
+      );
+    }
+    const market = await this.resolveMarketParams(params.market_id);
     const data = encodeFunctionData19({
       abi: MORPHO_ABI,
       functionName: "borrow",
       args: [market, params.amount, 0n, params.on_behalf_of, params.on_behalf_of]
     });
     return {
-      description: `[${this.protocolName}] Borrow ${params.amount} from Morpho market`,
+      description: `[${this.protocolName}] Borrow ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}\u2026`,
       to: this.morpho,
       data,
       value: 0n,
-      gas_estimate: 35e4
+      gas_estimate: 4e5
     };
   }
   async buildRepay(params) {
-    const market = defaultMarketParams(params.asset);
+    if (!params.market_id) {
+      throw DefiError21.invalidParam(
+        `[${this.protocolName}] Morpho Blue repay requires --market <marketId>.`
+      );
+    }
+    const market = await this.resolveMarketParams(params.market_id);
     const data = encodeFunctionData19({
       abi: MORPHO_ABI,
       functionName: "repay",
       args: [market, params.amount, 0n, params.on_behalf_of, "0x"]
     });
     return {
-      description: `[${this.protocolName}] Repay ${params.amount} to Morpho market`,
+      description: `[${this.protocolName}] Repay ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}\u2026`,
+      to: this.morpho,
+      data,
+      value: 0n,
+      gas_estimate: 35e4,
+      approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }]
+    };
+  }
+  async buildSupplyCollateral(params) {
+    const market = await this.resolveMarketParams(params.market_id);
+    const data = encodeFunctionData19({
+      abi: MORPHO_ABI,
+      functionName: "supplyCollateral",
+      args: [market, params.amount, params.on_behalf_of, "0x"]
+    });
+    return {
+      description: `[${this.protocolName}] Supply collateral ${params.amount} of ${params.asset} to market ${params.market_id.slice(0, 10)}\u2026`,
+      to: this.morpho,
+      data,
+      value: 0n,
+      gas_estimate: 35e4,
+      approvals: [{ token: params.asset, spender: this.morpho, amount: params.amount }]
+    };
+  }
+  async buildWithdrawCollateral(params) {
+    const market = await this.resolveMarketParams(params.market_id);
+    const data = encodeFunctionData19({
+      abi: MORPHO_ABI,
+      functionName: "withdrawCollateral",
+      args: [market, params.amount, params.to, params.to]
+    });
+    return {
+      description: `[${this.protocolName}] Withdraw collateral ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}\u2026`,
       to: this.morpho,
       data,
       value: 0n,
@@ -5777,6 +6155,21 @@ var MorphoBlueAdapter = class {
     };
   }
   async buildWithdraw(params) {
+    if (params.market_id) {
+      const market = await this.resolveMarketParams(params.market_id);
+      const data = encodeFunctionData19({
+        abi: MORPHO_ABI,
+        functionName: "withdraw",
+        args: [market, params.amount, 0n, params.to, params.to]
+      });
+      return {
+        description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from market ${params.market_id.slice(0, 10)}\u2026`,
+        to: this.morpho,
+        data,
+        value: 0n,
+        gas_estimate: 3e5
+      };
+    }
     const vault = await this.resolveVault(params.asset);
     if (vault) {
       if (params.amount === MAX_UINT256) {
@@ -5785,7 +6178,7 @@ var MorphoBlueAdapter = class {
           [vault, encodeFunctionData19({ abi: ERC4626_ABI, functionName: "balanceOf", args: [params.to] })]
         ]);
         const shares = decodeU2562(balRaw ?? null);
-        const data3 = encodeFunctionData19({
+        const data2 = encodeFunctionData19({
           abi: ERC4626_ABI,
           functionName: "redeem",
           args: [shares, params.to, params.to]
@@ -5793,12 +6186,12 @@ var MorphoBlueAdapter = class {
         return {
           description: `[${this.protocolName}] Redeem all shares (${shares}) from MetaMorpho vault`,
           to: vault,
-          data: data3,
+          data: data2,
           value: 0n,
           gas_estimate: 4e5
         };
       }
-      const data2 = encodeFunctionData19({
+      const data = encodeFunctionData19({
         abi: ERC4626_ABI,
         functionName: "withdraw",
         args: [params.amount, params.to, params.to]
@@ -5806,24 +6199,14 @@ var MorphoBlueAdapter = class {
       return {
         description: `[${this.protocolName}] Withdraw ${params.amount} assets from MetaMorpho vault`,
         to: vault,
-        data: data2,
+        data,
         value: 0n,
         gas_estimate: 4e5
       };
     }
-    const market = defaultMarketParams(params.asset);
-    const data = encodeFunctionData19({
-      abi: MORPHO_ABI,
-      functionName: "withdraw",
-      args: [market, params.amount, 0n, params.to, params.to]
-    });
-    return {
-      description: `[${this.protocolName}] Withdraw ${params.amount} from Morpho market`,
-      to: this.morpho,
-      data,
-      value: 0n,
-      gas_estimate: 25e4
-    };
+    throw DefiError21.invalidParam(
+      `[${this.protocolName}] withdraw requires either a registered MetaMorpho vault for ${params.asset} or an explicit --market <marketId>. The legacy zero-MarketParams stub was removed (it always reverted on-chain).`
+    );
   }
   async getRates(asset) {
     if (!this.rpcUrl) throw DefiError21.rpcError("No RPC URL configured");
@@ -5903,7 +6286,7 @@ var MorphoBlueAdapter = class {
 };
 
 // src/cdp/felix.ts
-import { createPublicClient as createPublicClient16, http as http16, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress11 } from "viem";
+import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi21, encodeFunctionData as encodeFunctionData20, zeroAddress as zeroAddress10 } from "viem";
 import {
   DefiError as DefiError22
 } from "@hypurrquant/defi-core";
@@ -5946,7 +6329,7 @@ var FelixCdpAdapter = class {
     if (!this.hintHelpers || !this.sortedTroves || !this.rpcUrl) {
       return [0n, 0n];
     }
-    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
     const approxResult = await client.readContract({
       address: this.hintHelpers,
       abi: HINT_HELPERS_ABI,
@@ -6037,7 +6420,7 @@ var FelixCdpAdapter = class {
   async getCdpInfo(cdpId) {
     if (!this.rpcUrl) throw DefiError22.rpcError(`[${this.protocolName}] getCdpInfo requires RPC \u2014 set HYPEREVM_RPC_URL`);
     if (!this.troveManager) throw DefiError22.contractError(`[${this.protocolName}] trove_manager contract not configured`);
-    const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
     const data = await client.readContract({
       address: this.troveManager,
       abi: TROVE_MANAGER_ABI,
@@ -6055,13 +6438,13 @@ var FelixCdpAdapter = class {
       protocol: this.protocolName,
       cdp_id: cdpId,
       collateral: {
-        token: zeroAddress11,
+        token: zeroAddress10,
         symbol: "WHYPE",
         amount: entireColl,
         decimals: 18
       },
       debt: {
-        token: zeroAddress11,
+        token: zeroAddress10,
         symbol: "feUSD",
         amount: entireDebt,
         decimals: 18
@@ -6072,7 +6455,7 @@ var FelixCdpAdapter = class {
 };
 
 // src/cdp/felix_oracle.ts
-import { createPublicClient as createPublicClient17, http as http17, parseAbi as parseAbi22 } from "viem";
+import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi22 } from "viem";
 import { DefiError as DefiError23 } from "@hypurrquant/defi-core";
 var PRICE_FEED_ABI = parseAbi22([
   "function fetchPrice() external view returns (uint256 price, bool isNewOracleFailureDetected)",
@@ -6100,7 +6483,7 @@ var FelixOracleAdapter = class {
     if (asset !== this.asset && this.asset !== "0x0000000000000000000000000000000000000000") {
       throw DefiError23.unsupported(`[${this.protocolName}] Felix PriceFeed only supports asset ${this.asset}`);
     }
-    const client = createPublicClient17({ transport: http17(this.rpcUrl) });
+    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
     let priceVal;
     try {
       const result = await client.readContract({
@@ -6141,7 +6524,7 @@ var FelixOracleAdapter = class {
 };
 
 // src/vault/erc4626.ts
-import { createPublicClient as createPublicClient18, http as http18, parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } from "viem";
+import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi23, encodeFunctionData as encodeFunctionData21 } from "viem";
 import {
   DefiError as DefiError24
 } from "@hypurrquant/defi-core";
@@ -6198,7 +6581,7 @@ var ERC4626VaultAdapter = class {
   }
   async totalAssets() {
     if (!this.rpcUrl) throw DefiError24.rpcError("No RPC URL configured");
-    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI2,
@@ -6209,7 +6592,7 @@ var ERC4626VaultAdapter = class {
   }
   async convertToShares(assets) {
     if (!this.rpcUrl) throw DefiError24.rpcError("No RPC URL configured");
-    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI2,
@@ -6221,7 +6604,7 @@ var ERC4626VaultAdapter = class {
   }
   async convertToAssets(shares) {
     if (!this.rpcUrl) throw DefiError24.rpcError("No RPC URL configured");
-    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
     return client.readContract({
       address: this.vaultAddress,
       abi: ERC4626_ABI2,
@@ -6233,7 +6616,7 @@ var ERC4626VaultAdapter = class {
   }
   async getVaultInfo() {
     if (!this.rpcUrl) throw DefiError24.rpcError("No RPC URL configured");
-    const client = createPublicClient18({ transport: http18(this.rpcUrl) });
+    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
     const [totalAssets, totalSupply, asset] = await Promise.all([
       client.readContract({ address: this.vaultAddress, abi: ERC4626_ABI2, functionName: "totalAssets" }).catch((e) => {
         throw DefiError24.rpcError(`[${this.protocolName}] totalAssets failed: ${e}`);
@@ -6306,7 +6689,7 @@ var GenericLstAdapter = class {
 };
 
 // src/liquid_staking/sthype.ts
-import { createPublicClient as createPublicClient19, http as http19, parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23, zeroAddress as zeroAddress12 } from "viem";
+import { createPublicClient as createPublicClient20, http as http20, parseAbi as parseAbi25, encodeFunctionData as encodeFunctionData23, zeroAddress as zeroAddress11 } from "viem";
 import {
   DefiError as DefiError26
 } from "@hypurrquant/defi-core";
@@ -6337,7 +6720,7 @@ var StHypeAdapter = class {
     const data = encodeFunctionData23({
       abi: STHYPE_ABI,
       functionName: "submit",
-      args: [zeroAddress12]
+      args: [zeroAddress11]
     });
     return {
       description: `[${this.protocolName}] Stake ${params.amount} HYPE for stHYPE`,
@@ -6363,7 +6746,7 @@ var StHypeAdapter = class {
   }
   async getInfo() {
     if (!this.rpcUrl) throw DefiError26.rpcError("No RPC URL configured");
-    const client = createPublicClient19({ transport: http19(this.rpcUrl) });
+    const client = createPublicClient20({ transport: http20(this.rpcUrl) });
     const tokenAddr = this.sthypeToken ?? this.staking;
     const totalSupply = await client.readContract({
       address: tokenAddr,
@@ -6374,7 +6757,7 @@ var StHypeAdapter = class {
     });
     return {
       protocol: this.protocolName,
-      staked_token: zeroAddress12,
+      staked_token: zeroAddress11,
       liquid_token: tokenAddr,
       exchange_rate: 1,
       total_staked: totalSupply
@@ -6383,7 +6766,7 @@ var StHypeAdapter = class {
 };
 
 // src/liquid_staking/kinetiq.ts
-import { createPublicClient as createPublicClient20, http as http20, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24, zeroAddress as zeroAddress13 } from "viem";
+import { createPublicClient as createPublicClient21, http as http21, parseAbi as parseAbi26, encodeFunctionData as encodeFunctionData24, zeroAddress as zeroAddress12 } from "viem";
 import {
   DefiError as DefiError27
 } from "@hypurrquant/defi-core";
@@ -6439,7 +6822,7 @@ var KinetiqAdapter = class {
   }
   async getInfo() {
     if (!this.rpcUrl) throw DefiError27.rpcError("No RPC URL configured");
-    const client = createPublicClient20({ transport: http20(this.rpcUrl) });
+    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
     const totalStaked = await client.readContract({
       address: this.staking,
       abi: KINETIQ_ABI,
@@ -6454,7 +6837,7 @@ var KinetiqAdapter = class {
     const rateF64 = hypePrice > 0n && khypePrice > 0n ? Number(khypePrice * 10n ** 18n / hypePrice) / 1e18 : 1;
     return {
       protocol: this.protocolName,
-      staked_token: zeroAddress13,
+      staked_token: zeroAddress12,
       liquid_token: this.liquidToken,
       exchange_rate: rateF64,
       total_staked: totalStaked
@@ -6688,7 +7071,7 @@ var GenericOptionsAdapter = class {
 };
 
 // src/nft/erc721.ts
-import { createPublicClient as createPublicClient21, http as http21, parseAbi as parseAbi29 } from "viem";
+import { createPublicClient as createPublicClient22, http as http22, parseAbi as parseAbi29 } from "viem";
 import { DefiError as DefiError34 } from "@hypurrquant/defi-core";
 var ERC721_ABI = parseAbi29([
   "function name() returns (string)",
@@ -6710,7 +7093,7 @@ var ERC721Adapter = class {
   }
   async getCollectionInfo(collection) {
     if (!this.rpcUrl) throw DefiError34.rpcError("No RPC URL configured");
-    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+    const client = createPublicClient22({ transport: http22(this.rpcUrl) });
     const [collectionName, symbol, totalSupply] = await Promise.all([
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "name" }).catch((e) => {
         throw DefiError34.rpcError(`[${this.protocolName}] name failed: ${e}`);
@@ -6729,7 +7112,7 @@ var ERC721Adapter = class {
   }
   async getTokenInfo(collection, tokenId) {
     if (!this.rpcUrl) throw DefiError34.rpcError("No RPC URL configured");
-    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+    const client = createPublicClient22({ transport: http22(this.rpcUrl) });
     const [owner, tokenUri] = await Promise.all([
       client.readContract({ address: collection, abi: ERC721_ABI, functionName: "ownerOf", args: [tokenId] }).catch((e) => {
         throw DefiError34.rpcError(`[${this.protocolName}] ownerOf failed: ${e}`);
@@ -6745,7 +7128,7 @@ var ERC721Adapter = class {
   }
   async getBalance(owner, collection) {
     if (!this.rpcUrl) throw DefiError34.rpcError("No RPC URL configured");
-    const client = createPublicClient21({ transport: http21(this.rpcUrl) });
+    const client = createPublicClient22({ transport: http22(this.rpcUrl) });
     return client.readContract({ address: collection, abi: ERC721_ABI, functionName: "balanceOf", args: [owner] }).catch((e) => {
       throw DefiError34.rpcError(`[${this.protocolName}] balanceOf failed: ${e}`);
     });

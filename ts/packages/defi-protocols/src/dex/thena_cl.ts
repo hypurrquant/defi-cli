@@ -2,7 +2,11 @@ import { encodeFunctionData, parseAbi, createPublicClient, http, zeroAddress } f
 import type { Address } from "viem";
 import { rangeToTicks, alignTickUp, alignTickDown } from "./tick_math.js";
 
-import { DefiError } from "@hypurrquant/defi-core";
+import {
+  DefiError,
+  applyMinSlippage,
+  defaultSwapSlippage,
+} from "@hypurrquant/defi-core";
 import type {
   IDex,
   ProtocolEntry,
@@ -65,6 +69,15 @@ export class ThenaCLAdapter implements IDex {
   }
 
   async buildSwap(params: SwapParams): Promise<DeFiTx> {
+    // SSOT 7.3: this.quote() is unsupported on Thena CL, so the caller
+    // MUST supply params.amount_out_min. We refuse to ship 0n.
+    if (params.amount_out_min === undefined) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] buildSwap requires amount_out_min for slippage protection ` +
+          `(SSOT 7.3) — Thena CL has no on-chain quoter. Compute the floor off-chain (e.g. ` +
+          `via the router's static-call simulation) and pass it explicitly.`,
+      );
+    }
     const data = encodeFunctionData({
       abi: thenaRouterAbi,
       functionName: "exactInputSingle",
@@ -75,7 +88,7 @@ export class ThenaCLAdapter implements IDex {
         recipient: params.recipient,
         deadline: BigInt(params.deadline ?? 18446744073709551615n),
         amountIn: params.amount_in,
-        amountOutMinimum: 0n,
+        amountOutMinimum: params.amount_out_min,
         sqrtPriceLimitX96: 0n,
       }],
     });
@@ -96,10 +109,17 @@ export class ThenaCLAdapter implements IDex {
     if (!this.rpcUrl) throw DefiError.rpcError("RPC URL required");
 
     // Sort tokens
-    const [token0, token1, rawAmount0, rawAmount1] =
-      params.token_a.toLowerCase() < params.token_b.toLowerCase()
-        ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
-        : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [token0, token1, rawAmount0, rawAmount1] = isAFirst
+      ? [params.token_a, params.token_b, params.amount_a, params.amount_b]
+      : [params.token_b, params.token_a, params.amount_b, params.amount_a];
+
+    // SSOT 7.3: derive amount{0,1}Min per side. Caller override wins;
+    // otherwise apply slippage (default 50 bps) to amountDesired.
+    const slippage = params.slippage ?? defaultSwapSlippage();
+    const minA = params.amount_a_min ?? applyMinSlippage(slippage, params.amount_a);
+    const minB = params.amount_b_min ?? applyMinSlippage(slippage, params.amount_b);
+    const [amount0Min, amount1Min] = isAFirst ? [minA, minB] : [minB, minA];
 
     // Resolve pool and tick range
     const client = createPublicClient({ transport: http(this.rpcUrl) });
@@ -162,7 +182,7 @@ export class ThenaCLAdapter implements IDex {
         tickLower, tickUpper,
         amount0Desired: rawAmount0,
         amount1Desired: rawAmount1,
-        amount0Min: 0n, amount1Min: 0n,
+        amount0Min, amount1Min,
         recipient: params.recipient,
         deadline: BigInt("18446744073709551615"),
         sqrtPriceX96: 0n,
@@ -183,11 +203,24 @@ export class ThenaCLAdapter implements IDex {
     const pm = this.positionManager;
     if (!pm) throw DefiError.contractError(`[${this.protocolName}] Missing 'position_manager'`);
     if (!params.token_id) throw DefiError.invalidParam(`[${this.protocolName}] V3 remove_liquidity requires --token-id`);
+    // SSOT 7.3: caller must pin amount_{a,b}_min — Thena CL has no
+    // quoter, and we won't ship 0n on a broadcast path.
+    if (params.amount_a_min === undefined || params.amount_b_min === undefined) {
+      throw DefiError.invalidParam(
+        `[${this.protocolName}] remove_liquidity requires amount_a_min and amount_b_min for ` +
+          `slippage protection (SSOT 7.3). Compute expected outputs from positions(tokenId) + ` +
+          `pool.slot0 off-chain and apply tolerance.`,
+      );
+    }
+    const isAFirst = params.token_a.toLowerCase() < params.token_b.toLowerCase();
+    const [amount0Min, amount1Min] = isAFirst
+      ? [params.amount_a_min, params.amount_b_min]
+      : [params.amount_b_min, params.amount_a_min];
     const MAX_UINT128 = (1n << 128n) - 1n;
     const deadline = BigInt("18446744073709551615");
     const decreaseData = encodeFunctionData({
       abi: thenaPmAbi, functionName: "decreaseLiquidity",
-      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min: 0n, amount1Min: 0n, deadline }],
+      args: [{ tokenId: params.token_id, liquidity: params.liquidity, amount0Min, amount1Min, deadline }],
     });
     const collectData = encodeFunctionData({
       abi: thenaPmAbi, functionName: "collect",

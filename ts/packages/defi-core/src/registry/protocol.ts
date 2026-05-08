@@ -100,5 +100,26 @@ export interface ProtocolEntry {
   cl_style?: "slipstream" | "ramses";
   contracts?: Record<string, Address>;
   pools?: PoolInfo[];
+  /**
+   * Optional named-market registry — currently used by Morpho Blue to map a
+   * friendly name (`WMON-AUSD`) to its 32-byte marketId so the CLI doesn't
+   * have to round-trip the GraphQL API on every call. Adapters that don't
+   * have a named-market concept (Aave V3, Compound V2/V3) ignore this.
+   */
+  markets?: MarketInfo[];
   description?: string;
+}
+
+/** Per-market metadata for Morpho Blue and similar id-keyed lending markets. */
+export interface MarketInfo {
+  /** Friendly name accepted by `--market <name>` on the CLI. Case-sensitive. */
+  name: string;
+  /** 32-byte marketId (the `bytes32` argument to `idToMarketParams`). */
+  id: `0x${string}`;
+  /** Human-readable loan asset symbol (informational; not used by the adapter). */
+  loan_asset?: string;
+  /** Human-readable collateral asset symbol (informational; not used by the adapter). */
+  collateral_asset?: string;
+  /** LLTV in 1e18 fixed-point (e.g. `770000000000000000` = 77%). Informational. */
+  lltv?: string;
 }

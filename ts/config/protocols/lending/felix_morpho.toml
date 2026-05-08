@@ -18,3 +18,19 @@ feusde = "0x835FEBF893c6DdDee5CF762B0f8e31C5B06938ab"
 feusdhl = "0x9c59a9389D8f72DE2CdAf1126F36EA4790E2275e"
 feusdt0_frontier = "0x9896a8605763106e57A51aa0a97Fe8099E806bb3"
 feusdhl_frontier = "0x66c71204B70aE27BE6dC3eb41F9aF5868E68fDb6"
+
+# Named-market shortcuts so direct Morpho Blue ops can use a friendly name
+# instead of the 32-byte hex. Source: blue-api.morpho.org, verified 2026-05-07.
+[[protocol.markets]]
+name = "WHYPE-USDT0"
+id = "0xd5a9fba2309a0b85972a96f2cc45f9784e786d712944d8fc0b31a6d9cb4f21d3"
+loan_asset = "USDT0"
+collateral_asset = "WHYPE"
+lltv = "770000000000000000"
+
+[[protocol.markets]]
+name = "wstHYPE-USDT0"
+id = "0xf7d557e9a88edda08758188faf12aba046168de4a7abdb3a7919a019d884f9ba"
+loan_asset = "USDT0"
+collateral_asset = "wstHYPE"
+lltv = "620000000000000000"
