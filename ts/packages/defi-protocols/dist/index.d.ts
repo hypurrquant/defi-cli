@@ -1,4 +1,4 @@
-import { IGaugeSystem, ProtocolEntry, GaugedPool, DeFiTx, RewardInfo, IGauge, ICdp, IDerivatives, IDex, ILending, ILiquidStaking, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, SupplyCollateralParams, WithdrawCollateralParams, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
+import { IGaugeSystem, ProtocolEntry, GaugedPool, DeFiTx, RewardInfo, IGauge, ICdp, IDerivatives, IDex, ILending, ILiquidStaking, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, MarketInfo, SupplyCollateralParams, WithdrawCollateralParams, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
 import { Address, Hex } from 'viem';
 
 /**
@@ -793,8 +793,22 @@ declare class MorphoBlueAdapter implements ILending {
     private readonly rpcUrl?;
     private readonly metaMorphoVaults;
     private readonly metaMorphoVaultEntries;
+    private readonly namedMarkets;
+    private readonly namedMarketByName;
     private vaultAssetMap;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
+    /**
+     * Resolve a friendly market name (e.g. `WMON-AUSD`) to its 32-byte
+     * marketId via the per-protocol TOML registry. Returns null when the
+     * adapter has no markets[] block or the name doesn't match any entry —
+     * callers fall back to treating the input as a raw hex marketId.
+     */
+    resolveMarketIdByName(name: string): `0x${string}` | null;
+    /**
+     * Returns the registered named markets for diagnostics (e.g. CLI error
+     * messages listing valid choices when the user passes an unknown name).
+     */
+    listNamedMarkets(): ReadonlyArray<MarketInfo>;
     private resolveVault;
     name(): string;
     /**
