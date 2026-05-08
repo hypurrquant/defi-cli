@@ -224,7 +224,10 @@ defi --chain bnb swap --provider relay --from WBNB --to USDT --amount <wei> --br
 
 ```bash
 defi --chain base bridge --token USDC --amount 100000000 --to-chain ethereum --provider lifi --broadcast
+defi --chain base bridge --token 0x0000000000000000000000000000000000000000 --amount 1000000000000000 --to-chain bnb --provider relay --broadcast
 ```
+
+Providers: `lifi` (default, broad coverage), `relay` (fast native-token routes, ~3s settle), `debridge` (DLN intent), `cctp` (Circle native USDC).
 
 ## Command Reference
 
@@ -242,7 +245,7 @@ defi --chain base bridge --token USDC --amount 100000000 --to-chain ethereum --p
 | `lending` | rates / position / supply / borrow / repay / withdraw |
 | `yield` | compare / scan (cross-chain) / optimize / execute |
 | `swap` | DEX aggregator swap (kyber, openocean, liquid, lifi, relay) |
-| `bridge` | Cross-chain transfer (lifi, debridge, cctp) |
+| `bridge` | Cross-chain transfer (lifi, relay, debridge, cctp) |
 | `portfolio` | show / snapshot / pnl / history |
 | `price` | Oracle + DEX prices |
 | `wallet` | Address management |
