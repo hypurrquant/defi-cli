@@ -30,6 +30,26 @@ export interface NestAprEstimateParams {
   token1Amount: bigint;
 }
 
+/**
+ * Per-pool emission snapshot returned by /api/blaze/liquidity-pools.
+ * Mirrors the shape `lp discover` consumes for IGauge pools, but populated
+ * from the off-chain blaze API so NEST's read-side surfaces non-zero APR
+ * even though on-chain `gauge.rewardRate` is hard-wired to 0.
+ */
+export interface NestLiquidityPool {
+  pool: Address;
+  gauge: Address | null;
+  token0: { address: Address; symbol: string };
+  token1: { address: Address; symbol: string };
+  tvlUSD: number;
+  /** APR in % (annualized, including emissions). 0 when pool has no active gauge epoch. */
+  aprPercent: number;
+  /** Current epoch's emission USD (0 if no active emissions). */
+  curEpochEmissionRewardsUSD: number;
+  poolType: string;
+  isStable: boolean;
+}
+
 export class NestOffChainAdapter {
   private readonly baseUrl: string;
   private readonly fallbackUrl: string;
@@ -111,6 +131,50 @@ export class NestOffChainAdapter {
       throw DefiError.providerError(`Nest apr/estimate: invalid apr value '${data.apr}'`);
     }
     return apr;
+  }
+
+  /**
+   * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+   * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+   * off-chain via signed claim tickets), so the on-chain Solidly gauge
+   * reader cannot surface real emission APR. This API is the canonical
+   * read source — used by `lp discover` to expose non-zero NEST yields.
+   */
+  async getLiquidityPools(): Promise<NestLiquidityPool[]> {
+    type RawTokenLeg = {
+      tokenAddress?: string;
+      basetoken?: { address?: string; symbol?: string; name?: string };
+    };
+    type RawPool = {
+      id: string;
+      gauge: string | null;
+      tvlUSD: string;
+      apr: string | number | null;
+      curEpochEmissionRewardsUSD: string | null;
+      poolType: string;
+      isStable: boolean;
+      token0: RawTokenLeg | null;
+      token1: RawTokenLeg | null;
+    };
+    const raw = await this.fetchJson<RawPool[]>("/liquidity-pools");
+    const out: NestLiquidityPool[] = [];
+    for (const p of raw) {
+      const t0 = p.token0?.basetoken;
+      const t1 = p.token1?.basetoken;
+      if (!t0?.address || !t1?.address) continue;
+      out.push({
+        pool: p.id as Address,
+        gauge: (p.gauge ?? null) as Address | null,
+        token0: { address: t0.address as Address, symbol: t0.symbol ?? "?" },
+        token1: { address: t1.address as Address, symbol: t1.symbol ?? "?" },
+        tvlUSD: Number(p.tvlUSD ?? 0),
+        aprPercent: Number(p.apr ?? 0),
+        curEpochEmissionRewardsUSD: Number(p.curEpochEmissionRewardsUSD ?? 0),
+        poolType: p.poolType,
+        isStable: p.isStable,
+      });
+    }
+    return out;
   }
 
   /** Pending NEST emissions as IGauge-compatible RewardInfo[] */

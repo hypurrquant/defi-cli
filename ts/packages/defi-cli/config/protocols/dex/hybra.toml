@@ -7,7 +7,7 @@ chain = "hyperevm"
 native = true
 verified = true
 reward_strategy = "on_chain_gauge_tokenid"
-description = "Hybra V4 CL DEX with ve(3,3) gauge emissions on HyperEVM. gauge.earned(tokenId) single-arg variant."
+description = "Hybra V4 CL DEX with ve(3,3) gauge emissions on HyperEVM. gauge.earned(tokenId) single-arg variant. CL NFT mint+remove (WHYPE/USDC pool 0x4C307812…9314) live-confirmed 2026-05-08 with --redeem-type 0 (instant exit, default 1 = 2-year veHYBR lock; tokenId 65929, mint 0xbe581c84…0e17, remove 0x4c271fef…1657). Full gauge stake/claim/unstake cycle (lp farm + lp claim --redeem-type 0 + lp remove --redeem-type 0) live-verified 2026-05-08 against gauge 0xa26921d56981fA43BA598428ea0C4Dd6De89CB8C on tokenId 65932 (mint 0x95cc6130…, gauge.deposit 0x3902fda7…, claim 0x2f3ef634…32ce, unstake 0x412430d0…, remove 0x690593f6…)."
 
 [protocol.contracts]
 # V4 CL
@@ -22,7 +22,9 @@ v2_factory = "0x9c7397c9C5ecC400992843408D3A283fE9108009"
 voter = "0x5623F012d15EB828C12fe32e46d40AdC2A9e4FA3"
 ve_token = "0xAE6D5FcE541216BDA471D311425B5412D9f1DEb9"
 minter = "0xA8265e40e4Cdf6DB345861F4FCb75F9CC63E149b"
-rewards_distributor = "0x04FCae9aF38e79B7bb82C6491BDACC2431F0e"
+# rewards_distributor: removed 2026-05-07 — the previously-listed address
+# was malformed (37 hex chars after 0x, should be 40) and no adapter code
+# referenced it. Re-add with the correct address when it's actually wired in.
 gauge_factory_cl = "0xeB60888176d0c6AF4C539D64b2E83E470a63e4F9"
 gauge_manager = "0x742CAA5bA7C92ca6CFeBfD0e73c21739b3b65d5e"
 bribe_factory = "0x2555F79AC6e8096c755096e3A8d175a4Bf5fC82F"

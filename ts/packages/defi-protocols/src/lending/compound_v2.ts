@@ -222,6 +222,47 @@ export class CompoundV2Adapter implements ILending {
     // CLI's `--amount` semantics). redeem() takes vToken units which would
     // require an extra exchangeRateStored conversion at the call site.
     const vtoken = await this.vtokenFor(params.asset);
+    const MAX_UINT256 = (1n << 256n) - 1n;
+
+    // uint256.max ("withdraw all") cannot use redeemUnderlying — it overflows
+    // when the contract converts max underlying back to vToken units. Read the
+    // user's full vToken balance and call redeem() with that exact amount.
+    if (params.amount === MAX_UINT256 && this.rpcUrl) {
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const [vtokenBalance, borrowBalance] = await Promise.all([
+        client.readContract({
+          address: vtoken,
+          abi: CTOKEN_ABI,
+          functionName: "balanceOf",
+          args: [params.to],
+        }) as Promise<bigint>,
+        client.readContract({
+          address: vtoken,
+          abi: CTOKEN_ABI,
+          functionName: "borrowBalanceStored",
+          args: [params.to],
+        }).catch(() => 0n) as Promise<bigint>,
+      ]);
+      // If the user has any outstanding borrow, redeeming the entire vToken
+      // balance leaves zero collateral and the Comptroller's hypothetical
+      // liquidity check rejects with a generic "math error" (Compound V2 forks
+      // bubble Comptroller errors as opaque math errors). Refuse explicitly so
+      // the caller knows to repay first or pass an exact underlying amount.
+      if (borrowBalance > 0n) {
+        throw DefiError.contractError(
+          `[${this.protocolName}] Cannot withdraw all (uint256.max) — wallet has an outstanding borrow of ${borrowBalance} on this market. Repay the borrow first, or pass an explicit --amount that leaves enough collateral.`,
+        );
+      }
+      const redeemData = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "redeem", args: [vtokenBalance] });
+      return {
+        description: `[${this.protocolName}] Withdraw all (auto-max, ${vtokenBalance} vTokens) of ${params.asset} from Venus`,
+        to: vtoken,
+        data: redeemData,
+        value: 0n,
+        gas_estimate: 350_000,
+      };
+    }
+
     const data = encodeFunctionData({ abi: CTOKEN_ABI, functionName: "redeemUnderlying", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from Venus`,

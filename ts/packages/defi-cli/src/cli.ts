@@ -105,7 +105,7 @@ registerPortfolio(program, getOutputMode);
 registerPrice(program, getOutputMode);
 registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
-registerBridge(program, getOutputMode);
+registerBridge(program, getOutputMode, makeExecutor);
 registerSwap(program, getOutputMode, makeExecutor);
 registerSetup(program);
 registerOws(program, getOutputMode);

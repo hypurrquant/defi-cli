@@ -7,8 +7,8 @@ chain = "bnb"
 native = false
 verified = true
 reward_strategy = "none"
-description = "BakerySwap V2 on BNB Chain. On-chain verified 2026-04-03."
+description = "BakerySwap V2 on BNB Chain. On-chain verified 2026-04-03; add+remove liquidity (USDT/USDC pool 0x087a49f7…28e3) live-confirmed 2026-05-08 (router checksum fixed; add tx 0x958d8099…d5d4, remove tx 0x53850068…a205)."
 
 [protocol.contracts]
-router = "0xCDe540d7eAFE93AC5fE6233Bee57E1270D3E330F"
+router = "0xCDe540d7eAFE93aC5fE6233Bee57E1270D3E330F"
 factory = "0x01bF7C66c6BD861915CdaaE475042d3c4BaE16A7"

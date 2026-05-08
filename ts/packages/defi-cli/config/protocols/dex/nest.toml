@@ -5,7 +5,7 @@ category = "dex"
 interface = "algebra_v3"
 chain = "hyperevm"
 native = true
-is_active = false  # ve(3,3) gauges return rewardRate=0; emissions tracked off-chain via blaze.nest.aegas.it
+is_active = true  # claim path verified live 2026-05-07 via NestOffChainAdapter.buildClaim (tx 0xacb5a608b6ba4e9d63ecc63aa1cdca098133c36a801a741834e074b9e2f7950a). Note: ve(3,3) gauge.rewardRate is still 0 — LP/farm read-paths return zero emissions; only the off_chain_api claim route is functional.
 reward_strategy = "off_chain_api"
 description = "Algebra V3 ve(3,3) MetaDEX on HyperEVM ($4M TVL). Rewards via NestOffChainAdapter (usenest.xyz/api/blaze)."
 
@@ -67,7 +67,8 @@ address = "0x45FbF9786cDBDE9E940620F4Af0eb42B76848d17"
 token0 = "USDH"
 token1 = "WHYPE"
 tick_spacing = 10
-gauge = "0xDb57bF01A22D11F2c5eE6B7b4E5e2d36f6B34E6"
+# gauge: removed 2026-05-07 — previously listed address was malformed
+# (39 hex chars after 0x, should be 40); nest is is_active=false anyway.
 
 [[protocol.pools]]
 name = "WHYPE/kHYPE"
@@ -83,7 +84,7 @@ address = "0x36De5262ADe55357A15226B85e2f20622D6eB203"
 token0 = "WHYPE"
 token1 = "PURR"
 tick_spacing = 50
-gauge = "0xb744C8Aa4F2f5E6B70c7Ab7A6A4F67a8C7B270F"
+# gauge: removed 2026-05-07 — malformed address (39 hex chars).
 
 [[protocol.pools]]
 name = "WHYPE/wstHYPE"
@@ -91,7 +92,7 @@ address = "0x728C8E4E89472B96Bd2B830438E0CB458F141db9"
 token0 = "WHYPE"
 token1 = "wstHYPE"
 tick_spacing = 1
-gauge = "0xcF5848f2D4e1a5cF2c8Ee8B72cB3E0fA1D7c1d9"
+# gauge: removed 2026-05-07 — malformed address (39 hex chars).
 
 [[protocol.pools]]
 name = "WHYPE/LHYPE"
@@ -123,4 +124,4 @@ address = "0xb09a299E9f7D333420d347EEBE0456Cb0f8545d5"
 token0 = "USDH"
 token1 = "USDT0"
 tick_spacing = 1
-gauge = "0x5A6D3E43c7F2F5C5d4EbA2b8A7cF8e6D1D1B2c1"
+# gauge: removed 2026-05-07 — malformed address (39 hex chars).

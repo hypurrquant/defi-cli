@@ -979,7 +979,7 @@ function createKittenSwapFarming(entry, rpcUrl) {
   const bonusRewardToken = entry.contracts?.["bonus_reward_token"];
   return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory, rewardToken, bonusRewardToken);
 }
-var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, slipstreamMintAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, algebraSharedPmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, DEFAULT_BASE_URL, FALLBACK_BASE_URL, NEST_TOKEN, NEST_DECIMALS, NestOffChainAdapter, POOL_ABI, ERC20_ABI2, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI22, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, NATIVE_CTOKEN_ABI, COMPTROLLER_ABI, NATIVE_SENTINEL, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, ERC4626_ABI, MAX_UINT256, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI2, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
+var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, slipstreamMintAbi, ramsesMintAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, algebraSharedPmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, DEFAULT_BASE_URL, FALLBACK_BASE_URL, NEST_TOKEN, NEST_DECIMALS, NestOffChainAdapter, POOL_ABI, ERC20_ABI2, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI22, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, NATIVE_CTOKEN_ABI, NATIVE_SENTINEL, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, ERC4626_ABI, MAX_UINT256, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI2, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
 var init_dist2 = __esm({
   "../defi-protocols/dist/index.js"() {
     "use strict";
@@ -1047,6 +1047,10 @@ var init_dist2 = __esm({
       "struct SlipstreamMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; uint160 sqrtPriceX96; }",
       "function mint(SlipstreamMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
     ]);
+    ramsesMintAbi = parseAbi4([
+      "struct RamsesMintParams { address token0; address token1; int24 tickSpacing; int24 tickLower; int24 tickUpper; uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min; address recipient; uint256 deadline; }",
+      "function mint(RamsesMintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)"
+    ]);
     UniswapV3Adapter = class {
       protocolName;
       router;
@@ -1056,6 +1060,7 @@ var init_dist2 = __esm({
       fee;
       rpcUrl;
       useTickSpacingQuoter;
+      clStyle;
       constructor(entry, rpcUrl) {
         this.protocolName = entry.name;
         const router = entry.contracts?.["router"];
@@ -1068,6 +1073,7 @@ var init_dist2 = __esm({
         this.factory = entry.contracts?.["factory"];
         this.fee = DEFAULT_FEE;
         this.rpcUrl = rpcUrl;
+        this.clStyle = entry.cl_style;
         this.useTickSpacingQuoter = entry.cl_style === "slipstream" || entry.cl_style === "ramses" || entry.contracts?.["pool_deployer"] !== void 0 || entry.contracts?.["gauge_factory"] !== void 0;
       }
       name() {
@@ -1263,22 +1269,23 @@ var init_dist2 = __esm({
         if (params.pool && this.rpcUrl) {
           const poolAbi2 = parseAbi4([
             "function fee() view returns (uint24)",
-            "function tickSpacing() view returns (int24)",
-            "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, bool)"
+            "function tickSpacing() view returns (int24)"
           ]);
           const client = createPublicClient4({ transport: http4(this.rpcUrl) });
-          const [poolFee, poolTs, slot0] = await Promise.all([
+          const [poolFee, poolTs, slot0Raw] = await Promise.all([
             client.readContract({ address: params.pool, abi: poolAbi2, functionName: "fee" }).catch(() => null),
             client.readContract({ address: params.pool, abi: poolAbi2, functionName: "tickSpacing" }).catch(() => null),
-            client.readContract({ address: params.pool, abi: poolAbi2, functionName: "slot0" }).catch(() => null)
+            client.call({ to: params.pool, data: "0x3850c7bd" }).then((r) => r.data ?? null).catch(() => null)
           ]);
           if (this.useTickSpacingQuoter && poolTs !== null) {
             thirdField = poolTs;
           } else if (poolFee !== null) {
             thirdField = poolFee;
           }
-          if (params.range_pct !== void 0 && slot0 && poolTs !== null) {
-            const currentTick = slot0[1];
+          if (params.range_pct !== void 0 && slot0Raw && poolTs !== null) {
+            const tickWord = slot0Raw.slice(2 + 64, 2 + 128);
+            const tickU = BigInt("0x" + tickWord);
+            const currentTick = tickU >= 1n << 255n ? Number(tickU - (1n << 256n)) : Number(tickU);
             const rangeTicks = Math.floor(params.range_pct * 100);
             tickLower = Math.floor((currentTick - rangeTicks) / poolTs) * poolTs;
             tickUpper = Math.ceil((currentTick + rangeTicks) / poolTs) * poolTs;
@@ -1286,7 +1293,25 @@ var init_dist2 = __esm({
         }
         if (params.tick_lower !== void 0) tickLower = params.tick_lower;
         if (params.tick_upper !== void 0) tickUpper = params.tick_upper;
-        const data = this.useTickSpacingQuoter ? encodeFunctionData4({
+        const data = this.clStyle === "ramses" ? encodeFunctionData4({
+          abi: ramsesMintAbi,
+          functionName: "mint",
+          args: [
+            {
+              token0,
+              token1,
+              tickSpacing: thirdField,
+              tickLower,
+              tickUpper,
+              amount0Desired: amount0,
+              amount1Desired: amount1,
+              amount0Min,
+              amount1Min,
+              recipient: params.recipient,
+              deadline: BigInt("18446744073709551615")
+            }
+          ]
+        }) : this.useTickSpacingQuoter ? encodeFunctionData4({
           abi: slipstreamMintAbi,
           functionName: "mint",
           args: [
@@ -1660,7 +1685,13 @@ var init_dist2 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 25e4
+          gas_estimate: 25e4,
+          // Same LP-approval requirement as Solidly forks: the V2 router pulls the
+          // LP pair token via transferFrom and reverts at gas ~42k otherwise.
+          // Caller passes --pool so we can target the pair contract for approval.
+          // Discovered live on Uniswap V2 Monad WMON/AUSD 2026-05-08
+          // (failed tx 0x2268659a…09ae → recovered with this fix).
+          ...params.pool ? { approvals: [{ token: params.pool, spender: this.router, amount: params.liquidity }] } : {}
         };
       }
     };
@@ -2001,8 +2032,8 @@ var init_dist2 = __esm({
     poolAbi = parseAbi5([
       "function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256)",
       "function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256)",
-      "function add_liquidity(uint256[2] amounts, uint256 min_mint_amount) external returns (uint256)",
-      "function remove_liquidity(uint256 amount, uint256[2] min_amounts) external returns (uint256[2])"
+      "function add_liquidity(uint256[] amounts, uint256 min_mint_amount) external returns (uint256)",
+      "function remove_liquidity(uint256 amount, uint256[] min_amounts) external returns (uint256[])"
     ]);
     CurveStableSwapAdapter = class {
       protocolName;
@@ -2037,17 +2068,22 @@ var init_dist2 = __esm({
         throw DefiError.unsupported(`[${this.protocolName}] quote requires RPC connection`);
       }
       async buildAddLiquidity(params) {
+        if (!params.pool) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] Curve add_liquidity needs --pool <address>. The router does not proxy this call; it lives on the pool itself.`
+          );
+        }
         const data = encodeFunctionData5({
           abi: poolAbi,
           functionName: "add_liquidity",
           args: [[params.amount_a, params.amount_b], 0n]
         });
         const approvals = [];
-        if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: this.router, amount: params.amount_a });
-        if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: this.router, amount: params.amount_b });
+        if (params.amount_a > 0n) approvals.push({ token: params.token_a, spender: params.pool, amount: params.amount_a });
+        if (params.amount_b > 0n) approvals.push({ token: params.token_b, spender: params.pool, amount: params.amount_b });
         return {
-          description: `[${this.protocolName}] Curve add liquidity`,
-          to: this.router,
+          description: `[${this.protocolName}] Curve add liquidity to ${params.pool}`,
+          to: params.pool,
           data,
           value: 0n,
           gas_estimate: 4e5,
@@ -2055,14 +2091,19 @@ var init_dist2 = __esm({
         };
       }
       async buildRemoveLiquidity(params) {
+        if (!params.pool) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] Curve remove_liquidity needs --pool <address>. The router does not proxy this call.`
+          );
+        }
         const data = encodeFunctionData5({
           abi: poolAbi,
           functionName: "remove_liquidity",
           args: [params.liquidity, [0n, 0n]]
         });
         return {
-          description: `[${this.protocolName}] Curve remove liquidity`,
-          to: this.router,
+          description: `[${this.protocolName}] Curve remove liquidity from ${params.pool}`,
+          to: params.pool,
           data,
           value: 0n,
           gas_estimate: 35e4
@@ -2228,7 +2269,12 @@ var init_dist2 = __esm({
           to: this.router,
           data,
           value: 0n,
-          gas_estimate: 3e5
+          gas_estimate: 3e5,
+          // The router pulls the LP token via transferFrom; without this approval
+          // the tx reverts at gas ~42k. Caller must pass --pool so we know which
+          // LP pair to approve. Discovered live on Aerodrome USDC/USDT 2026-05-08
+          // (failed tx 0x6d052e0a…3298 → recovered with manual approve 0xa126fc3a).
+          ...params.pool ? { approvals: [{ token: params.pool, spender: this.router, amount: params.liquidity }] } : {}
         };
       }
     };
@@ -3926,20 +3972,47 @@ var init_dist2 = __esm({
       /**
        * Build an addLiquidity transaction for a Liquidity Book pair.
        * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+       *
+       * The LB pair stores tokenX/tokenY in the order set at factory creation,
+       * which is **not** address-sorted. Callers may pass tokens in either order;
+       * we always re-align with the pool's `getTokenX/getTokenY` (and swap amounts
+       * accordingly) so the router's `if (tokenX != pair.tokenX) revert` path is
+       * never hit.
        */
       async buildAddLiquidity(params) {
         const numBins = params.numBins ?? 5;
         const deadline = params.deadline ?? BigInt("18446744073709551615");
-        let activeIdDesired = params.activeIdDesired;
-        if (activeIdDesired === void 0) {
-          const rpcUrl = this.requireRpc();
-          const client = createPublicClient8({ transport: http8(rpcUrl) });
-          const activeId = await client.readContract({
-            address: params.pool,
-            abi: lbPairAbi,
-            functionName: "getActiveId"
-          });
-          activeIdDesired = activeId;
+        const rpcUrl = this.requireRpc();
+        const client = createPublicClient8({ transport: http8(rpcUrl) });
+        const [poolTokenX, poolTokenY, onChainActiveId] = await Promise.all([
+          client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }),
+          client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" }),
+          params.activeIdDesired === void 0 ? client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getActiveId" }) : Promise.resolve(params.activeIdDesired)
+        ]);
+        const activeIdDesired = onChainActiveId;
+        const inX = params.tokenX.toLowerCase();
+        const inY = params.tokenY.toLowerCase();
+        const poolX = poolTokenX.toLowerCase();
+        const poolY = poolTokenY.toLowerCase();
+        let tokenX;
+        let tokenY;
+        let amountX;
+        let amountY;
+        if (inX === poolX && inY === poolY) {
+          tokenX = params.tokenX;
+          tokenY = params.tokenY;
+          amountX = params.amountX;
+          amountY = params.amountY;
+        } else if (inX === poolY && inY === poolX) {
+          tokenX = poolTokenX;
+          tokenY = poolTokenY;
+          amountX = params.amountY;
+          amountY = params.amountX;
+        } else {
+          throw new DefiError(
+            "CONTRACT_ERROR",
+            `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`
+          );
         }
         const deltaIds = [];
         for (let d = -numBins; d <= numBins; d++) {
@@ -3951,11 +4024,11 @@ var init_dist2 = __esm({
           functionName: "addLiquidity",
           args: [
             {
-              tokenX: params.tokenX,
-              tokenY: params.tokenY,
+              tokenX,
+              tokenY,
               binStep: BigInt(params.binStep),
-              amountX: params.amountX,
-              amountY: params.amountY,
+              amountX,
+              amountY,
               amountXMin: 0n,
               amountYMin: 0n,
               activeIdDesired: BigInt(activeIdDesired),
@@ -3970,31 +4043,63 @@ var init_dist2 = __esm({
           ]
         });
         return {
-          description: `[${this.protocolName}] LB addLiquidity ${params.amountX} tokenX + ${params.amountY} tokenY across ${deltaIds.length} bins`,
+          description: `[${this.protocolName}] LB addLiquidity ${amountX} tokenX + ${amountY} tokenY across ${deltaIds.length} bins`,
           to: this.lbRouter,
           data,
           value: 0n,
           gas_estimate: 8e5,
           approvals: [
-            { token: params.tokenX, spender: this.lbRouter, amount: params.amountX },
-            { token: params.tokenY, spender: this.lbRouter, amount: params.amountY }
+            { token: tokenX, spender: this.lbRouter, amount: amountX },
+            { token: tokenY, spender: this.lbRouter, amount: amountY }
           ]
         };
       }
       /**
        * Build a removeLiquidity transaction for specific LB bins.
+       *
+       * When `pool` is supplied, the adapter realigns tokenX/tokenY (and
+       * amountXMin/amountYMin) to the pool's actual ordering. Otherwise it trusts
+       * the caller — the router will revert if the order is wrong.
        */
       async buildRemoveLiquidity(params) {
         const deadline = params.deadline ?? BigInt("18446744073709551615");
+        let tokenX = params.tokenX;
+        let tokenY = params.tokenY;
+        let amountXMin = params.amountXMin ?? 0n;
+        let amountYMin = params.amountYMin ?? 0n;
+        if (params.pool) {
+          const rpcUrl = this.requireRpc();
+          const client = createPublicClient8({ transport: http8(rpcUrl) });
+          const [poolTokenX, poolTokenY] = await Promise.all([
+            client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenX" }),
+            client.readContract({ address: params.pool, abi: lbPairAbi, functionName: "getTokenY" })
+          ]);
+          const inX = params.tokenX.toLowerCase();
+          const inY = params.tokenY.toLowerCase();
+          const poolX = poolTokenX.toLowerCase();
+          const poolY = poolTokenY.toLowerCase();
+          if (inX === poolY && inY === poolX) {
+            tokenX = poolTokenX;
+            tokenY = poolTokenY;
+            const x = amountXMin;
+            amountXMin = amountYMin;
+            amountYMin = x;
+          } else if (!(inX === poolX && inY === poolY)) {
+            throw new DefiError(
+              "CONTRACT_ERROR",
+              `[${this.protocolName}] tokenX/tokenY ${params.tokenX}/${params.tokenY} do not match pool ${params.pool} (${poolTokenX}/${poolTokenY})`
+            );
+          }
+        }
         const data = encodeFunctionData12({
           abi: lbRouterAbi,
           functionName: "removeLiquidity",
           args: [
-            params.tokenX,
-            params.tokenY,
+            tokenX,
+            tokenY,
             params.binStep,
-            params.amountXMin ?? 0n,
-            params.amountYMin ?? 0n,
+            amountXMin,
+            amountYMin,
             params.binIds.map(BigInt),
             params.amounts,
             params.recipient,
@@ -5069,6 +5174,34 @@ var init_dist2 = __esm({
         }
         return apr;
       }
+      /**
+       * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+       * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+       * off-chain via signed claim tickets), so the on-chain Solidly gauge
+       * reader cannot surface real emission APR. This API is the canonical
+       * read source — used by `lp discover` to expose non-zero NEST yields.
+       */
+      async getLiquidityPools() {
+        const raw = await this.fetchJson("/liquidity-pools");
+        const out = [];
+        for (const p of raw) {
+          const t0 = p.token0?.basetoken;
+          const t1 = p.token1?.basetoken;
+          if (!t0?.address || !t1?.address) continue;
+          out.push({
+            pool: p.id,
+            gauge: p.gauge ?? null,
+            token0: { address: t0.address, symbol: t0.symbol ?? "?" },
+            token1: { address: t1.address, symbol: t1.symbol ?? "?" },
+            tvlUSD: Number(p.tvlUSD ?? 0),
+            aprPercent: Number(p.apr ?? 0),
+            curEpochEmissionRewardsUSD: Number(p.curEpochEmissionRewardsUSD ?? 0),
+            poolType: p.poolType,
+            isStable: p.isStable
+          });
+        }
+        return out;
+      }
       /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
       async getPendingRewards(user) {
         const status = await this.getClaimStatus(user);
@@ -5903,17 +6036,12 @@ var init_dist2 = __esm({
       "function mint() external payable",
       "function repayBorrow() external payable"
     ]);
-    COMPTROLLER_ABI = parseAbi17([
-      "function enterMarkets(address[] cTokens) external returns (uint256[])",
-      "function exitMarket(address cToken) external returns (uint256)"
-    ]);
     NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000";
     BSC_BLOCKS_PER_YEAR = 10512e3;
     CompoundV2Adapter = class {
       protocolName;
       defaultVtoken;
       vTokenCandidates;
-      comptroller;
       rpcUrl;
       // Lazy cache: underlying asset address (lowercased) → vToken address.
       // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
@@ -5931,7 +6059,6 @@ var init_dist2 = __esm({
         const vtoken = contracts["vusdt"] ?? contracts["vusdc"] ?? contracts["vbnb"] ?? contracts["comptroller"];
         if (!vtoken) throw DefiError.contractError("Missing vToken or comptroller address");
         this.defaultVtoken = vtoken;
-        this.comptroller = contracts["comptroller"];
         this.vTokenCandidates = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k)).map(([, v]) => v);
         if (this.vTokenCandidates.length === 0) this.vTokenCandidates = [vtoken];
       }
@@ -6047,37 +6174,6 @@ var init_dist2 = __esm({
           data,
           value: 0n,
           gas_estimate: 25e4
-        };
-      }
-      /**
-       * Compound V2 family: enter cTokens as collateral via Comptroller.
-       * Without this call, supplied assets sit dormant in the Comptroller's
-       * accountAssets[] and `getAccountLiquidity` reports zero collateral —
-       * any borrow then reverts. Mirrors the role of Aave V3's
-       * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
-       */
-      async buildEnterMarkets(cTokens) {
-        if (!this.comptroller) {
-          throw DefiError.contractError(
-            `[${this.protocolName}] enterMarkets requires the Comptroller address to be registered under [protocol.contracts] as 'comptroller'.`
-          );
-        }
-        if (cTokens.length === 0) {
-          throw DefiError.invalidParam(
-            `[${this.protocolName}] enterMarkets requires at least one cToken address.`
-          );
-        }
-        const data = encodeFunctionData16({
-          abi: COMPTROLLER_ABI,
-          functionName: "enterMarkets",
-          args: [cTokens]
-        });
-        return {
-          description: `[${this.protocolName}] Enter ${cTokens.length} market(s) as collateral`,
-          to: this.comptroller,
-          data,
-          value: 0n,
-          gas_estimate: 2e5
         };
       }
       async getRates(asset) {
@@ -9038,6 +9134,24 @@ function registerLP(parent, getOpts, makeExecutor2) {
     await Promise.allSettled(
       protocols.map(async (protocol) => {
         try {
+          if (protocol.reward_strategy === "off_chain_api") {
+            const adapter = createNestOffChain(protocol);
+            const pools = await adapter.getLiquidityPools();
+            for (const p of pools) {
+              if (p.aprPercent === 0 && opts.emissionOnly) continue;
+              results.push({
+                protocol: protocol.slug,
+                pool: p.pool,
+                pair: `${p.token0.symbol}/${p.token1.symbol}`,
+                type: p.aprPercent > 0 ? "EMISSION" : "FEE",
+                source: "off_chain_api",
+                aprPercent: p.aprPercent,
+                poolTvlUsd: p.tvlUSD,
+                emissionUsd: p.curEpochEmissionRewardsUSD
+              });
+            }
+            return;
+          }
           const isGaugeProtocol = ["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(protocol.interface) || protocol.interface === "uniswap_v3" && protocol.contracts?.["voter"];
           if (isGaugeProtocol) {
             const chainTokens = registry.tokens.get(chainName)?.map((t) => t.address);
@@ -9220,7 +9334,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
     if (opts.emissionOnly) {
       printOutput(
         results.filter(
-          (r) => r.type === "EMISSION" && ((r.moePerDay ?? 0) > 0 || r.rewardRate && BigInt(r.rewardRate) > 0n)
+          (r) => r.type === "EMISSION" && ((r.moePerDay ?? 0) > 0 || r.rewardRate && BigInt(r.rewardRate) > 0n || (r.aprPercent ?? 0) > 0)
         ),
         getOpts()
       );
@@ -9245,13 +9359,27 @@ function registerLP(parent, getOpts, makeExecutor2) {
     if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
       if (!poolAddr) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book \u2014 pass --pool <addr>; use \`lp discover --protocol ${protocol.slug}\` to list active pools)`);
       const lbAdapter = createMerchantMoeLB(protocol, chain.effectiveRpcUrl());
-      const [tokenX, tokenY, amountX, amountY] = tokenA.toLowerCase() < tokenB.toLowerCase() ? [tokenA, tokenB, BigInt(opts.amountA), BigInt(opts.amountB)] : [tokenB, tokenA, BigInt(opts.amountB), BigInt(opts.amountA)];
       const client = createPublicClient23({ transport: http23(chain.effectiveRpcUrl()) });
-      const binStep = await client.readContract({
-        address: poolAddr,
-        abi: parseAbi30(["function getBinStep() view returns (uint16)"]),
-        functionName: "getBinStep"
-      });
+      const lbPairOrderAbi = parseAbi30([
+        "function getTokenX() view returns (address)",
+        "function getTokenY() view returns (address)",
+        "function getBinStep() view returns (uint16)"
+      ]);
+      const [poolTokenX, poolTokenY, binStep] = await Promise.all([
+        client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getTokenX" }),
+        client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getTokenY" }),
+        client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getBinStep" })
+      ]);
+      const aIsX = tokenA.toLowerCase() === poolTokenX.toLowerCase();
+      const bIsX = tokenB.toLowerCase() === poolTokenX.toLowerCase();
+      const aIsY = tokenA.toLowerCase() === poolTokenY.toLowerCase();
+      const bIsY = tokenB.toLowerCase() === poolTokenY.toLowerCase();
+      if (!(aIsX && bIsY || bIsX && aIsY)) {
+        throw new Error(
+          `[${protocol.name}] --token-a/--token-b (${tokenA}/${tokenB}) do not match pool tokens (X=${poolTokenX}, Y=${poolTokenY})`
+        );
+      }
+      const [tokenX, tokenY, amountX, amountY] = aIsX ? [tokenA, tokenB, BigInt(opts.amountA), BigInt(opts.amountB)] : [tokenB, tokenA, BigInt(opts.amountB), BigInt(opts.amountA)];
       const tx2 = await lbAdapter.buildAddLiquidity({
         pool: poolAddr,
         tokenX,
@@ -9576,14 +9704,28 @@ function registerLP(parent, getOpts, makeExecutor2) {
       const lbAdapter = createMerchantMoeLB(protocol, rpcUrl);
       const tokenA2 = opts.tokenA.startsWith("0x") ? opts.tokenA : registry.resolveToken(chainName, opts.tokenA).address;
       const tokenB2 = opts.tokenB.startsWith("0x") ? opts.tokenB : registry.resolveToken(chainName, opts.tokenB).address;
-      const [tokenX, tokenY] = tokenA2.toLowerCase() < tokenB2.toLowerCase() ? [tokenA2, tokenB2] : [tokenB2, tokenA2];
       const binIds = opts.bins.split(",").map((s) => parseInt(s.trim()));
       const client = createPublicClient23({ transport: http23(rpcUrl) });
-      const binStep = await client.readContract({
-        address: opts.pool,
-        abi: parseAbi30(["function getBinStep() view returns (uint16)"]),
-        functionName: "getBinStep"
-      });
+      const lbPairOrderAbi = parseAbi30([
+        "function getTokenX() view returns (address)",
+        "function getTokenY() view returns (address)",
+        "function getBinStep() view returns (uint16)"
+      ]);
+      const [poolTokenX, poolTokenY, binStep] = await Promise.all([
+        client.readContract({ address: opts.pool, abi: lbPairOrderAbi, functionName: "getTokenX" }),
+        client.readContract({ address: opts.pool, abi: lbPairOrderAbi, functionName: "getTokenY" }),
+        client.readContract({ address: opts.pool, abi: lbPairOrderAbi, functionName: "getBinStep" })
+      ]);
+      const aIsX = tokenA2.toLowerCase() === poolTokenX.toLowerCase();
+      const bIsX = tokenB2.toLowerCase() === poolTokenX.toLowerCase();
+      const aIsY = tokenA2.toLowerCase() === poolTokenY.toLowerCase();
+      const bIsY = tokenB2.toLowerCase() === poolTokenY.toLowerCase();
+      if (!(aIsX && bIsY || bIsX && aIsY)) {
+        throw new Error(
+          `[${protocol.name}] --token-a/--token-b (${tokenA2}/${tokenB2}) do not match pool tokens (X=${poolTokenX}, Y=${poolTokenY})`
+        );
+      }
+      const [tokenX, tokenY] = aIsX ? [tokenA2, tokenB2] : [tokenB2, tokenA2];
       let amounts;
       if (opts.amounts) {
         amounts = opts.amounts.split(",").map((s) => BigInt(s.trim()));
@@ -9603,6 +9745,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
         gas_estimate: 8e4
       };
       const tx = await lbAdapter.buildRemoveLiquidity({
+        pool: opts.pool,
         tokenX,
         tokenY,
         binStep,
@@ -9715,6 +9858,7 @@ function registerLP(parent, getOpts, makeExecutor2) {
       return;
     }
     const ZERO = "0x0000000000000000000000000000000000000000";
+    const removePoolAddr = opts.pool ? resolvePoolAddress(registry, opts.protocol, opts.pool) : void 0;
     const removeTx = await dexAdapter.buildRemoveLiquidity({
       protocol: protocol.name,
       token_a: tokenA ?? ZERO,
@@ -9723,7 +9867,8 @@ function registerLP(parent, getOpts, makeExecutor2) {
       recipient,
       token_id: opts.tokenId ? BigInt(opts.tokenId) : void 0,
       amount_a_min: opts.amountAMin !== void 0 ? BigInt(opts.amountAMin) : void 0,
-      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0
+      amount_b_min: opts.amountBMin !== void 0 ? BigInt(opts.amountBMin) : void 0,
+      pool: removePoolAddr
     });
     const removeResult = await executor.execute(removeTx);
     printOutput({ step: "lp_remove", ...removeResult }, getOpts());
@@ -10264,38 +10409,6 @@ function registerLending(parent, getOpts, makeExecutor2) {
       return;
     }
     const tx = await adapter.buildSetEMode(id);
-    const result = await executor.execute(tx);
-    printOutput(result, getOpts());
-  });
-  lending.command("enter-markets").description("Compound V2 (Venus): enter supplied assets as collateral via Comptroller.enterMarkets").requiredOption("--protocol <protocol>", "Protocol slug (must be a Compound V2 fork)").requiredOption("--asset <token>", "Underlying asset symbol or address (resolved to its cToken)").action(async (opts) => {
-    const executor = makeExecutor2();
-    const ctx = resolveContext(parent, getOpts, opts.protocol);
-    if (!ctx) return;
-    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
-    if (typeof adapter.buildEnterMarkets !== "function") {
-      printOutput({
-        error: `[${ctx.protocol.name}] adapter does not implement buildEnterMarkets. This is a Compound V2 family operation; Aave V3 uses toggle-collateral instead.`
-      }, getOpts());
-      return;
-    }
-    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
-    const contracts = ctx.protocol.contracts ?? {};
-    const vTokenEntries = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k));
-    if (vTokenEntries.length === 0) {
-      printOutput({ error: `[${ctx.protocol.name}] no vTokens registered in TOML` }, getOpts());
-      return;
-    }
-    const symbol = opts.asset.toLowerCase();
-    const matchedKey = vTokenEntries.find(([k]) => k.toLowerCase() === `v${symbol}`);
-    const vToken = matchedKey ? matchedKey[1] : void 0;
-    if (!vToken) {
-      printOutput({
-        error: `[${ctx.protocol.name}] could not resolve a vToken for '${opts.asset}'. Registered vTokens: ${vTokenEntries.map(([k]) => k).join(", ")}. Pass --asset matching the symbol after the 'v' prefix (e.g. USDT for vusdt).`
-      }, getOpts());
-      return;
-    }
-    void asset;
-    const tx = await adapter.buildEnterMarkets([vToken]);
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
@@ -11784,9 +11897,50 @@ function registerToken(parent, getOpts, makeExecutor2) {
 
 // src/commands/bridge.ts
 init_dist();
+function resolveDestExecutor(slug, broadcast) {
+  const registry = Registry.loadEmbedded();
+  try {
+    const c = registry.getChain(slug);
+    return new Executor(broadcast, c.effectiveRpcUrl(), c.explorer_url, c.viemChain());
+  } catch {
+    const envKey = `${slug.toUpperCase()}_RPC_URL`;
+    const envVal = process.env[envKey];
+    const meta = DEST_CHAIN_META[slug];
+    if (!meta) throw new Error(`Cannot resolve destination chain: ${slug}`);
+    const rpc = envVal ?? DEST_RPC_FALLBACKS[slug];
+    if (!rpc) throw new Error(`No RPC URL for ${slug}. Set ${envKey} or use a registered chain.`);
+    const minimal = {
+      id: meta.chain_id,
+      name: meta.name,
+      nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: [rpc] } }
+    };
+    return new Executor(broadcast, rpc, void 0, minimal);
+  }
+}
+async function pollCctpAttestation(srcDomain, burnTxHash, maxSeconds) {
+  const intervalMs = 5e3;
+  const deadline = Date.now() + maxSeconds * 1e3;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`https://iris-api.circle.com/v2/messages/${srcDomain}?transactionHash=${burnTxHash}`);
+      if (res.ok) {
+        const data = await res.json();
+        const m = data.messages?.[0];
+        if (m && m.status === "complete" && m.attestation && m.attestation !== "PENDING") {
+          return { message: m.message, attestation: m.attestation };
+        }
+      }
+    } catch {
+    }
+    await new Promise((resolve5) => setTimeout(resolve5, intervalMs));
+  }
+  throw new Error(`CCTP attestation timeout after ${maxSeconds}s for tx ${burnTxHash}`);
+}
 var LIFI_API = "https://li.quest/v1";
 var DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
 var CCTP_FEE_API = "https://iris-api.circle.com/v2/burn/USDC/fees";
+var RELAY_API = "https://api.relay.link";
 var DEST_CHAIN_META = {
   ethereum: { chain_id: 1, name: "Ethereum" },
   optimism: { chain_id: 10, name: "Optimism" },
@@ -11858,6 +12012,42 @@ async function getDebridgeQuote(srcChainId, dstChainId, srcToken, dstToken, amou
     raw: createData
   };
 }
+async function getRelayBridgeQuote(srcChainId, dstChainId, srcToken, dstToken, amountRaw, user, recipient) {
+  const body = {
+    user,
+    recipient,
+    originChainId: srcChainId,
+    destinationChainId: dstChainId,
+    originCurrency: srcToken,
+    destinationCurrency: dstToken,
+    tradeType: "EXACT_INPUT",
+    amount: amountRaw
+  };
+  const res = await fetch(`${RELAY_API}/quote`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`Relay quote failed: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  const steps = json.steps;
+  const swapStep = steps?.find((s) => s.id !== "approve") ?? steps?.[steps?.length ?? 1 - 1];
+  const items = swapStep?.items;
+  const txData = items?.[0]?.data;
+  if (!txData) throw new Error("Relay: no executable step in cross-chain quote");
+  const details = json.details;
+  const currencyOut = details?.currencyOut;
+  const timeEst = details?.timeEstimate ?? 30;
+  return {
+    to: String(txData.to),
+    data: String(txData.data),
+    value: String(txData.value ?? "0x0"),
+    amountOut: String(currencyOut?.amount ?? "0"),
+    estimatedTime: timeEst,
+    tool: String(swapStep?.id ?? "relay"),
+    raw: json
+  };
+}
 var CCTP_DOMAINS = {
   ethereum: 0,
   avalanche: 1,
@@ -11870,6 +12060,16 @@ var CCTP_DOMAINS = {
   aptos: 9
 };
 var CCTP_TOKEN_MESSENGER_V2 = "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d";
+var CCTP_MESSAGE_TRANSMITTER_V2 = "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64";
+var DEST_RPC_FALLBACKS = {
+  ethereum: "https://eth.merkle.io",
+  arbitrum: "https://arbitrum.drpc.org",
+  optimism: "https://optimism.drpc.org",
+  polygon: "https://polygon.drpc.org",
+  avalanche: "https://avalanche.drpc.org",
+  linea: "https://linea.drpc.org",
+  zksync: "https://zksync.drpc.org"
+};
 var CCTP_USDC_ADDRESSES = {
   ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   avalanche: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
@@ -11913,8 +12113,8 @@ async function getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc) {
   }
   return { fee: 0.25, maxFeeSubunits: 250000n };
 }
-function registerBridge(parent, getOpts) {
-  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, debridge, cctp", "lifi").action(async (opts) => {
+function registerBridge(parent, getOpts, makeExecutor2) {
+  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, relay, debridge, cctp", "lifi").option("--auto-receive", "(CCTP only) After burn, poll Circle attestation and auto-call MessageTransmitter.receiveMessage on destination", false).option("--receive-timeout <seconds>", "(CCTP --auto-receive) max seconds to wait for attestation", "1200").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
@@ -11929,6 +12129,46 @@ function registerBridge(parent, getOpts) {
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
     const recipient = resolveWallet(opts.recipient);
     const provider = opts.provider.toLowerCase();
+    if (provider === "relay") {
+      try {
+        const result = await getRelayBridgeQuote(
+          fromChain.chain_id,
+          toChain.chain_id,
+          tokenAddr,
+          tokenAddr,
+          opts.amount,
+          recipient,
+          recipient
+        );
+        const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+        const executor = makeExecutor2();
+        const approvals = isNative ? [] : [{
+          token: tokenAddr,
+          spender: result.to,
+          amount: BigInt(opts.amount)
+        }];
+        const action = await executor.execute({
+          to: result.to,
+          data: result.data,
+          value: BigInt(result.value || "0"),
+          description: `Relay bridge ${fromChain.name} \u2192 ${toChain.name}`,
+          approvals
+        });
+        printOutput({
+          from_chain: fromChain.name,
+          to_chain: toChain.name,
+          token: tokenAddr,
+          amount: opts.amount,
+          bridge: `Relay (${result.tool})`,
+          estimated_output: result.amountOut,
+          estimated_time_seconds: result.estimatedTime,
+          action
+        }, getOpts());
+      } catch (e) {
+        printOutput({ error: `Relay API error: ${errMsg(e)}` }, getOpts());
+      }
+      return;
+    }
     if (provider === "debridge") {
       try {
         const srcId = DLN_CHAIN_IDS[chainName] ?? fromChain.chain_id;
@@ -11942,6 +12182,24 @@ function registerBridge(parent, getOpts) {
           recipient
         );
         const tx = result.raw.tx;
+        if (!tx?.to || !tx?.data) {
+          printOutput({ error: "deBridge: API did not return a tx envelope" }, getOpts());
+          return;
+        }
+        const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+        const executor = makeExecutor2();
+        const approvals = isNative ? [] : [{
+          token: tokenAddr,
+          spender: tx.to,
+          amount: BigInt(opts.amount)
+        }];
+        const action = await executor.execute({
+          to: tx.to,
+          data: tx.data,
+          value: BigInt(tx.value ?? "0"),
+          description: `deBridge DLN ${fromChain.name} \u2192 ${toChain.name}`,
+          approvals
+        });
         printOutput({
           from_chain: fromChain.name,
           to_chain: toChain.name,
@@ -11950,7 +12208,7 @@ function registerBridge(parent, getOpts) {
           bridge: "deBridge DLN",
           estimated_output: result.amountOut,
           estimated_time_seconds: result.estimatedTime,
-          tx: tx ? { to: tx.to, data: tx.data, value: tx.value } : void 0
+          action
         }, getOpts());
       } catch (e) {
         printOutput({ error: `deBridge API error: ${errMsg(e)}` }, getOpts());
@@ -12002,6 +12260,48 @@ function registerBridge(parent, getOpts) {
             // standard finality
           ]
         });
+        const executor = makeExecutor2();
+        const burnAction = await executor.execute({
+          to: CCTP_TOKEN_MESSENGER_V2,
+          data,
+          value: 0n,
+          description: `CCTP burn ${fromChain.name} \u2192 ${toChain.name}`,
+          approvals: [{
+            token: usdcSrc,
+            spender: CCTP_TOKEN_MESSENGER_V2,
+            amount: BigInt(opts.amount)
+          }]
+        });
+        let receiveAction = void 0;
+        if (opts.autoReceive && burnAction.tx_hash && burnAction.status === "confirmed") {
+          try {
+            const timeoutSec = parseInt(opts.receiveTimeout) || 1200;
+            process.stderr.write(`Polling Circle attestation for ${burnAction.tx_hash} (max ${timeoutSec}s)...
+`);
+            const { message, attestation } = await pollCctpAttestation(srcDomain, burnAction.tx_hash, timeoutSec);
+            process.stderr.write(`Attestation ready. Calling receiveMessage on ${opts.toChain}...
+`);
+            const { encodeFunctionData: encReceive, parseAbi: parseAbiReceive } = await import("viem");
+            const receiveAbi = parseAbiReceive([
+              "function receiveMessage(bytes message, bytes attestation) external"
+            ]);
+            const receiveData = encReceive({
+              abi: receiveAbi,
+              functionName: "receiveMessage",
+              args: [message, attestation]
+            });
+            const destExecutor = resolveDestExecutor(opts.toChain, !!parent.opts().broadcast);
+            receiveAction = await destExecutor.execute({
+              to: CCTP_MESSAGE_TRANSMITTER_V2,
+              data: receiveData,
+              value: 0n,
+              description: `CCTP receive on ${toChain.name}`,
+              approvals: []
+            });
+          } catch (e) {
+            receiveAction = { error: `auto-receive failed: ${errMsg(e)}` };
+          }
+        }
         printOutput({
           from_chain: fromChain.name,
           to_chain: toChain.name,
@@ -12011,12 +12311,9 @@ function registerBridge(parent, getOpts) {
           bridge: "Circle CCTP V2",
           estimated_fee_usdc: fee,
           estimated_output: String(BigInt(opts.amount) - maxFeeSubunits),
-          note: "After burn, poll https://iris-api.circle.com/v2/messages/{srcDomain} for attestation, then call MessageTransmitter.receiveMessage() on destination",
-          tx: {
-            to: CCTP_TOKEN_MESSENGER_V2,
-            data,
-            value: "0x0"
-          }
+          burn: burnAction,
+          receive: receiveAction,
+          note: opts.autoReceive ? void 0 : "Pass --auto-receive to poll Circle attestation and auto-call MessageTransmitter.receiveMessage on the destination chain."
         }, getOpts());
       } catch (e) {
         printOutput({ error: `CCTP error: ${errMsg(e)}` }, getOpts());
@@ -12035,19 +12332,34 @@ function registerBridge(parent, getOpts) {
       });
       const res = await fetch(`${LIFI_API}/quote?${params}`);
       const quote = await res.json();
-      if (quote.transactionRequest) {
-        printOutput({
-          from_chain: fromChain.name,
-          to_chain: toChain.name,
-          token: tokenAddr,
-          amount: opts.amount,
-          bridge: quote.toolDetails?.name ?? "LI.FI",
-          estimated_output: quote.estimate?.toAmount,
-          tx: { to: quote.transactionRequest.to, data: quote.transactionRequest.data, value: quote.transactionRequest.value }
-        }, getOpts());
-      } else {
+      if (!quote.transactionRequest) {
         printOutput({ error: "No LI.FI route found", details: quote }, getOpts());
+        return;
       }
+      const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+      const spender = quote.estimate?.approvalAddress ?? quote.transactionRequest.to;
+      const executor = makeExecutor2();
+      const approvals = isNative ? [] : [{
+        token: tokenAddr,
+        spender,
+        amount: BigInt(opts.amount)
+      }];
+      const action = await executor.execute({
+        to: quote.transactionRequest.to,
+        data: quote.transactionRequest.data,
+        value: BigInt(quote.transactionRequest.value ?? "0"),
+        description: `LI.FI ${fromChain.name} \u2192 ${toChain.name}`,
+        approvals
+      });
+      printOutput({
+        from_chain: fromChain.name,
+        to_chain: toChain.name,
+        token: tokenAddr,
+        amount: opts.amount,
+        bridge: quote.toolDetails?.name ?? "LI.FI",
+        estimated_output: quote.estimate?.toAmount,
+        action
+      }, getOpts());
     } catch (e) {
       printOutput({ error: `LI.FI API error: ${errMsg(e)}` }, getOpts());
     }
@@ -12135,7 +12447,7 @@ async function lifiQuote(chainId, fromToken, toToken, fromAmount, fromAddress, s
     outAmount: String(estimate?.toAmount ?? "0")
   };
 }
-var RELAY_API = "https://api.relay.link";
+var RELAY_API2 = "https://api.relay.link";
 async function relayQuote(chainId, fromToken, toToken, amount, user) {
   const body = {
     user,
@@ -12147,7 +12459,7 @@ async function relayQuote(chainId, fromToken, toToken, amount, user) {
     tradeType: "EXACT_INPUT",
     amount
   };
-  const res = await fetch(`${RELAY_API}/quote`, {
+  const res = await fetch(`${RELAY_API2}/quote`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
@@ -12802,7 +13114,7 @@ registerPortfolio(program, getOutputMode);
 registerPrice(program, getOutputMode);
 registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
-registerBridge(program, getOutputMode);
+registerBridge(program, getOutputMode, makeExecutor);
 registerSwap(program, getOutputMode, makeExecutor);
 registerSetup(program);
 registerOws(program, getOutputMode);

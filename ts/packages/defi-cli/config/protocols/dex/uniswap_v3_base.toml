@@ -5,7 +5,8 @@ category = "dex"
 interface = "uniswap_v3"
 chain = "base"
 native = false
-description = "Uniswap V3 on Base"
+verified = true
+description = "Uniswap V3 on Base. V3 NFT mint+remove (USDC/USDT fee=100 pool 0xd56da2b7…5da1) live-confirmed 2026-05-08 (tokenId 5083156, mint 0x358e01c2…fab8, remove 0xfb0535fd…062a)."
 
 [protocol.contracts]
 router = "0x2626664c2603336E57B271c5C0b26F421741e481"

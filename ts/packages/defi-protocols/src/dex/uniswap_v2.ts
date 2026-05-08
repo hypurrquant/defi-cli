@@ -242,6 +242,14 @@ export class UniswapV2Adapter implements IDex {
       data,
       value: 0n,
       gas_estimate: 250_000,
+      // Same LP-approval requirement as Solidly forks: the V2 router pulls the
+      // LP pair token via transferFrom and reverts at gas ~42k otherwise.
+      // Caller passes --pool so we can target the pair contract for approval.
+      // Discovered live on Uniswap V2 Monad WMON/AUSD 2026-05-08
+      // (failed tx 0x2268659a…09ae → recovered with this fix).
+      ...(params.pool
+        ? { approvals: [{ token: params.pool, spender: this.router, amount: params.liquidity }] }
+        : {}),
     };
   }
 }

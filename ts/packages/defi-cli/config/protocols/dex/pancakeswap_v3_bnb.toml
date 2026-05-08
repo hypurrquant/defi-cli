@@ -5,7 +5,8 @@ category = "dex"
 interface = "uniswap_v3"
 chain = "bnb"
 native = false
-description = "PancakeSwap V3 on BNB Chain — CAKE emissions via MasterChef V3"
+verified = true
+description = "PancakeSwap V3 on BNB Chain — CAKE emissions via MasterChef V3. V3 NFT mint+remove (USDT/USDC fee=100 pool 0x92b7807b…3121) live-confirmed 2026-05-08 (tokenId 6815439, mint 0xcffbcda4…bd32, remove 0x0439ac24…55be). Full MasterChef V3 stake (safeTransferFrom NFT to MasterChef) → harvest → withdraw cycle live-verified 2026-05-08 (tokenId 6815781, mint 0x246d1c22…8715, stake 0xd58120a9…6d4a, harvest 0xdf971916…5dff, withdraw 0xdf11475e…85da, remove 0xe52c847e…0a55a)."
 
 [protocol.contracts]
 router = "0x13f4EA83D0bd40E75C8222255bc855a974568Dd4"

@@ -166,6 +166,9 @@ interface LBAddLiquidityParams {
     deadline?: bigint;
 }
 interface LBRemoveLiquidityParams {
+    /** Optional pool address. When provided, the adapter realigns tokenX/tokenY
+     * to the pool's actual ordering (LB pairs are not address-sorted). */
+    pool?: Address;
     tokenX: Address;
     tokenY: Address;
     binStep: number;
@@ -219,10 +222,20 @@ declare class MerchantMoeLBAdapter {
     /**
      * Build an addLiquidity transaction for a Liquidity Book pair.
      * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+     *
+     * The LB pair stores tokenX/tokenY in the order set at factory creation,
+     * which is **not** address-sorted. Callers may pass tokens in either order;
+     * we always re-align with the pool's `getTokenX/getTokenY` (and swap amounts
+     * accordingly) so the router's `if (tokenX != pair.tokenX) revert` path is
+     * never hit.
      */
     buildAddLiquidity(params: LBAddLiquidityParams): Promise<DeFiTx>;
     /**
      * Build a removeLiquidity transaction for specific LB bins.
+     *
+     * When `pool` is supplied, the adapter realigns tokenX/tokenY (and
+     * amountXMin/amountYMin) to the pool's actual ordering. Otherwise it trusts
+     * the caller — the router will revert if the order is wrong.
      */
     buildRemoveLiquidity(params: LBRemoveLiquidityParams): Promise<DeFiTx>;
     /**
@@ -377,6 +390,31 @@ interface NestAprEstimateParams {
     token0Amount: bigint;
     token1Amount: bigint;
 }
+/**
+ * Per-pool emission snapshot returned by /api/blaze/liquidity-pools.
+ * Mirrors the shape `lp discover` consumes for IGauge pools, but populated
+ * from the off-chain blaze API so NEST's read-side surfaces non-zero APR
+ * even though on-chain `gauge.rewardRate` is hard-wired to 0.
+ */
+interface NestLiquidityPool {
+    pool: Address;
+    gauge: Address | null;
+    token0: {
+        address: Address;
+        symbol: string;
+    };
+    token1: {
+        address: Address;
+        symbol: string;
+    };
+    tvlUSD: number;
+    /** APR in % (annualized, including emissions). 0 when pool has no active gauge epoch. */
+    aprPercent: number;
+    /** Current epoch's emission USD (0 if no active emissions). */
+    curEpochEmissionRewardsUSD: number;
+    poolType: string;
+    isStable: boolean;
+}
 declare class NestOffChainAdapter {
     private readonly baseUrl;
     private readonly fallbackUrl;
@@ -394,6 +432,14 @@ declare class NestOffChainAdapter {
     getClaimTicket(wallet: Address): Promise<NestClaimTicket | null>;
     /** APR estimate (percent) for a CL position with given tick range and amounts */
     estimateLpApr(params: NestAprEstimateParams): Promise<number>;
+    /**
+     * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+     * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+     * off-chain via signed claim tickets), so the on-chain Solidly gauge
+     * reader cannot surface real emission APR. This API is the canonical
+     * read source — used by `lp discover` to expose non-zero NEST yields.
+     */
+    getLiquidityPools(): Promise<NestLiquidityPool[]>;
     /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
     getPendingRewards(user: Address): Promise<RewardInfo[]>;
     /** Voter address used by aggregateClaim() — exposed for callers that build the tx themselves */
@@ -522,6 +568,7 @@ declare class UniswapV3Adapter implements IDex {
     private readonly fee;
     private readonly rpcUrl;
     private readonly useTickSpacingQuoter;
+    private readonly clStyle;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
