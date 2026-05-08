@@ -7,7 +7,7 @@ chain = "bnb"
 native = false
 verified = true
 reward_strategy = "none"
-description = "Kinza Finance — Aave V3 fork on BNB. On-chain verified 2026-04-03."
+description = "Kinza Finance — Aave V3 fork on BNB. On-chain verified 2026-04-03; full borrow lifecycle (supply→toggle-collateral→borrow→repay→withdraw) live-confirmed 2026-05-08 (tx 0xed974c6f…aad3)."
 
 [protocol.contracts]
 pool = "0xcb0620b181140e57d1c0d8b724cde623ca963c8c"
