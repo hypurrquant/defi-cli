@@ -178,7 +178,27 @@ async function getRelayBridgeQuote(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Relay quote failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    let code = "";
+    let msg = text;
+    try {
+      const j = JSON.parse(text) as Record<string, unknown>;
+      code = String(j.errorCode ?? j.code ?? "");
+      msg = String(j.message ?? text);
+    } catch { /* response not JSON */ }
+    const hints: Record<string, string> = {
+      AMOUNT_TOO_LOW: "Try a larger amount or use --provider lifi (Relay enforces a per-route fee floor)",
+      INVALID_INPUT_CURRENCY: "Source token unsupported by Relay on this chain — try --provider lifi",
+      INVALID_OUTPUT_CURRENCY: "Destination token unsupported by Relay on this chain — try --provider lifi or change --token",
+      NO_QUOTES: "No Relay liquidity for this route right now — try --provider lifi or retry later",
+      AMOUNT_TOO_HIGH: "Amount exceeds Relay per-tx cap — split into smaller amounts",
+      UNSUPPORTED_CHAIN: "Relay does not support this origin/destination chain — use --provider lifi",
+    };
+    const hint = hints[code];
+    const detail = code ? `${code}: ${msg}` : msg;
+    throw new Error(`Relay quote failed (${res.status}): ${detail}${hint ? ` — ${hint}` : ""}`);
+  }
   const json = await res.json() as Record<string, unknown>;
   // Relay returns multiple steps for cross-chain (often: approve → deposit). Skip
   // any "approve" step — the executor handles ERC20 approvals via `approvals[]`.
