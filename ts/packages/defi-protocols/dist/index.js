@@ -5384,12 +5384,17 @@ var NATIVE_CTOKEN_ABI = parseAbi17([
   "function mint() external payable",
   "function repayBorrow() external payable"
 ]);
+var COMPTROLLER_ABI = parseAbi17([
+  "function enterMarkets(address[] cTokens) external returns (uint256[])",
+  "function exitMarket(address cToken) external returns (uint256)"
+]);
 var NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000";
 var BSC_BLOCKS_PER_YEAR = 10512e3;
 var CompoundV2Adapter = class {
   protocolName;
   defaultVtoken;
   vTokenCandidates;
+  comptroller;
   rpcUrl;
   // Lazy cache: underlying asset address (lowercased) → vToken address.
   // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
@@ -5407,6 +5412,7 @@ var CompoundV2Adapter = class {
     const vtoken = contracts["vusdt"] ?? contracts["vusdc"] ?? contracts["vbnb"] ?? contracts["comptroller"];
     if (!vtoken) throw DefiError18.contractError("Missing vToken or comptroller address");
     this.defaultVtoken = vtoken;
+    this.comptroller = contracts["comptroller"];
     this.vTokenCandidates = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k)).map(([, v]) => v);
     if (this.vTokenCandidates.length === 0) this.vTokenCandidates = [vtoken];
   }
@@ -5515,6 +5521,37 @@ var CompoundV2Adapter = class {
   }
   async buildWithdraw(params) {
     const vtoken = await this.vtokenFor(params.asset);
+    const MAX_UINT2562 = (1n << 256n) - 1n;
+    if (params.amount === MAX_UINT2562 && this.rpcUrl) {
+      const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+      const [vtokenBalance, borrowBalance] = await Promise.all([
+        client.readContract({
+          address: vtoken,
+          abi: CTOKEN_ABI,
+          functionName: "balanceOf",
+          args: [params.to]
+        }),
+        client.readContract({
+          address: vtoken,
+          abi: CTOKEN_ABI,
+          functionName: "borrowBalanceStored",
+          args: [params.to]
+        }).catch(() => 0n)
+      ]);
+      if (borrowBalance > 0n) {
+        throw DefiError18.contractError(
+          `[${this.protocolName}] Cannot withdraw all (uint256.max) \u2014 wallet has an outstanding borrow of ${borrowBalance} on this market. Repay the borrow first, or pass an explicit --amount that leaves enough collateral.`
+        );
+      }
+      const redeemData = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "redeem", args: [vtokenBalance] });
+      return {
+        description: `[${this.protocolName}] Withdraw all (auto-max, ${vtokenBalance} vTokens) of ${params.asset} from Venus`,
+        to: vtoken,
+        data: redeemData,
+        value: 0n,
+        gas_estimate: 35e4
+      };
+    }
     const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "redeemUnderlying", args: [params.amount] });
     return {
       description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from Venus`,
@@ -5522,6 +5559,37 @@ var CompoundV2Adapter = class {
       data,
       value: 0n,
       gas_estimate: 25e4
+    };
+  }
+  /**
+   * Compound V2 family: enter cTokens as collateral via Comptroller.
+   * Without this call, supplied assets sit dormant in the Comptroller's
+   * accountAssets[] and `getAccountLiquidity` reports zero collateral —
+   * any borrow then reverts. Mirrors the role of Aave V3's
+   * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
+   */
+  async buildEnterMarkets(cTokens) {
+    if (!this.comptroller) {
+      throw DefiError18.contractError(
+        `[${this.protocolName}] enterMarkets requires the Comptroller address to be registered under [protocol.contracts] as 'comptroller'.`
+      );
+    }
+    if (cTokens.length === 0) {
+      throw DefiError18.invalidParam(
+        `[${this.protocolName}] enterMarkets requires at least one cToken address.`
+      );
+    }
+    const data = encodeFunctionData16({
+      abi: COMPTROLLER_ABI,
+      functionName: "enterMarkets",
+      args: [cTokens]
+    });
+    return {
+      description: `[${this.protocolName}] Enter ${cTokens.length} market(s) as collateral`,
+      to: this.comptroller,
+      data,
+      value: 0n,
+      gas_estimate: 2e5
     };
   }
   async getRates(asset) {
@@ -5966,6 +6034,8 @@ var MorphoBlueAdapter = class {
   rpcUrl;
   metaMorphoVaults;
   metaMorphoVaultEntries;
+  namedMarkets;
+  namedMarketByName;
   vaultAssetMap = null;
   constructor(entry, rpcUrl) {
     this.protocolName = entry.name;
@@ -5977,6 +6047,26 @@ var MorphoBlueAdapter = class {
     this.defaultVault = contracts["fehype"] ?? contracts["vault"] ?? contracts["feusdc"];
     this.metaMorphoVaultEntries = Object.entries(contracts).filter(([key]) => /^fe[a-z0-9_]+$/i.test(key) || key === "vault").map(([key, addr]) => ({ key, addr }));
     this.metaMorphoVaults = this.metaMorphoVaultEntries.map((e) => e.addr);
+    this.namedMarkets = entry.markets ?? [];
+    const byName = /* @__PURE__ */ new Map();
+    for (const m of this.namedMarkets) byName.set(m.name.toLowerCase(), m.id);
+    this.namedMarketByName = byName;
+  }
+  /**
+   * Resolve a friendly market name (e.g. `WMON-AUSD`) to its 32-byte
+   * marketId via the per-protocol TOML registry. Returns null when the
+   * adapter has no markets[] block or the name doesn't match any entry —
+   * callers fall back to treating the input as a raw hex marketId.
+   */
+  resolveMarketIdByName(name) {
+    return this.namedMarketByName.get(name.toLowerCase()) ?? null;
+  }
+  /**
+   * Returns the registered named markets for diagnostics (e.g. CLI error
+   * messages listing valid choices when the user passes an unknown name).
+   */
+  listNamedMarkets() {
+    return this.namedMarkets;
   }
   async resolveVault(asset, preferKey) {
     if (this.metaMorphoVaultEntries.length === 0 || !this.rpcUrl) return null;
@@ -6109,6 +6199,42 @@ var MorphoBlueAdapter = class {
       );
     }
     const market = await this.resolveMarketParams(params.market_id);
+    if (params.amount === MAX_UINT256) {
+      if (!this.rpcUrl) {
+        throw DefiError21.rpcError(
+          `[${this.protocolName}] max-repay requires an RPC URL to read borrowShares.`
+        );
+      }
+      const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+      const positionAbi = parseAbi20([
+        "function position(bytes32 id, address user) external view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral)"
+      ]);
+      const pos = await client.readContract({
+        address: this.morpho,
+        abi: positionAbi,
+        functionName: "position",
+        args: [params.market_id, params.on_behalf_of]
+      });
+      const [, borrowShares] = pos;
+      if (borrowShares === 0n) {
+        throw DefiError21.invalidParam(
+          `[${this.protocolName}] cannot repay max \u2014 user has no borrow position in market ${params.market_id}.`
+        );
+      }
+      const data2 = encodeFunctionData19({
+        abi: MORPHO_ABI,
+        functionName: "repay",
+        args: [market, 0n, borrowShares, params.on_behalf_of, "0x"]
+      });
+      return {
+        description: `[${this.protocolName}] Repay max (${borrowShares} shares) to market ${params.market_id.slice(0, 10)}\u2026`,
+        to: this.morpho,
+        data: data2,
+        value: 0n,
+        gas_estimate: 35e4,
+        approvals: [{ token: params.asset, spender: this.morpho, amount: MAX_UINT256 }]
+      };
+    }
     const data = encodeFunctionData19({
       abi: MORPHO_ABI,
       functionName: "repay",

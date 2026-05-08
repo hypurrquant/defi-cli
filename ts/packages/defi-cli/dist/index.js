@@ -979,7 +979,7 @@ function createKittenSwapFarming(entry, rpcUrl) {
   const bonusRewardToken = entry.contracts?.["bonus_reward_token"];
   return new KittenSwapFarmingAdapter(entry.name, farmingCenter, eternalFarming, positionManager, rpcUrl, factory, rewardToken, bonusRewardToken);
 }
-var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, slipstreamMintAbi, ramsesMintAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, algebraSharedPmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, DEFAULT_BASE_URL, FALLBACK_BASE_URL, NEST_TOKEN, NEST_DECIMALS, NestOffChainAdapter, POOL_ABI, ERC20_ABI2, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI22, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, NATIVE_CTOKEN_ABI, NATIVE_SENTINEL, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, ERC4626_ABI, MAX_UINT256, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI2, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
+var DEFAULT_FEE, swapRouterAbi, quoterAbi, ramsesQuoterAbi, positionManagerAbi, slipstreamMintAbi, ramsesMintAbi, UniswapV3Adapter, abi, lbQuoterAbi, UniswapV2Adapter, abi2, algebraQuoterAbi, algebraSingleQuoterAbi, algebraIntegralPmAbi, algebraV2PmAbi, algebraSharedPmAbi, AlgebraV3Adapter, abi3, BalancerV3Adapter, poolAbi, CurveStableSwapAdapter, abi4, abiV2, SolidlyAdapter, thenaPmAbi, thenaRouterAbi, thenaPoolAbi, thenaFactoryAbi, ThenaCLAdapter, _addressDecodeAbi, _symbolDecodeAbi, gaugeManagerAbi, gaugeCLAbi, nfpmAbi, veAbi, voterAbi, HybraGaugeAdapter, abi5, WooFiAdapter, gaugeAbi, veAbi2, voterAbi2, _addressDecodeAbi2, _symbolDecodeAbi2, _boolDecodeAbi, HYPEREVM_TOKENS, CL_TICK_SPACINGS, SolidlyGaugeAdapter, masterchefAbi, MasterChefAdapter, lbRouterAbi, lbFactoryAbi, lbPairAbi, lbRewarderAbi, masterChefAbi, veMoeAbi, lbPairBinAbi, lbQuoterAbi2, erc20Abi2, _addressAbi, _uint256Abi, _boolAbi, _rangeAbi, _binAbi, _uint256ArrayAbi, MerchantMoeLBAdapter, KITTEN_TOKEN, WHYPE_TOKEN, MAX_NONCE_SCAN, HYPEREVM_TOKENS2, farmingCenterAbi, positionManagerAbi2, eternalFarmingAbi, algebraFactoryAbi, _addressDecodeAbi3, nonceCache, KittenSwapFarmingAdapter, DEFAULT_BASE_URL, FALLBACK_BASE_URL, NEST_TOKEN, NEST_DECIMALS, NestOffChainAdapter, POOL_ABI, ERC20_ABI2, INCENTIVES_ABI, REWARDS_CONTROLLER_ABI, POOL_PROVIDER_ABI, ADDRESSES_PROVIDER_ABI, ORACLE_ABI, ERC20_DECIMALS_ABI, AaveV3Adapter, POOL_ABI2, ERC20_ABI22, AaveV2Adapter, ORACLE_ABI2, AaveOracleAdapter, CTOKEN_ABI, NATIVE_CTOKEN_ABI, COMPTROLLER_ABI, NATIVE_SENTINEL, BSC_BLOCKS_PER_YEAR, CompoundV2Adapter, COMET_ABI, SECONDS_PER_YEAR, CompoundV3Adapter, EULER_VAULT_ABI, SECONDS_PER_YEAR2, EulerV2Adapter, MORPHO_ABI, META_MORPHO_ABI, ERC4626_ABI, MAX_UINT256, IRM_ABI, SECONDS_PER_YEAR3, MorphoBlueAdapter, BORROWER_OPS_ABI, TROVE_MANAGER_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, FelixCdpAdapter, PRICE_FEED_ABI, FelixOracleAdapter, ERC4626_ABI2, ERC4626VaultAdapter, GENERIC_LST_ABI, GenericLstAdapter, STHYPE_ABI, ERC20_ABI3, StHypeAdapter, KINETIQ_ABI, ORACLE_ABI3, WHYPE, HYPERLEND_ORACLE, KinetiqAdapter, PendleAdapter, GenericYieldAdapter, HLP_ABI, HlpVaultAdapter, GenericDerivativesAdapter, RYSK_ABI, RyskAdapter, GenericOptionsAdapter, ERC721_ABI, ERC721Adapter, DexSpotPrice;
 var init_dist2 = __esm({
   "../defi-protocols/dist/index.js"() {
     "use strict";
@@ -6036,12 +6036,17 @@ var init_dist2 = __esm({
       "function mint() external payable",
       "function repayBorrow() external payable"
     ]);
+    COMPTROLLER_ABI = parseAbi17([
+      "function enterMarkets(address[] cTokens) external returns (uint256[])",
+      "function exitMarket(address cToken) external returns (uint256)"
+    ]);
     NATIVE_SENTINEL = "0x0000000000000000000000000000000000000000";
     BSC_BLOCKS_PER_YEAR = 10512e3;
     CompoundV2Adapter = class {
       protocolName;
       defaultVtoken;
       vTokenCandidates;
+      comptroller;
       rpcUrl;
       // Lazy cache: underlying asset address (lowercased) → vToken address.
       // The native sentinel (0x0…) is mapped to the cETH/vBNB-style vToken
@@ -6059,6 +6064,7 @@ var init_dist2 = __esm({
         const vtoken = contracts["vusdt"] ?? contracts["vusdc"] ?? contracts["vbnb"] ?? contracts["comptroller"];
         if (!vtoken) throw DefiError.contractError("Missing vToken or comptroller address");
         this.defaultVtoken = vtoken;
+        this.comptroller = contracts["comptroller"];
         this.vTokenCandidates = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k)).map(([, v]) => v);
         if (this.vTokenCandidates.length === 0) this.vTokenCandidates = [vtoken];
       }
@@ -6167,6 +6173,37 @@ var init_dist2 = __esm({
       }
       async buildWithdraw(params) {
         const vtoken = await this.vtokenFor(params.asset);
+        const MAX_UINT2562 = (1n << 256n) - 1n;
+        if (params.amount === MAX_UINT2562 && this.rpcUrl) {
+          const client = createPublicClient13({ transport: http13(this.rpcUrl) });
+          const [vtokenBalance, borrowBalance] = await Promise.all([
+            client.readContract({
+              address: vtoken,
+              abi: CTOKEN_ABI,
+              functionName: "balanceOf",
+              args: [params.to]
+            }),
+            client.readContract({
+              address: vtoken,
+              abi: CTOKEN_ABI,
+              functionName: "borrowBalanceStored",
+              args: [params.to]
+            }).catch(() => 0n)
+          ]);
+          if (borrowBalance > 0n) {
+            throw DefiError.contractError(
+              `[${this.protocolName}] Cannot withdraw all (uint256.max) \u2014 wallet has an outstanding borrow of ${borrowBalance} on this market. Repay the borrow first, or pass an explicit --amount that leaves enough collateral.`
+            );
+          }
+          const redeemData = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "redeem", args: [vtokenBalance] });
+          return {
+            description: `[${this.protocolName}] Withdraw all (auto-max, ${vtokenBalance} vTokens) of ${params.asset} from Venus`,
+            to: vtoken,
+            data: redeemData,
+            value: 0n,
+            gas_estimate: 35e4
+          };
+        }
         const data = encodeFunctionData16({ abi: CTOKEN_ABI, functionName: "redeemUnderlying", args: [params.amount] });
         return {
           description: `[${this.protocolName}] Withdraw ${params.amount} of ${params.asset} from Venus`,
@@ -6174,6 +6211,37 @@ var init_dist2 = __esm({
           data,
           value: 0n,
           gas_estimate: 25e4
+        };
+      }
+      /**
+       * Compound V2 family: enter cTokens as collateral via Comptroller.
+       * Without this call, supplied assets sit dormant in the Comptroller's
+       * accountAssets[] and `getAccountLiquidity` reports zero collateral —
+       * any borrow then reverts. Mirrors the role of Aave V3's
+       * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
+       */
+      async buildEnterMarkets(cTokens) {
+        if (!this.comptroller) {
+          throw DefiError.contractError(
+            `[${this.protocolName}] enterMarkets requires the Comptroller address to be registered under [protocol.contracts] as 'comptroller'.`
+          );
+        }
+        if (cTokens.length === 0) {
+          throw DefiError.invalidParam(
+            `[${this.protocolName}] enterMarkets requires at least one cToken address.`
+          );
+        }
+        const data = encodeFunctionData16({
+          abi: COMPTROLLER_ABI,
+          functionName: "enterMarkets",
+          args: [cTokens]
+        });
+        return {
+          description: `[${this.protocolName}] Enter ${cTokens.length} market(s) as collateral`,
+          to: this.comptroller,
+          data,
+          value: 0n,
+          gas_estimate: 2e5
         };
       }
       async getRates(asset) {
@@ -6574,6 +6642,8 @@ var init_dist2 = __esm({
       rpcUrl;
       metaMorphoVaults;
       metaMorphoVaultEntries;
+      namedMarkets;
+      namedMarketByName;
       vaultAssetMap = null;
       constructor(entry, rpcUrl) {
         this.protocolName = entry.name;
@@ -6585,6 +6655,26 @@ var init_dist2 = __esm({
         this.defaultVault = contracts["fehype"] ?? contracts["vault"] ?? contracts["feusdc"];
         this.metaMorphoVaultEntries = Object.entries(contracts).filter(([key]) => /^fe[a-z0-9_]+$/i.test(key) || key === "vault").map(([key, addr]) => ({ key, addr }));
         this.metaMorphoVaults = this.metaMorphoVaultEntries.map((e) => e.addr);
+        this.namedMarkets = entry.markets ?? [];
+        const byName = /* @__PURE__ */ new Map();
+        for (const m of this.namedMarkets) byName.set(m.name.toLowerCase(), m.id);
+        this.namedMarketByName = byName;
+      }
+      /**
+       * Resolve a friendly market name (e.g. `WMON-AUSD`) to its 32-byte
+       * marketId via the per-protocol TOML registry. Returns null when the
+       * adapter has no markets[] block or the name doesn't match any entry —
+       * callers fall back to treating the input as a raw hex marketId.
+       */
+      resolveMarketIdByName(name) {
+        return this.namedMarketByName.get(name.toLowerCase()) ?? null;
+      }
+      /**
+       * Returns the registered named markets for diagnostics (e.g. CLI error
+       * messages listing valid choices when the user passes an unknown name).
+       */
+      listNamedMarkets() {
+        return this.namedMarkets;
       }
       async resolveVault(asset, preferKey) {
         if (this.metaMorphoVaultEntries.length === 0 || !this.rpcUrl) return null;
@@ -6717,6 +6807,42 @@ var init_dist2 = __esm({
           );
         }
         const market = await this.resolveMarketParams(params.market_id);
+        if (params.amount === MAX_UINT256) {
+          if (!this.rpcUrl) {
+            throw DefiError.rpcError(
+              `[${this.protocolName}] max-repay requires an RPC URL to read borrowShares.`
+            );
+          }
+          const client = createPublicClient16({ transport: http16(this.rpcUrl) });
+          const positionAbi = parseAbi20([
+            "function position(bytes32 id, address user) external view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral)"
+          ]);
+          const pos = await client.readContract({
+            address: this.morpho,
+            abi: positionAbi,
+            functionName: "position",
+            args: [params.market_id, params.on_behalf_of]
+          });
+          const [, borrowShares] = pos;
+          if (borrowShares === 0n) {
+            throw DefiError.invalidParam(
+              `[${this.protocolName}] cannot repay max \u2014 user has no borrow position in market ${params.market_id}.`
+            );
+          }
+          const data2 = encodeFunctionData19({
+            abi: MORPHO_ABI,
+            functionName: "repay",
+            args: [market, 0n, borrowShares, params.on_behalf_of, "0x"]
+          });
+          return {
+            description: `[${this.protocolName}] Repay max (${borrowShares} shares) to market ${params.market_id.slice(0, 10)}\u2026`,
+            to: this.morpho,
+            data: data2,
+            value: 0n,
+            gas_estimate: 35e4,
+            approvals: [{ token: params.asset, spender: this.morpho, amount: MAX_UINT256 }]
+          };
+        }
         const data = encodeFunctionData19({
           abi: MORPHO_ABI,
           functionName: "repay",
@@ -10276,6 +10402,21 @@ function parseAmount(s) {
   if (lower === "max" || lower === "all") return maxUint256;
   return BigInt(s);
 }
+function resolveMarketInput(adapter, raw) {
+  if (!raw) return void 0;
+  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw;
+  if (typeof adapter.resolveMarketIdByName !== "function") {
+    throw new Error(
+      `--market must be a 32-byte hex value; got '${raw}'. This adapter does not support named-market lookup.`
+    );
+  }
+  const id = adapter.resolveMarketIdByName(raw);
+  if (id) return id;
+  const known = adapter.listNamedMarkets?.()?.map((m) => m.name).join(", ") ?? "(none)";
+  throw new Error(
+    `--market '${raw}' is not a 32-byte hex and is not registered on this protocol. Known markets: ${known}.`
+  );
+}
 function registerLending(parent, getOpts, makeExecutor2) {
   const lending = parent.command("lending").description("Lending operations: supply, borrow, repay, withdraw, rates, position");
   lending.command("rates").description("Show current lending rates").requiredOption("--protocol <protocol>", "Protocol slug").requiredOption("--asset <token>", "Token symbol or address").action(async (opts) => {
@@ -10310,7 +10451,7 @@ function registerLending(parent, getOpts, makeExecutor2) {
       asset,
       amount: parseAmount(opts.amount),
       on_behalf_of: onBehalfOf,
-      market_id: opts.market
+      market_id: resolveMarketInput(adapter, opts.market)
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -10328,7 +10469,7 @@ function registerLending(parent, getOpts, makeExecutor2) {
       amount: parseAmount(opts.amount),
       interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
       on_behalf_of: onBehalfOf,
-      market_id: opts.market
+      market_id: resolveMarketInput(adapter, opts.market)
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -10346,7 +10487,7 @@ function registerLending(parent, getOpts, makeExecutor2) {
       amount: parseAmount(opts.amount),
       interest_rate_mode: opts.rateMode === "stable" ? InterestRateMode.Stable : InterestRateMode.Variable,
       on_behalf_of: onBehalfOf,
-      market_id: opts.market
+      market_id: resolveMarketInput(adapter, opts.market)
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -10363,7 +10504,7 @@ function registerLending(parent, getOpts, makeExecutor2) {
       asset,
       amount: parseAmount(opts.amount),
       to,
-      market_id: opts.market
+      market_id: resolveMarketInput(adapter, opts.market)
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -10412,6 +10553,38 @@ function registerLending(parent, getOpts, makeExecutor2) {
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
+  lending.command("enter-markets").description("Compound V2 (Venus): enter supplied assets as collateral via Comptroller.enterMarkets").requiredOption("--protocol <protocol>", "Protocol slug (must be a Compound V2 fork)").requiredOption("--asset <token>", "Underlying asset symbol or address (resolved to its cToken)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const ctx = resolveContext(parent, getOpts, opts.protocol);
+    if (!ctx) return;
+    const adapter = createLending(ctx.protocol, ctx.rpcUrl);
+    if (typeof adapter.buildEnterMarkets !== "function") {
+      printOutput({
+        error: `[${ctx.protocol.name}] adapter does not implement buildEnterMarkets. This is a Compound V2 family operation; Aave V3 uses toggle-collateral instead.`
+      }, getOpts());
+      return;
+    }
+    const asset = resolveTokenAddress(ctx.registry, ctx.chainName, opts.asset);
+    const contracts = ctx.protocol.contracts ?? {};
+    const vTokenEntries = Object.entries(contracts).filter(([k]) => /^v[a-z][a-z0-9]*$/i.test(k));
+    if (vTokenEntries.length === 0) {
+      printOutput({ error: `[${ctx.protocol.name}] no vTokens registered in TOML` }, getOpts());
+      return;
+    }
+    const symbol = opts.asset.toLowerCase();
+    const matchedKey = vTokenEntries.find(([k]) => k.toLowerCase() === `v${symbol}`);
+    const vToken = matchedKey ? matchedKey[1] : void 0;
+    if (!vToken) {
+      printOutput({
+        error: `[${ctx.protocol.name}] could not resolve a vToken for '${opts.asset}'. Registered vTokens: ${vTokenEntries.map(([k]) => k).join(", ")}. Pass --asset matching the symbol after the 'v' prefix (e.g. USDT for vusdt).`
+      }, getOpts());
+      return;
+    }
+    void asset;
+    const tx = await adapter.buildEnterMarkets([vToken]);
+    const result = await executor.execute(tx);
+    printOutput(result, getOpts());
+  });
   lending.command("supply-collateral").description("Supply the collateral side of a Morpho Blue market (different selector from supply)").requiredOption("--protocol <protocol>", "Protocol slug (must be a Morpho Blue adapter)").requiredOption("--asset <token>", "Collateral token symbol or address").requiredOption("--amount <amount>", "Amount in wei (or 'max')").requiredOption("--market <marketId>", "32-byte Morpho marketId (find via Morpho API)").option("--on-behalf-of <address>", "On behalf of address").action(async (opts) => {
     const executor = makeExecutor2();
     const ctx = resolveContext(parent, getOpts, opts.protocol);
@@ -10430,7 +10603,7 @@ function registerLending(parent, getOpts, makeExecutor2) {
       asset,
       amount: parseAmount(opts.amount),
       on_behalf_of: onBehalfOf,
-      market_id: opts.market
+      market_id: resolveMarketInput(adapter, opts.market)
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -10453,7 +10626,7 @@ function registerLending(parent, getOpts, makeExecutor2) {
       asset,
       amount: parseAmount(opts.amount),
       to,
-      market_id: opts.market
+      market_id: resolveMarketInput(adapter, opts.market)
     });
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -11824,7 +11997,7 @@ function registerWallet(parent, getOpts) {
 
 // src/commands/token.ts
 init_dist();
-import { createPublicClient as createPublicClient27, http as http27, maxUint256 as maxUint2562 } from "viem";
+import { createPublicClient as createPublicClient27, encodeFunctionData as encodeFunctionData30, http as http27, maxUint256 as maxUint2562, parseAbi as parseAbi34 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
   token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
@@ -11882,6 +12055,52 @@ function registerToken(parent, getOpts, makeExecutor2) {
       args: [owner, opts.spender]
     });
     printOutput({ token: tokenAddr, owner, spender: opts.spender, allowance }, getOpts());
+  });
+  const WETH9_ABI = parseAbi34([
+    "function deposit() payable",
+    "function withdraw(uint256 amount)"
+  ]);
+  token.command("wrap").description("Wrap native gas token into its ERC-20 wrapped form (WrappedNative.deposit())").requiredOption("--amount <amount>", "Amount of native token to wrap (in wei)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const chainName = requireChain(parent, getOpts);
+    if (!chainName) return;
+    const registry = Registry.loadEmbedded();
+    const chain = registry.getChain(chainName);
+    if (!chain.wrapped_native) {
+      printOutput({ error: `[${chainName}] no wrapped_native registered in chains.toml` }, getOpts());
+      return;
+    }
+    const amount = BigInt(opts.amount);
+    const data = encodeFunctionData30({ abi: WETH9_ABI, functionName: "deposit" });
+    const result = await executor.execute({
+      description: `[${chainName}] Wrap ${opts.amount} ${chain.native_token} \u2192 W${chain.native_token}`,
+      to: chain.wrapped_native,
+      data,
+      value: amount,
+      gas_estimate: 8e4
+    });
+    printOutput(result, getOpts());
+  });
+  token.command("unwrap").description("Unwrap wrapped-native ERC-20 back into native gas token (WrappedNative.withdraw(amount))").requiredOption("--amount <amount>", "Amount of wrapped token to unwrap (in wei)").action(async (opts) => {
+    const executor = makeExecutor2();
+    const chainName = requireChain(parent, getOpts);
+    if (!chainName) return;
+    const registry = Registry.loadEmbedded();
+    const chain = registry.getChain(chainName);
+    if (!chain.wrapped_native) {
+      printOutput({ error: `[${chainName}] no wrapped_native registered in chains.toml` }, getOpts());
+      return;
+    }
+    const amount = BigInt(opts.amount);
+    const data = encodeFunctionData30({ abi: WETH9_ABI, functionName: "withdraw", args: [amount] });
+    const result = await executor.execute({
+      description: `[${chainName}] Unwrap ${opts.amount} W${chain.native_token} \u2192 ${chain.native_token}`,
+      to: chain.wrapped_native,
+      data,
+      value: 0n,
+      gas_estimate: 8e4
+    });
+    printOutput(result, getOpts());
   });
   token.command("transfer").description("Transfer tokens to an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--to <address>", "Recipient address").requiredOption("--amount <amount>", "Amount to transfer (in wei)").action(async (opts) => {
     const executor = makeExecutor2();
@@ -12028,7 +12247,28 @@ async function getRelayBridgeQuote(srcChainId, dstChainId, srcToken, dstToken, a
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error(`Relay quote failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    let code = "";
+    let msg = text;
+    try {
+      const j = JSON.parse(text);
+      code = String(j.errorCode ?? j.code ?? "");
+      msg = String(j.message ?? text);
+    } catch {
+    }
+    const hints = {
+      AMOUNT_TOO_LOW: "Try a larger amount or use --provider lifi (Relay enforces a per-route fee floor)",
+      INVALID_INPUT_CURRENCY: "Source token unsupported by Relay on this chain \u2014 try --provider lifi",
+      INVALID_OUTPUT_CURRENCY: "Destination token unsupported by Relay on this chain \u2014 try --provider lifi or change --token",
+      NO_QUOTES: "No Relay liquidity for this route right now \u2014 try --provider lifi or retry later",
+      AMOUNT_TOO_HIGH: "Amount exceeds Relay per-tx cap \u2014 split into smaller amounts",
+      UNSUPPORTED_CHAIN: "Relay does not support this origin/destination chain \u2014 use --provider lifi"
+    };
+    const hint = hints[code];
+    const detail = code ? `${code}: ${msg}` : msg;
+    throw new Error(`Relay quote failed (${res.status}): ${detail}${hint ? ` \u2014 ${hint}` : ""}`);
+  }
   const json = await res.json();
   const steps = json.steps;
   const swapStep = steps?.find((s) => s.id !== "approve") ?? steps?.[steps?.length ?? 1 - 1];
@@ -12127,6 +12367,13 @@ function registerBridge(parent, getOpts, makeExecutor2) {
       return;
     }
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
+    let dstTokenAddr = tokenAddr;
+    if (!opts.token.startsWith("0x")) {
+      try {
+        dstTokenAddr = registry.resolveToken(opts.toChain, opts.token).address;
+      } catch {
+      }
+    }
     const recipient = resolveWallet(opts.recipient);
     const provider = opts.provider.toLowerCase();
     if (provider === "relay") {
@@ -12135,7 +12382,7 @@ function registerBridge(parent, getOpts, makeExecutor2) {
           fromChain.chain_id,
           toChain.chain_id,
           tokenAddr,
-          tokenAddr,
+          dstTokenAddr,
           opts.amount,
           recipient,
           recipient
@@ -12177,7 +12424,7 @@ function registerBridge(parent, getOpts, makeExecutor2) {
           srcId,
           dstId,
           tokenAddr,
-          tokenAddr,
+          dstTokenAddr,
           opts.amount,
           recipient
         );
@@ -12241,11 +12488,11 @@ function registerBridge(parent, getOpts, makeExecutor2) {
           return;
         }
         const recipientPadded = `0x${"0".repeat(24)}${recipient.replace("0x", "").toLowerCase()}`;
-        const { encodeFunctionData: encodeFunctionData30, parseAbi: parseAbi34 } = await import("viem");
-        const tokenMessengerAbi = parseAbi34([
+        const { encodeFunctionData: encodeFunctionData31, parseAbi: parseAbi35 } = await import("viem");
+        const tokenMessengerAbi = parseAbi35([
           "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold) external returns (uint64 nonce)"
         ]);
-        const data = encodeFunctionData30({
+        const data = encodeFunctionData31({
           abi: tokenMessengerAbi,
           functionName: "depositForBurn",
           args: [
@@ -12325,7 +12572,7 @@ function registerBridge(parent, getOpts, makeExecutor2) {
         fromChain: String(fromChain.chain_id),
         toChain: String(toChain.chain_id),
         fromToken: tokenAddr,
-        toToken: tokenAddr,
+        toToken: dstTokenAddr,
         fromAmount: opts.amount,
         fromAddress: recipient,
         slippage: String(parseInt(opts.slippage) / 1e4)
