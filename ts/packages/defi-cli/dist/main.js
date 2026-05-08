@@ -11901,6 +11901,46 @@ function registerToken(parent, getOpts, makeExecutor2) {
 
 // src/commands/bridge.ts
 init_dist();
+function resolveDestExecutor(slug, broadcast) {
+  const registry = Registry.loadEmbedded();
+  try {
+    const c = registry.getChain(slug);
+    return new Executor(broadcast, c.effectiveRpcUrl(), c.explorer_url, c.viemChain());
+  } catch {
+    const envKey = `${slug.toUpperCase()}_RPC_URL`;
+    const envVal = process.env[envKey];
+    const meta = DEST_CHAIN_META[slug];
+    if (!meta) throw new Error(`Cannot resolve destination chain: ${slug}`);
+    const rpc = envVal ?? DEST_RPC_FALLBACKS[slug];
+    if (!rpc) throw new Error(`No RPC URL for ${slug}. Set ${envKey} or use a registered chain.`);
+    const minimal = {
+      id: meta.chain_id,
+      name: meta.name,
+      nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: [rpc] } }
+    };
+    return new Executor(broadcast, rpc, void 0, minimal);
+  }
+}
+async function pollCctpAttestation(srcDomain, burnTxHash, maxSeconds) {
+  const intervalMs = 5e3;
+  const deadline = Date.now() + maxSeconds * 1e3;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`https://iris-api.circle.com/v2/messages/${srcDomain}?transactionHash=${burnTxHash}`);
+      if (res.ok) {
+        const data = await res.json();
+        const m = data.messages?.[0];
+        if (m && m.status === "complete" && m.attestation && m.attestation !== "PENDING") {
+          return { message: m.message, attestation: m.attestation };
+        }
+      }
+    } catch {
+    }
+    await new Promise((resolve6) => setTimeout(resolve6, intervalMs));
+  }
+  throw new Error(`CCTP attestation timeout after ${maxSeconds}s for tx ${burnTxHash}`);
+}
 var LIFI_API = "https://li.quest/v1";
 var DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
 var CCTP_FEE_API = "https://iris-api.circle.com/v2/burn/USDC/fees";
@@ -12024,6 +12064,16 @@ var CCTP_DOMAINS = {
   aptos: 9
 };
 var CCTP_TOKEN_MESSENGER_V2 = "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d";
+var CCTP_MESSAGE_TRANSMITTER_V2 = "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64";
+var DEST_RPC_FALLBACKS = {
+  ethereum: "https://eth.merkle.io",
+  arbitrum: "https://arbitrum.drpc.org",
+  optimism: "https://optimism.drpc.org",
+  polygon: "https://polygon.drpc.org",
+  avalanche: "https://avalanche.drpc.org",
+  linea: "https://linea.drpc.org",
+  zksync: "https://zksync.drpc.org"
+};
 var CCTP_USDC_ADDRESSES = {
   ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   avalanche: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
@@ -12068,7 +12118,7 @@ async function getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc) {
   return { fee: 0.25, maxFeeSubunits: 250000n };
 }
 function registerBridge(parent, getOpts, makeExecutor2) {
-  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, relay, debridge, cctp", "lifi").action(async (opts) => {
+  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, relay, debridge, cctp", "lifi").option("--auto-receive", "(CCTP only) After burn, poll Circle attestation and auto-call MessageTransmitter.receiveMessage on destination", false).option("--receive-timeout <seconds>", "(CCTP --auto-receive) max seconds to wait for attestation", "1200").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
@@ -12136,6 +12186,24 @@ function registerBridge(parent, getOpts, makeExecutor2) {
           recipient
         );
         const tx = result.raw.tx;
+        if (!tx?.to || !tx?.data) {
+          printOutput({ error: "deBridge: API did not return a tx envelope" }, getOpts());
+          return;
+        }
+        const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+        const executor = makeExecutor2();
+        const approvals = isNative ? [] : [{
+          token: tokenAddr,
+          spender: tx.to,
+          amount: BigInt(opts.amount)
+        }];
+        const action = await executor.execute({
+          to: tx.to,
+          data: tx.data,
+          value: BigInt(tx.value ?? "0"),
+          description: `deBridge DLN ${fromChain.name} \u2192 ${toChain.name}`,
+          approvals
+        });
         printOutput({
           from_chain: fromChain.name,
           to_chain: toChain.name,
@@ -12144,7 +12212,7 @@ function registerBridge(parent, getOpts, makeExecutor2) {
           bridge: "deBridge DLN",
           estimated_output: result.amountOut,
           estimated_time_seconds: result.estimatedTime,
-          tx: tx ? { to: tx.to, data: tx.data, value: tx.value } : void 0
+          action
         }, getOpts());
       } catch (e) {
         printOutput({ error: `deBridge API error: ${errMsg(e)}` }, getOpts());
@@ -12196,6 +12264,48 @@ function registerBridge(parent, getOpts, makeExecutor2) {
             // standard finality
           ]
         });
+        const executor = makeExecutor2();
+        const burnAction = await executor.execute({
+          to: CCTP_TOKEN_MESSENGER_V2,
+          data,
+          value: 0n,
+          description: `CCTP burn ${fromChain.name} \u2192 ${toChain.name}`,
+          approvals: [{
+            token: usdcSrc,
+            spender: CCTP_TOKEN_MESSENGER_V2,
+            amount: BigInt(opts.amount)
+          }]
+        });
+        let receiveAction = void 0;
+        if (opts.autoReceive && burnAction.tx_hash && burnAction.status === "confirmed") {
+          try {
+            const timeoutSec = parseInt(opts.receiveTimeout) || 1200;
+            process.stderr.write(`Polling Circle attestation for ${burnAction.tx_hash} (max ${timeoutSec}s)...
+`);
+            const { message, attestation } = await pollCctpAttestation(srcDomain, burnAction.tx_hash, timeoutSec);
+            process.stderr.write(`Attestation ready. Calling receiveMessage on ${opts.toChain}...
+`);
+            const { encodeFunctionData: encReceive, parseAbi: parseAbiReceive } = await import("viem");
+            const receiveAbi = parseAbiReceive([
+              "function receiveMessage(bytes message, bytes attestation) external"
+            ]);
+            const receiveData = encReceive({
+              abi: receiveAbi,
+              functionName: "receiveMessage",
+              args: [message, attestation]
+            });
+            const destExecutor = resolveDestExecutor(opts.toChain, !!parent.opts().broadcast);
+            receiveAction = await destExecutor.execute({
+              to: CCTP_MESSAGE_TRANSMITTER_V2,
+              data: receiveData,
+              value: 0n,
+              description: `CCTP receive on ${toChain.name}`,
+              approvals: []
+            });
+          } catch (e) {
+            receiveAction = { error: `auto-receive failed: ${errMsg(e)}` };
+          }
+        }
         printOutput({
           from_chain: fromChain.name,
           to_chain: toChain.name,
@@ -12205,12 +12315,9 @@ function registerBridge(parent, getOpts, makeExecutor2) {
           bridge: "Circle CCTP V2",
           estimated_fee_usdc: fee,
           estimated_output: String(BigInt(opts.amount) - maxFeeSubunits),
-          note: "After burn, poll https://iris-api.circle.com/v2/messages/{srcDomain} for attestation, then call MessageTransmitter.receiveMessage() on destination",
-          tx: {
-            to: CCTP_TOKEN_MESSENGER_V2,
-            data,
-            value: "0x0"
-          }
+          burn: burnAction,
+          receive: receiveAction,
+          note: opts.autoReceive ? void 0 : "Pass --auto-receive to poll Circle attestation and auto-call MessageTransmitter.receiveMessage on the destination chain."
         }, getOpts());
       } catch (e) {
         printOutput({ error: `CCTP error: ${errMsg(e)}` }, getOpts());
@@ -12229,19 +12336,34 @@ function registerBridge(parent, getOpts, makeExecutor2) {
       });
       const res = await fetch(`${LIFI_API}/quote?${params}`);
       const quote = await res.json();
-      if (quote.transactionRequest) {
-        printOutput({
-          from_chain: fromChain.name,
-          to_chain: toChain.name,
-          token: tokenAddr,
-          amount: opts.amount,
-          bridge: quote.toolDetails?.name ?? "LI.FI",
-          estimated_output: quote.estimate?.toAmount,
-          tx: { to: quote.transactionRequest.to, data: quote.transactionRequest.data, value: quote.transactionRequest.value }
-        }, getOpts());
-      } else {
+      if (!quote.transactionRequest) {
         printOutput({ error: "No LI.FI route found", details: quote }, getOpts());
+        return;
       }
+      const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+      const spender = quote.estimate?.approvalAddress ?? quote.transactionRequest.to;
+      const executor = makeExecutor2();
+      const approvals = isNative ? [] : [{
+        token: tokenAddr,
+        spender,
+        amount: BigInt(opts.amount)
+      }];
+      const action = await executor.execute({
+        to: quote.transactionRequest.to,
+        data: quote.transactionRequest.data,
+        value: BigInt(quote.transactionRequest.value ?? "0"),
+        description: `LI.FI ${fromChain.name} \u2192 ${toChain.name}`,
+        approvals
+      });
+      printOutput({
+        from_chain: fromChain.name,
+        to_chain: toChain.name,
+        token: tokenAddr,
+        amount: opts.amount,
+        bridge: quote.toolDetails?.name ?? "LI.FI",
+        estimated_output: quote.estimate?.toAmount,
+        action
+      }, getOpts());
     } catch (e) {
       printOutput({ error: `LI.FI API error: ${errMsg(e)}` }, getOpts());
     }

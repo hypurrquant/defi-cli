@@ -1,10 +1,55 @@
 import type { Command } from "commander";
 import type { OutputMode } from "../output.js";
-import type { Executor } from "../executor.js";
+import { Executor } from "../executor.js";
 import { printOutput } from "../output.js";
 import { Registry } from "@hypurrquant/defi-core";
-import type { Address, Hex } from "viem";
+import type { Address, Hex, Chain } from "viem";
 import { requireChain, resolveWallet, errMsg } from "../utils.js";
+
+function resolveDestExecutor(slug: string, broadcast: boolean): Executor {
+  const registry = Registry.loadEmbedded();
+  try {
+    const c = registry.getChain(slug);
+    return new Executor(broadcast, c.effectiveRpcUrl(), c.explorer_url, c.viemChain() as unknown as Chain);
+  } catch {
+    const envKey = `${slug.toUpperCase()}_RPC_URL`;
+    const envVal = process.env[envKey];
+    const meta = DEST_CHAIN_META[slug];
+    if (!meta) throw new Error(`Cannot resolve destination chain: ${slug}`);
+    const rpc = envVal ?? DEST_RPC_FALLBACKS[slug];
+    if (!rpc) throw new Error(`No RPC URL for ${slug}. Set ${envKey} or use a registered chain.`);
+    const minimal: Chain = {
+      id: meta.chain_id,
+      name: meta.name,
+      nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: [rpc] } },
+    };
+    return new Executor(broadcast, rpc, undefined, minimal);
+  }
+}
+
+async function pollCctpAttestation(
+  srcDomain: number,
+  burnTxHash: string,
+  maxSeconds: number,
+): Promise<{ message: Hex; attestation: Hex }> {
+  const intervalMs = 5000;
+  const deadline = Date.now() + maxSeconds * 1000;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`https://iris-api.circle.com/v2/messages/${srcDomain}?transactionHash=${burnTxHash}`);
+      if (res.ok) {
+        const data = await res.json() as { messages?: Array<{ message: string; attestation: string; status?: string }> };
+        const m = data.messages?.[0];
+        if (m && m.status === "complete" && m.attestation && m.attestation !== "PENDING") {
+          return { message: m.message as Hex, attestation: m.attestation as Hex };
+        }
+      }
+    } catch { /* retry */ }
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`CCTP attestation timeout after ${maxSeconds}s for tx ${burnTxHash}`);
+}
 
 const LIFI_API = "https://li.quest/v1";
 const DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
@@ -174,6 +219,21 @@ const CCTP_DOMAINS: Record<string, number> = {
 // TokenMessenger V2 contract address (same on all EVM chains)
 const CCTP_TOKEN_MESSENGER_V2 = "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d";
 
+// MessageTransmitter V2 contract address (same on all EVM V2 chains)
+const CCTP_MESSAGE_TRANSMITTER_V2 = "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64";
+
+// Public-RPC fallbacks for non-registry destination chains. Override per chain
+// via `<UPPER>_RPC_URL` (e.g. ETHEREUM_RPC_URL, ARBITRUM_RPC_URL).
+const DEST_RPC_FALLBACKS: Record<string, string> = {
+  ethereum: "https://eth.merkle.io",
+  arbitrum: "https://arbitrum.drpc.org",
+  optimism: "https://optimism.drpc.org",
+  polygon: "https://polygon.drpc.org",
+  avalanche: "https://avalanche.drpc.org",
+  linea: "https://linea.drpc.org",
+  zksync: "https://zksync.drpc.org",
+};
+
 // Native USDC addresses per chain
 const CCTP_USDC_ADDRESSES: Record<string, string> = {
   ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
@@ -253,6 +313,8 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
     .option("--recipient <address>", "Recipient address on destination chain")
     .option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50")
     .option("--provider <name>", "Bridge provider: lifi, relay, debridge, cctp", "lifi")
+    .option("--auto-receive", "(CCTP only) After burn, poll Circle attestation and auto-call MessageTransmitter.receiveMessage on destination", false)
+    .option("--receive-timeout <seconds>", "(CCTP --auto-receive) max seconds to wait for attestation", "1200")
     .action(async (opts) => {
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
@@ -318,13 +380,31 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
           );
 
           const tx = (result.raw as Record<string, unknown>).tx as Record<string, unknown> | undefined;
+          if (!tx?.to || !tx?.data) {
+            printOutput({ error: "deBridge: API did not return a tx envelope" }, getOpts());
+            return;
+          }
+          const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+          const executor = makeExecutor();
+          const approvals = isNative ? [] : [{
+            token: tokenAddr as Address,
+            spender: tx.to as Address,
+            amount: BigInt(opts.amount),
+          }];
+          const action = await executor.execute({
+            to: tx.to as Address,
+            data: tx.data as Hex,
+            value: BigInt((tx.value as string) ?? "0"),
+            description: `deBridge DLN ${fromChain.name} → ${toChain.name}`,
+            approvals,
+          });
           printOutput({
             from_chain: fromChain.name, to_chain: toChain.name,
             token: tokenAddr, amount: opts.amount,
             bridge: "deBridge DLN",
             estimated_output: result.amountOut,
             estimated_time_seconds: result.estimatedTime,
-            tx: tx ? { to: tx.to, data: tx.data, value: tx.value } : undefined,
+            action,
           }, getOpts());
         } catch (e) {
           printOutput({ error: `deBridge API error: ${errMsg(e)}` }, getOpts());
@@ -388,6 +468,49 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
             ],
           });
 
+          const executor = makeExecutor();
+          const burnAction = await executor.execute({
+            to: CCTP_TOKEN_MESSENGER_V2 as Address,
+            data: data as Hex,
+            value: 0n,
+            description: `CCTP burn ${fromChain.name} → ${toChain.name}`,
+            approvals: [{
+              token: usdcSrc as Address,
+              spender: CCTP_TOKEN_MESSENGER_V2 as Address,
+              amount: BigInt(opts.amount),
+            }],
+          });
+
+          let receiveAction: unknown = undefined;
+          if (opts.autoReceive && burnAction.tx_hash && burnAction.status === "confirmed") {
+            try {
+              const timeoutSec = parseInt(opts.receiveTimeout) || 1200;
+              process.stderr.write(`Polling Circle attestation for ${burnAction.tx_hash} (max ${timeoutSec}s)...\n`);
+              const { message, attestation } = await pollCctpAttestation(srcDomain, burnAction.tx_hash, timeoutSec);
+              process.stderr.write(`Attestation ready. Calling receiveMessage on ${opts.toChain}...\n`);
+
+              const { encodeFunctionData: encReceive, parseAbi: parseAbiReceive } = await import("viem");
+              const receiveAbi = parseAbiReceive([
+                "function receiveMessage(bytes message, bytes attestation) external",
+              ]);
+              const receiveData = encReceive({
+                abi: receiveAbi,
+                functionName: "receiveMessage",
+                args: [message, attestation],
+              });
+              const destExecutor = resolveDestExecutor(opts.toChain, !!parent.opts().broadcast);
+              receiveAction = await destExecutor.execute({
+                to: CCTP_MESSAGE_TRANSMITTER_V2 as Address,
+                data: receiveData as Hex,
+                value: 0n,
+                description: `CCTP receive on ${toChain.name}`,
+                approvals: [],
+              });
+            } catch (e) {
+              receiveAction = { error: `auto-receive failed: ${errMsg(e)}` };
+            }
+          }
+
           printOutput({
             from_chain: fromChain.name, to_chain: toChain.name,
             token: usdcSrc,
@@ -396,12 +519,11 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
             bridge: "Circle CCTP V2",
             estimated_fee_usdc: fee,
             estimated_output: String(BigInt(opts.amount) - maxFeeSubunits),
-            note: "After burn, poll https://iris-api.circle.com/v2/messages/{srcDomain} for attestation, then call MessageTransmitter.receiveMessage() on destination",
-            tx: {
-              to: CCTP_TOKEN_MESSENGER_V2,
-              data,
-              value: "0x0",
-            },
+            burn: burnAction,
+            receive: receiveAction,
+            note: opts.autoReceive
+              ? undefined
+              : "Pass --auto-receive to poll Circle attestation and auto-call MessageTransmitter.receiveMessage on the destination chain.",
           }, getOpts());
         } catch (e) {
           printOutput({ error: `CCTP error: ${errMsg(e)}` }, getOpts());
@@ -420,17 +542,32 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
         const res = await fetch(`${LIFI_API}/quote?${params}`);
         const quote = await res.json() as any;
 
-        if (quote.transactionRequest) {
-          printOutput({
-            from_chain: fromChain.name, to_chain: toChain.name,
-            token: tokenAddr, amount: opts.amount,
-            bridge: quote.toolDetails?.name ?? "LI.FI",
-            estimated_output: quote.estimate?.toAmount,
-            tx: { to: quote.transactionRequest.to, data: quote.transactionRequest.data, value: quote.transactionRequest.value },
-          }, getOpts());
-        } else {
+        if (!quote.transactionRequest) {
           printOutput({ error: "No LI.FI route found", details: quote }, getOpts());
+          return;
         }
+        const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+        const spender = (quote.estimate?.approvalAddress ?? quote.transactionRequest.to) as Address;
+        const executor = makeExecutor();
+        const approvals = isNative ? [] : [{
+          token: tokenAddr as Address,
+          spender,
+          amount: BigInt(opts.amount),
+        }];
+        const action = await executor.execute({
+          to: quote.transactionRequest.to as Address,
+          data: quote.transactionRequest.data as Hex,
+          value: BigInt(quote.transactionRequest.value ?? "0"),
+          description: `LI.FI ${fromChain.name} → ${toChain.name}`,
+          approvals,
+        });
+        printOutput({
+          from_chain: fromChain.name, to_chain: toChain.name,
+          token: tokenAddr, amount: opts.amount,
+          bridge: quote.toolDetails?.name ?? "LI.FI",
+          estimated_output: quote.estimate?.toAmount,
+          action,
+        }, getOpts());
       } catch (e) {
         printOutput({ error: `LI.FI API error: ${errMsg(e)}` }, getOpts());
       }
