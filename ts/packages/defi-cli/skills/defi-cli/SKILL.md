@@ -54,7 +54,7 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 | `hyperevm` | HyperEVM | 999 | 🟢 production |
 | `mantle` | Mantle | 5000 | 🟢 production |
 | `base` | Base | 8453 | 🟢 production |
-| `bnb` | BNB Chain | 56 | 🟡 staged |
+| `bnb` | BNB Chain | 56 | 🟢 production |
 | `monad` | Monad | 143 | 🟡 staged |
 
 🟢 = mainnet broadcast verified | 🟡 = configs verified, awaiting funded broadcast

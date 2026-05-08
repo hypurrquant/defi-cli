@@ -21,7 +21,7 @@ npx -y @hypurrquant/defi-cli --json status
 | HyperEVM | 999 | 🟢 production | 11 |
 | Mantle | 5000 | 🟢 production | 3 |
 | Base | 8453 | 🟢 production | 5 |
-| BNB | 56 | 🟡 staged | 16 |
+| BNB | 56 | 🟢 production | 16 |
 | Monad | 143 | 🟡 staged | 4 |
 
 🟢 = full lifecycle broadcast verified (mint/supply → claim → withdraw)

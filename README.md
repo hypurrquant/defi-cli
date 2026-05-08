@@ -83,8 +83,8 @@ The MCP server (`defi-mcp` binary) is also bundled if you prefer tool-call integ
 | **HyperEVM** | 999 | 🟢 production | 11 | HYPE | All protocols mainnet-verified incl. emission token receipt |
 | **Mantle** | 5000 | 🟢 production | 3 | MNT | Aave V3 + Uniswap V3 + Merchant Moe LB (MOE emission verified) |
 | **Base** | 8453 | 🟢 production | 5 | ETH | Aerodrome V2/CL (AERO emission) + Uniswap V3 + Aave V3 + Compound V3 |
-| **BNB** | 56 | 🟡 staged | 16 | BNB | Read-only verified, broadcast pending |
-| **Monad** | 143 | 🟡 staged | 4 | MON | TraderJoe LB pools active, broadcast pending |
+| **BNB** | 56 | 🟢 production | 16 | BNB | 13/16 lifecycle-verified (Aave V3, Venus, Kinza, Pancakeswap V2/V3, Uniswap V3, Thena V1, Biswap, ApeSwap, BakerySwap, BSCSwap, BabyDogeSwap, FstSwap); `venus-flux-bnb` (no USDT in stablecoins pool), `thena-fusion`, `beefy-bnb` deferred for funding |
+| **Monad** | 143 | 🟡 staged | 4 | MON | Uniswap V3/V2 lifecycle-verified; `traderjoe-monad`, `morpho-blue-monad` await mainnet launch + funding |
 | **Arbitrum** | 42161 | 🟡 staged | 3 | ETH | Read-only + aggregator quotes verified |
 | **Ethereum** | 1 | 🟡 staged | 6 | ETH | Read-only + aggregator quotes verified |
 
