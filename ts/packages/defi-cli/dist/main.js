@@ -11904,6 +11904,7 @@ init_dist();
 var LIFI_API = "https://li.quest/v1";
 var DLN_API = "https://dln.debridge.finance/v1.0/dln/order";
 var CCTP_FEE_API = "https://iris-api.circle.com/v2/burn/USDC/fees";
+var RELAY_API = "https://api.relay.link";
 var DEST_CHAIN_META = {
   ethereum: { chain_id: 1, name: "Ethereum" },
   optimism: { chain_id: 10, name: "Optimism" },
@@ -11975,6 +11976,42 @@ async function getDebridgeQuote(srcChainId, dstChainId, srcToken, dstToken, amou
     raw: createData
   };
 }
+async function getRelayBridgeQuote(srcChainId, dstChainId, srcToken, dstToken, amountRaw, user, recipient) {
+  const body = {
+    user,
+    recipient,
+    originChainId: srcChainId,
+    destinationChainId: dstChainId,
+    originCurrency: srcToken,
+    destinationCurrency: dstToken,
+    tradeType: "EXACT_INPUT",
+    amount: amountRaw
+  };
+  const res = await fetch(`${RELAY_API}/quote`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`Relay quote failed: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  const steps = json.steps;
+  const swapStep = steps?.find((s) => s.id !== "approve") ?? steps?.[steps?.length ?? 1 - 1];
+  const items = swapStep?.items;
+  const txData = items?.[0]?.data;
+  if (!txData) throw new Error("Relay: no executable step in cross-chain quote");
+  const details = json.details;
+  const currencyOut = details?.currencyOut;
+  const timeEst = details?.timeEstimate ?? 30;
+  return {
+    to: String(txData.to),
+    data: String(txData.data),
+    value: String(txData.value ?? "0x0"),
+    amountOut: String(currencyOut?.amount ?? "0"),
+    estimatedTime: timeEst,
+    tool: String(swapStep?.id ?? "relay"),
+    raw: json
+  };
+}
 var CCTP_DOMAINS = {
   ethereum: 0,
   avalanche: 1,
@@ -12030,8 +12067,8 @@ async function getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc) {
   }
   return { fee: 0.25, maxFeeSubunits: 250000n };
 }
-function registerBridge(parent, getOpts) {
-  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, debridge, cctp", "lifi").action(async (opts) => {
+function registerBridge(parent, getOpts, makeExecutor2) {
+  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, relay, debridge, cctp", "lifi").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
@@ -12046,6 +12083,46 @@ function registerBridge(parent, getOpts) {
     const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
     const recipient = resolveWallet(opts.recipient);
     const provider = opts.provider.toLowerCase();
+    if (provider === "relay") {
+      try {
+        const result = await getRelayBridgeQuote(
+          fromChain.chain_id,
+          toChain.chain_id,
+          tokenAddr,
+          tokenAddr,
+          opts.amount,
+          recipient,
+          recipient
+        );
+        const isNative = tokenAddr.toLowerCase() === "0x0000000000000000000000000000000000000000";
+        const executor = makeExecutor2();
+        const approvals = isNative ? [] : [{
+          token: tokenAddr,
+          spender: result.to,
+          amount: BigInt(opts.amount)
+        }];
+        const action = await executor.execute({
+          to: result.to,
+          data: result.data,
+          value: BigInt(result.value || "0"),
+          description: `Relay bridge ${fromChain.name} \u2192 ${toChain.name}`,
+          approvals
+        });
+        printOutput({
+          from_chain: fromChain.name,
+          to_chain: toChain.name,
+          token: tokenAddr,
+          amount: opts.amount,
+          bridge: `Relay (${result.tool})`,
+          estimated_output: result.amountOut,
+          estimated_time_seconds: result.estimatedTime,
+          action
+        }, getOpts());
+      } catch (e) {
+        printOutput({ error: `Relay API error: ${errMsg(e)}` }, getOpts());
+      }
+      return;
+    }
     if (provider === "debridge") {
       try {
         const srcId = DLN_CHAIN_IDS[chainName] ?? fromChain.chain_id;
@@ -12252,7 +12329,7 @@ async function lifiQuote(chainId, fromToken, toToken, fromAmount, fromAddress, s
     outAmount: String(estimate?.toAmount ?? "0")
   };
 }
-var RELAY_API = "https://api.relay.link";
+var RELAY_API2 = "https://api.relay.link";
 async function relayQuote(chainId, fromToken, toToken, amount, user) {
   const body = {
     user,
@@ -12264,7 +12341,7 @@ async function relayQuote(chainId, fromToken, toToken, amount, user) {
     tradeType: "EXACT_INPUT",
     amount
   };
-  const res = await fetch(`${RELAY_API}/quote`, {
+  const res = await fetch(`${RELAY_API2}/quote`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
@@ -12919,7 +12996,7 @@ registerPortfolio(program, getOutputMode);
 registerPrice(program, getOutputMode);
 registerWallet(program, getOutputMode);
 registerToken(program, getOutputMode, makeExecutor);
-registerBridge(program, getOutputMode);
+registerBridge(program, getOutputMode, makeExecutor);
 registerSwap(program, getOutputMode, makeExecutor);
 registerSetup(program);
 registerOws(program, getOutputMode);
