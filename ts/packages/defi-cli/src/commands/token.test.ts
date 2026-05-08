@@ -192,6 +192,113 @@ describe("defi token transfer", () => {
   });
 });
 
+describe("defi token wrap / unwrap — WETH9-shape calldata", () => {
+  // WETH9 fork selectors. Pinning these on every chain we support — pre-PR,
+  // the CLI had no way to drive deposit() / withdraw() at all and users had
+  // to hand-craft transactions. Bug-class: missing surface, silent fail.
+  const DEPOSIT_SELECTOR = "0xd0e30db0";
+  const WITHDRAW_SELECTOR = "0x2e1a7d4d";
+
+  it("wrap encodes deposit() with selector 0xd0e30db0 and routes value to wrapped_native", async () => {
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node",
+        "defi",
+        "--json",
+        "--chain",
+        "monad",
+        "token",
+        "wrap",
+        "--amount",
+        "1000000000000000000",
+      ]);
+    } finally {
+      restore();
+    }
+    const data = JSON.parse(capture.json.join("\n")) as {
+      details?: { to: string; data: Hex; value: string };
+      status?: string;
+    };
+    expect(data.status).toBe("dry_run");
+    // value carries the native amount (deposit() is payable; the chain
+    // credits the caller with 1:1 wrapped token via msg.value).
+    expect(data.details?.value).toBe("1000000000000000000");
+    expect(data.details?.data.toLowerCase()).toBe(DEPOSIT_SELECTOR);
+    // Target must be Monad's WMON, not the 0x0 sentinel.
+    expect(data.details?.to.toLowerCase()).toMatch(/^0x[0-9a-f]{40}$/);
+    expect(data.details?.to.toLowerCase()).not.toBe(
+      "0x0000000000000000000000000000000000000000",
+    );
+  });
+
+  it("unwrap encodes withdraw(uint256) with selector 0x2e1a7d4d and the exact amount", async () => {
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node",
+        "defi",
+        "--json",
+        "--chain",
+        "monad",
+        "token",
+        "unwrap",
+        "--amount",
+        "1000000000000000000",
+      ]);
+    } finally {
+      restore();
+    }
+    const data = JSON.parse(capture.json.join("\n")) as {
+      details?: { data: Hex; value: string };
+    };
+    // unwrap is non-payable: value MUST be 0 — sending native to withdraw()
+    // wastes gas and is a footgun; pin it.
+    expect(data.details?.value).toBe("0");
+    expect(data.details?.data.toLowerCase().slice(0, 10)).toBe(WITHDRAW_SELECTOR);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function withdraw(uint256 amount)"]),
+      data: data.details!.data,
+    });
+    expect(decoded.functionName).toBe("withdraw");
+    const args = decoded.args as readonly unknown[];
+    expect(args[0]).toBe(1_000_000_000_000_000_000n);
+  });
+
+  it("wrap targets each chain's registered wrapped_native (not a hard-coded address)", async () => {
+    // Same flow on a different chain → different `to`. Validates the
+    // chain-registry lookup actually drives the target rather than a
+    // baked-in address.
+    const captured: Record<string, string> = {};
+    for (const chain of ["monad", "hyperevm", "bnb"]) {
+      const program = buildProgram();
+      const { capture, restore } = captureConsole();
+      try {
+        await program.parseAsync([
+          "node",
+          "defi",
+          "--json",
+          "--chain",
+          chain,
+          "token",
+          "wrap",
+          "--amount",
+          "1",
+        ]);
+      } finally {
+        restore();
+      }
+      const data = JSON.parse(capture.json.join("\n")) as { details?: { to: string } };
+      captured[chain] = data.details!.to.toLowerCase();
+    }
+    expect(captured.monad).not.toBe(captured.hyperevm);
+    expect(captured.hyperevm).not.toBe(captured.bnb);
+    expect(captured.monad).not.toBe(captured.bnb);
+  });
+});
+
 describe("defi token balance / allowance — pre-RPC guards", () => {
   it("balance: errors when neither --owner nor DEFI_WALLET_ADDRESS is set", async () => {
     const program = buildProgram();

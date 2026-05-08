@@ -241,3 +241,58 @@ describe("MorphoBlueAdapter — direct-market path with marketId", () => {
     ).rejects.toThrow(/empty MarketParams|registered market/);
   });
 });
+
+describe("MorphoBlueAdapter — named-market lookup (US-B4)", () => {
+  beforeEach(() => readContractMock.mockReset());
+
+  function makeEntryWithMarkets(): ProtocolEntry {
+    return {
+      ...makeEntry(),
+      markets: [
+        {
+          name: "WMON-AUSD",
+          id: MARKET_ID,
+          loan_asset: "AUSD",
+          collateral_asset: "WMON",
+          lltv: "770000000000000000",
+        },
+        {
+          name: "TETH-TUSD",
+          id: "0xfdfec1ced463198bba499c38a43c04a5919cab0472a298c4c68041b225d16563" as `0x${string}`,
+          loan_asset: "TUSD",
+          collateral_asset: "TETH",
+          lltv: "860000000000000000",
+        },
+      ],
+    } as ProtocolEntry;
+  }
+
+  it("resolveMarketIdByName: matches a registered name (case-insensitive)", async () => {
+    const { MorphoBlueAdapter } = await import("./morpho.js");
+    const adapter = new MorphoBlueAdapter(makeEntryWithMarkets(), "https://example/monad");
+    expect(adapter.resolveMarketIdByName("WMON-AUSD")).toBe(MARKET_ID);
+    // case-insensitive lookup matches "wmon-ausd"
+    expect(adapter.resolveMarketIdByName("wmon-ausd")).toBe(MARKET_ID);
+  });
+
+  it("resolveMarketIdByName: returns null on unknown name (caller falls back / surfaces error)", async () => {
+    const { MorphoBlueAdapter } = await import("./morpho.js");
+    const adapter = new MorphoBlueAdapter(makeEntryWithMarkets(), "https://example/monad");
+    expect(adapter.resolveMarketIdByName("UNKNOWN-MARKET")).toBeNull();
+  });
+
+  it("listNamedMarkets: returns the registered markets for diagnostics", async () => {
+    const { MorphoBlueAdapter } = await import("./morpho.js");
+    const adapter = new MorphoBlueAdapter(makeEntryWithMarkets(), "https://example/monad");
+    const list = adapter.listNamedMarkets();
+    expect(list.length).toBe(2);
+    expect(list.map((m) => m.name)).toEqual(["WMON-AUSD", "TETH-TUSD"]);
+  });
+
+  it("falls back to empty registry when no markets[] in TOML — preserves backward compatibility", async () => {
+    const { MorphoBlueAdapter } = await import("./morpho.js");
+    const adapter = new MorphoBlueAdapter(makeEntry(), "https://example/monad");
+    expect(adapter.resolveMarketIdByName("anything")).toBeNull();
+    expect(adapter.listNamedMarkets()).toEqual([]);
+  });
+});

@@ -6,6 +6,7 @@ import {
   multicallRead,
   decodeU256,
   type ProtocolEntry,
+  type MarketInfo,
   type SupplyParams,
   type BorrowParams,
   type RepayParams,
@@ -92,6 +93,8 @@ export class MorphoBlueAdapter implements ILending {
   private readonly rpcUrl?: string;
   private readonly metaMorphoVaults: Address[];
   private readonly metaMorphoVaultEntries: Array<{ key: string; addr: Address }>;
+  private readonly namedMarkets: ReadonlyArray<MarketInfo>;
+  private readonly namedMarketByName: ReadonlyMap<string, `0x${string}`>;
   private vaultAssetMap: Map<string, Address> | null = null;
 
   constructor(entry: ProtocolEntry, rpcUrl?: string) {
@@ -107,6 +110,31 @@ export class MorphoBlueAdapter implements ILending {
       .filter(([key]) => /^fe[a-z0-9_]+$/i.test(key) || key === "vault")
       .map(([key, addr]) => ({ key, addr }));
     this.metaMorphoVaults = this.metaMorphoVaultEntries.map((e) => e.addr);
+
+    // Lowercase the lookup key so `--market WMON-AUSD` and `wmon-ausd`
+    // both resolve. `id` stays canonical-case for downstream RPC use.
+    this.namedMarkets = entry.markets ?? [];
+    const byName = new Map<string, `0x${string}`>();
+    for (const m of this.namedMarkets) byName.set(m.name.toLowerCase(), m.id);
+    this.namedMarketByName = byName;
+  }
+
+  /**
+   * Resolve a friendly market name (e.g. `WMON-AUSD`) to its 32-byte
+   * marketId via the per-protocol TOML registry. Returns null when the
+   * adapter has no markets[] block or the name doesn't match any entry —
+   * callers fall back to treating the input as a raw hex marketId.
+   */
+  resolveMarketIdByName(name: string): `0x${string}` | null {
+    return this.namedMarketByName.get(name.toLowerCase()) ?? null;
+  }
+
+  /**
+   * Returns the registered named markets for diagnostics (e.g. CLI error
+   * messages listing valid choices when the user passes an unknown name).
+   */
+  listNamedMarkets(): ReadonlyArray<MarketInfo> {
+    return this.namedMarkets;
   }
 
   private async resolveVault(asset: Address, preferKey?: string): Promise<Address | null> {
@@ -252,6 +280,52 @@ export class MorphoBlueAdapter implements ILending {
       );
     }
     const market = await this.resolveMarketParams(params.market_id);
+    // Max-repay path: when caller passes `--amount max` (= maxUint256), the
+    // CLI's parseAmount() gives us 2^256-1. Morpho's repay() reverts if
+    // assets > borrowed (toSharesUp underflows), so we instead repay by
+    // SHARES — pass `shares = position[id][user].borrowShares, assets = 0`.
+    // This cleanly closes the position even when toAssetsDown(borrowShares)
+    // rounds to 0 wei (the post-repay residual that left users stuck before
+    // 2026-05-07).
+    if (params.amount === MAX_UINT256) {
+      if (!this.rpcUrl) {
+        throw DefiError.rpcError(
+          `[${this.protocolName}] max-repay requires an RPC URL to read borrowShares.`,
+        );
+      }
+      const client = createPublicClient({ transport: http(this.rpcUrl) });
+      const positionAbi = parseAbi([
+        "function position(bytes32 id, address user) external view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral)",
+      ]);
+      const pos = await client.readContract({
+        address: this.morpho,
+        abi: positionAbi,
+        functionName: "position",
+        args: [params.market_id, params.on_behalf_of],
+      }) as readonly [bigint, bigint, bigint];
+      const [, borrowShares] = pos;
+      if (borrowShares === 0n) {
+        throw DefiError.invalidParam(
+          `[${this.protocolName}] cannot repay max — user has no borrow position in market ${params.market_id}.`,
+        );
+      }
+      const data = encodeFunctionData({
+        abi: MORPHO_ABI,
+        functionName: "repay",
+        args: [market, 0n, borrowShares, params.on_behalf_of, "0x"],
+      });
+      // Approve generously since the contract pulls assets equivalent to
+      // borrowShares × current borrow rate; rounded up. Use uint256 max so
+      // small-rate-of-change interest doesn't fail the approve mid-flight.
+      return {
+        description: `[${this.protocolName}] Repay max (${borrowShares} shares) to market ${params.market_id.slice(0, 10)}…`,
+        to: this.morpho,
+        data,
+        value: 0n,
+        gas_estimate: 350_000,
+        approvals: [{ token: params.asset, spender: this.morpho, amount: MAX_UINT256 }],
+      };
+    }
     const data = encodeFunctionData({
       abi: MORPHO_ABI,
       functionName: "repay",
