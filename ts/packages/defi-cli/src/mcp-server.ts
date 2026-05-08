@@ -382,15 +382,47 @@ server.tool(
         toChainId = registry.getChain(to_chain).chain_id;
       } catch { /* use name */ }
 
+      // Resolve src/dst token addresses separately. Same symbol lives at
+      // different contract addresses per chain (USDC on Base ≠ USDC on BNB)
+      // — passing one address as both src and dst makes providers reject
+      // with OUTPUT_TOKEN_NOT_TRADABLE / no route. For symbol input, look up
+      // the contract on each chain's registry; for hex input, reuse on dst
+      // (caller intent). Symbols not registered on the dst fall back to the
+      // src address (works only for native sentinels).
+      const isAddr = tokenSymbol.startsWith("0x");
+      const NATIVE = "0x0000000000000000000000000000000000000000";
+      let srcTokenAddr: string;
+      let dstTokenAddr: string;
+      let tokenDecimals = 18;
+      let dstTokenDecimals = 18;
+      if (isAddr) {
+        srcTokenAddr = tokenSymbol;
+        dstTokenAddr = tokenSymbol;
+      } else {
+        try {
+          const srcResolved = registry.resolveToken(from_chain, tokenSymbol);
+          srcTokenAddr = srcResolved.address;
+          tokenDecimals = srcResolved.decimals ?? 18;
+        } catch {
+          srcTokenAddr = NATIVE;
+          tokenDecimals = 18;
+        }
+        try {
+          const dstResolved = registry.resolveToken(to_chain, tokenSymbol);
+          dstTokenAddr = dstResolved.address;
+          dstTokenDecimals = dstResolved.decimals ?? tokenDecimals;
+        } catch {
+          dstTokenAddr = srcTokenAddr;
+          dstTokenDecimals = tokenDecimals;
+        }
+      }
+
       if (selectedProvider === "relay") {
         const RELAY_API = "https://api.relay.link";
         if (!fromChainId || !toChainId) {
           throw new Error("Relay requires resolvable numeric chain IDs for both source and destination");
         }
-        const isAddr = tokenSymbol.startsWith("0x");
-        const tokenAddr = isAddr ? tokenSymbol : "0x0000000000000000000000000000000000000000";
-        const decimals = isAddr ? 18 : 6;
-        const amountRaw = String(BigInt(Math.round(parseFloat(amount) * Math.pow(10, decimals))));
+        const amountRaw = String(BigInt(Math.round(parseFloat(amount) * Math.pow(10, tokenDecimals))));
         const res = await fetch(`${RELAY_API}/quote`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -399,8 +431,8 @@ server.tool(
             recipient: recipientAddr,
             originChainId: fromChainId,
             destinationChainId: toChainId,
-            originCurrency: tokenAddr,
-            destinationCurrency: tokenAddr,
+            originCurrency: srcTokenAddr,
+            destinationCurrency: dstTokenAddr,
             tradeType: "EXACT_INPUT",
             amount: amountRaw,
           }),
@@ -430,10 +462,10 @@ server.tool(
       const params = new URLSearchParams({
         fromChain: fromChainId ? String(fromChainId) : from_chain,
         toChain: toChainId ? String(toChainId) : to_chain,
-        fromToken: tokenSymbol,
-        toToken: tokenSymbol,
-        fromAmount: String(Math.round(parseFloat(amount) * 1e6)),
-        toAddress: recipientAddr,
+        fromToken: srcTokenAddr,
+        toToken: dstTokenAddr,
+        fromAmount: String(BigInt(Math.round(parseFloat(amount) * Math.pow(10, tokenDecimals)))),
+        fromAddress: recipientAddr,
       });
       const res = await fetch(`${LIFI_API}/quote?${params}`, {
         headers: { Accept: "application/json" },
@@ -444,12 +476,16 @@ server.tool(
       }
       const data = await res.json() as Record<string, unknown>;
       const estimate = data.estimate as Record<string, unknown> | undefined;
+      // Prefer the LiFi-quoted destination token decimals; fall back to the
+      // registry's dst entry; finally to the src decimals.
+      const lifiDstDecimals = (estimate?.toToken as Record<string, unknown> | undefined)?.decimals as number | undefined;
+      const amountOutDivisor = Math.pow(10, lifiDstDecimals ?? dstTokenDecimals);
       const quote = {
         from_chain,
         to_chain,
         token: tokenSymbol,
         amount_in: amount,
-        amount_out: estimate?.toAmount ? String(Number(estimate.toAmount as string) / 1e6) : "unknown",
+        amount_out: estimate?.toAmount ? String(Number(estimate.toAmount as string) / amountOutDivisor) : "unknown",
         fee_costs: estimate?.feeCosts ?? [],
         gas_costs: estimate?.gasCosts ?? [],
         execution_duration_seconds: estimate?.executionDuration ?? "unknown",
