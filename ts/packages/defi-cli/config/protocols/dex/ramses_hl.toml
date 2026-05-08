@@ -8,7 +8,7 @@ native = true
 verified = true
 reward_strategy = "auto_stake"
 reward_tokens = ["RAM", "WHYPE"]
-description = "Ramses V2 AMM (x(3,3) model) on HyperEVM. 'auto_stake' is misleading — router.addLiquidity does NOT auto-deposit; caller must invoke gauge.deposit(amount). WHYPE/RAM gauge rewards RAM (0x555570...), not xRAM (0xAE6D5F... isReward=false). Claim via gauge.getReward(account, [RAM, WHYPE])."
+description = "Ramses V2 AMM (x(3,3) model) on HyperEVM. 'auto_stake' is misleading — router.addLiquidity does NOT auto-deposit; caller must invoke gauge.deposit(amount). WHYPE/RAM gauge rewards RAM (0x555570...), not xRAM (0xAE6D5F... isReward=false). Claim via gauge.getReward(account, [RAM, WHYPE]). add+remove liquidity (USDC/USDT0 volatile pool 0x4378d583…60cd) live-confirmed 2026-05-08 (add tx 0x0cc02f44…7118, remove tx 0xf2632c31…5954)."
 
 [protocol.contracts]
 # V2 AMM

@@ -124,6 +124,13 @@ interface RemoveLiquidityParams {
     /** NFT tokenId for V3 / CL position managers (required for V3-style removes) */
     token_id?: bigint;
     /**
+     * V2/Solidly LP pair token address. When provided, the adapter emits an
+     * `approvals[]` entry so the executor can auto-approve the LP token for
+     * the router before broadcasting the remove tx. Without this, the remove
+     * tx reverts at the router's `transferFrom(LP)` call.
+     */
+    pool?: Address;
+    /**
      * Slippage tolerance for `amount0Min`/`amount1Min` derivation. When the
      * caller does not supply explicit minimums, the adapter computes them
      * from a live quote. Default = `defaultSwapSlippage()` (50 bps).
@@ -866,27 +873,7 @@ interface ProtocolEntry {
     cl_style?: "slipstream" | "ramses";
     contracts?: Record<string, Address>;
     pools?: PoolInfo[];
-    /**
-     * Optional named-market registry — currently used by Morpho Blue to map a
-     * friendly name (`WMON-AUSD`) to its 32-byte marketId so the CLI doesn't
-     * have to round-trip the GraphQL API on every call. Adapters that don't
-     * have a named-market concept (Aave V3, Compound V2/V3) ignore this.
-     */
-    markets?: MarketInfo[];
     description?: string;
-}
-/** Per-market metadata for Morpho Blue and similar id-keyed lending markets. */
-interface MarketInfo {
-    /** Friendly name accepted by `--market <name>` on the CLI. Case-sensitive. */
-    name: string;
-    /** 32-byte marketId (the `bytes32` argument to `idToMarketParams`). */
-    id: `0x${string}`;
-    /** Human-readable loan asset symbol (informational; not used by the adapter). */
-    loan_asset?: string;
-    /** Human-readable collateral asset symbol (informational; not used by the adapter). */
-    collateral_asset?: string;
-    /** LLTV in 1e18 fixed-point (e.g. `770000000000000000` = 77%). Informational. */
-    lltv?: string;
 }
 
 declare class Registry {
@@ -910,4 +897,4 @@ declare class Registry {
     resolvePool(protocolSlug: string, poolName: string): PoolInfo;
 }
 
-export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type AggregatorSlugs, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type GaugedPool, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type MarketInfo, type MorphoMarketId, type NativeInputStyle, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type RewardStrategy, type Slippage, type StakeParams, type StakingInfo, type SupplyCollateralParams, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type ViemChainShape, type WithdrawCollateralParams, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };
+export { type ActionResult, type AddLiquidityParams, type AdjustCdpParams, type AggregatorSlugs, type BorrowParams, type CdpInfo, ChainConfig, type CloseCdpParams, type DeFiTx, DefiError, type DefiErrorCode, type DefiPosition, type DerivativesPositionParams, type GaugeInfo, type GaugedPool, type ICdp, type IDerivatives, type IDex, type IGauge, type IGaugeSystem, type ILending, type ILiquidStaking, type INft, type IOptions, type IOracle, type IVault, type IVoteEscrow, type IVoter, type IYieldAggregator, type IYieldSource, InterestRateMode, type LendingRates, MULTICALL3_ADDRESS, type MorphoMarketId, type NativeInputStyle, type NftCollectionInfo, type NftTokenInfo, type OpenCdpParams, type OptionParams, type PoolInfo, type PortfolioPnL, type PortfolioSnapshot, type PositionAsset, type PriceData, ProtocolCategory, type ProtocolEntry, type QuoteParams, type QuoteResult, Registry, type RemoveLiquidityParams, type RepayParams, type Result, type RewardInfo, type RewardStrategy, type Slippage, type StakeParams, type StakingInfo, type SupplyCollateralParams, type SupplyParams, type SwapParams, type TokenAmount, type TokenBalance, type TokenChange, type TokenEntry, TxStatus, type UnstakeParams, type UserPosition, type VaultInfo, type VeNftInfo, type ViemChainShape, type WithdrawCollateralParams, type WithdrawParams, type YieldInfo, applyMinSlippage, buildApprove, buildMulticall, buildTransfer, clearProviderCache, decodeU128, decodeU256, defaultSwapSlippage, erc20Abi, formatHuman, getProvider, jsonReplacer, jsonReplacerDecimal, jsonStringify, multicallRead, newSlippage, parseBigInt, protocolCategoryLabel };

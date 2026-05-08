@@ -1,4 +1,4 @@
-import { IGaugeSystem, ProtocolEntry, GaugedPool, DeFiTx, RewardInfo, IGauge, ICdp, IDerivatives, IDex, ILending, ILiquidStaking, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, MarketInfo, SupplyCollateralParams, WithdrawCollateralParams, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
+import { IGaugeSystem, ProtocolEntry, GaugedPool, DeFiTx, RewardInfo, IGauge, ICdp, IDerivatives, IDex, ILending, ILiquidStaking, INft, IOptions, IOracle, IVault, IYieldSource, SwapParams, QuoteParams, QuoteResult, AddLiquidityParams, RemoveLiquidityParams, PriceData, SupplyParams, BorrowParams, RepayParams, WithdrawParams, LendingRates, UserPosition, SupplyCollateralParams, WithdrawCollateralParams, OpenCdpParams, AdjustCdpParams, CloseCdpParams, CdpInfo, VaultInfo, StakeParams, UnstakeParams, StakingInfo, YieldInfo, DerivativesPositionParams, OptionParams, NftCollectionInfo, NftTokenInfo } from '@hypurrquant/defi-core';
 import { Address, Hex } from 'viem';
 
 /**
@@ -166,6 +166,9 @@ interface LBAddLiquidityParams {
     deadline?: bigint;
 }
 interface LBRemoveLiquidityParams {
+    /** Optional pool address. When provided, the adapter realigns tokenX/tokenY
+     * to the pool's actual ordering (LB pairs are not address-sorted). */
+    pool?: Address;
     tokenX: Address;
     tokenY: Address;
     binStep: number;
@@ -219,10 +222,20 @@ declare class MerchantMoeLBAdapter {
     /**
      * Build an addLiquidity transaction for a Liquidity Book pair.
      * Distributes tokenX/tokenY uniformly across active bin ± numBins.
+     *
+     * The LB pair stores tokenX/tokenY in the order set at factory creation,
+     * which is **not** address-sorted. Callers may pass tokens in either order;
+     * we always re-align with the pool's `getTokenX/getTokenY` (and swap amounts
+     * accordingly) so the router's `if (tokenX != pair.tokenX) revert` path is
+     * never hit.
      */
     buildAddLiquidity(params: LBAddLiquidityParams): Promise<DeFiTx>;
     /**
      * Build a removeLiquidity transaction for specific LB bins.
+     *
+     * When `pool` is supplied, the adapter realigns tokenX/tokenY (and
+     * amountXMin/amountYMin) to the pool's actual ordering. Otherwise it trusts
+     * the caller — the router will revert if the order is wrong.
      */
     buildRemoveLiquidity(params: LBRemoveLiquidityParams): Promise<DeFiTx>;
     /**
@@ -377,6 +390,31 @@ interface NestAprEstimateParams {
     token0Amount: bigint;
     token1Amount: bigint;
 }
+/**
+ * Per-pool emission snapshot returned by /api/blaze/liquidity-pools.
+ * Mirrors the shape `lp discover` consumes for IGauge pools, but populated
+ * from the off-chain blaze API so NEST's read-side surfaces non-zero APR
+ * even though on-chain `gauge.rewardRate` is hard-wired to 0.
+ */
+interface NestLiquidityPool {
+    pool: Address;
+    gauge: Address | null;
+    token0: {
+        address: Address;
+        symbol: string;
+    };
+    token1: {
+        address: Address;
+        symbol: string;
+    };
+    tvlUSD: number;
+    /** APR in % (annualized, including emissions). 0 when pool has no active gauge epoch. */
+    aprPercent: number;
+    /** Current epoch's emission USD (0 if no active emissions). */
+    curEpochEmissionRewardsUSD: number;
+    poolType: string;
+    isStable: boolean;
+}
 declare class NestOffChainAdapter {
     private readonly baseUrl;
     private readonly fallbackUrl;
@@ -394,6 +432,14 @@ declare class NestOffChainAdapter {
     getClaimTicket(wallet: Address): Promise<NestClaimTicket | null>;
     /** APR estimate (percent) for a CL position with given tick range and amounts */
     estimateLpApr(params: NestAprEstimateParams): Promise<number>;
+    /**
+     * Snapshot of all NEST gauged pools from the off-chain blaze API. The
+     * on-chain ve(3,3) gauges return `rewardRate=0` (emissions are credited
+     * off-chain via signed claim tickets), so the on-chain Solidly gauge
+     * reader cannot surface real emission APR. This API is the canonical
+     * read source — used by `lp discover` to expose non-zero NEST yields.
+     */
+    getLiquidityPools(): Promise<NestLiquidityPool[]>;
     /** Pending NEST emissions as IGauge-compatible RewardInfo[] */
     getPendingRewards(user: Address): Promise<RewardInfo[]>;
     /** Voter address used by aggregateClaim() — exposed for callers that build the tx themselves */
@@ -522,6 +568,7 @@ declare class UniswapV3Adapter implements IDex {
     private readonly fee;
     private readonly rpcUrl;
     private readonly useTickSpacingQuoter;
+    private readonly clStyle;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
     name(): string;
     buildSwap(params: SwapParams): Promise<DeFiTx>;
@@ -685,6 +732,7 @@ declare class CompoundV2Adapter implements ILending {
     private readonly protocolName;
     private readonly defaultVtoken;
     private readonly vTokenCandidates;
+    private readonly comptroller;
     private readonly rpcUrl?;
     private vTokenByAsset;
     private nativeVtoken;
@@ -698,6 +746,14 @@ declare class CompoundV2Adapter implements ILending {
     buildBorrow(params: BorrowParams): Promise<DeFiTx>;
     buildRepay(params: RepayParams): Promise<DeFiTx>;
     buildWithdraw(params: WithdrawParams): Promise<DeFiTx>;
+    /**
+     * Compound V2 family: enter cTokens as collateral via Comptroller.
+     * Without this call, supplied assets sit dormant in the Comptroller's
+     * accountAssets[] and `getAccountLiquidity` reports zero collateral —
+     * any borrow then reverts. Mirrors the role of Aave V3's
+     * setUserUseReserveAsCollateral, but the API is batch-by-cToken.
+     */
+    buildEnterMarkets(cTokens: Address[]): Promise<DeFiTx>;
     getRates(asset: Address): Promise<LendingRates>;
     getUserPosition(user: Address): Promise<UserPosition>;
 }
@@ -737,22 +793,8 @@ declare class MorphoBlueAdapter implements ILending {
     private readonly rpcUrl?;
     private readonly metaMorphoVaults;
     private readonly metaMorphoVaultEntries;
-    private readonly namedMarkets;
-    private readonly namedMarketByName;
     private vaultAssetMap;
     constructor(entry: ProtocolEntry, rpcUrl?: string);
-    /**
-     * Resolve a friendly market name (e.g. `WMON-AUSD`) to its 32-byte
-     * marketId via the per-protocol TOML registry. Returns null when the
-     * adapter has no markets[] block or the name doesn't match any entry —
-     * callers fall back to treating the input as a raw hex marketId.
-     */
-    resolveMarketIdByName(name: string): `0x${string}` | null;
-    /**
-     * Returns the registered named markets for diagnostics (e.g. CLI error
-     * messages listing valid choices when the user passes an unknown name).
-     */
-    listNamedMarkets(): ReadonlyArray<MarketInfo>;
     private resolveVault;
     name(): string;
     /**
