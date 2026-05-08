@@ -157,6 +157,13 @@ export interface RemoveLiquidityParams {
   /** NFT tokenId for V3 / CL position managers (required for V3-style removes) */
   token_id?: bigint;
   /**
+   * V2/Solidly LP pair token address. When provided, the adapter emits an
+   * `approvals[]` entry so the executor can auto-approve the LP token for
+   * the router before broadcasting the remove tx. Without this, the remove
+   * tx reverts at the router's `transferFrom(LP)` call.
+   */
+  pool?: Address;
+  /**
    * Slippage tolerance for `amount0Min`/`amount1Min` derivation. When the
    * caller does not supply explicit minimums, the adapter computes them
    * from a live quote. Default = `defaultSwapSlippage()` (50 bps).

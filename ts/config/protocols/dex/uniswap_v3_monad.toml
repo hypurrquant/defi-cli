@@ -5,7 +5,8 @@ category = "dex"
 interface = "uniswap_v3"
 chain = "monad"
 native = false
-description = "Uniswap V3 on Monad — concentrated liquidity DEX leveraging Monad's high-performance EVM"
+verified = true
+description = "Uniswap V3 on Monad — concentrated liquidity DEX leveraging Monad's high-performance EVM. V3 NFT mint+remove (WMON/AUSD fee=100 pool 0x99e94823…1bfa8) live-confirmed 2026-05-08 with --range 20 + --amount-{a,b}-min 0 (low-liquidity pool needs slippage bypass; tokenId 29176, mint 0xba8ebee9…80cf, remove 0x683e7773…c5a4)."
 
 [protocol.contracts]
 router = "0xfE31F71C1b106EAc32F1A19239c9a9A72ddfb900"

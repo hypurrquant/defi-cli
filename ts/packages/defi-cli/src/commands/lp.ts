@@ -227,7 +227,7 @@ interface DiscoveredPool {
   pool: string;
   pair?: string;
   type: "FEE" | "EMISSION";
-  source: "gauge" | "farming" | "lb_hooks" | "fee" | "masterchef" | "curve_factory";
+  source: "gauge" | "farming" | "lb_hooks" | "fee" | "masterchef" | "curve_factory" | "off_chain_api";
   apr?: string;
   total_reward?: string;
   bonus_reward?: string;
@@ -247,6 +247,8 @@ interface DiscoveredPool {
   totalStaked?: string;
   rewardToken?: string;
   rewardPerDay?: number;
+  /** USD value of current epoch's emissions (off_chain_api source only). */
+  emissionUsd?: number;
   rewardTokenSymbol?: string;
 }
 
@@ -463,6 +465,28 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       await Promise.allSettled(
         protocols.map(async (protocol) => {
           try {
+            // Off-chain emission protocols (NEST blaze): rewards live in the
+            // backend (signed claim tickets), on-chain `gauge.rewardRate` is
+            // hard-wired to 0. Skip the on-chain gauge reader and pull the
+            // pool snapshot directly from /api/blaze/liquidity-pools.
+            if (protocol.reward_strategy === "off_chain_api") {
+              const adapter = createNestOffChain(protocol);
+              const pools = await adapter.getLiquidityPools();
+              for (const p of pools) {
+                if (p.aprPercent === 0 && opts.emissionOnly) continue;
+                results.push({
+                  protocol: protocol.slug,
+                  pool: p.pool,
+                  pair: `${p.token0.symbol}/${p.token1.symbol}`,
+                  type: p.aprPercent > 0 ? "EMISSION" : "FEE",
+                  source: "off_chain_api",
+                  aprPercent: p.aprPercent,
+                  poolTvlUsd: p.tvlUSD,
+                  emissionUsd: p.curEpochEmissionRewardsUSD,
+                });
+              }
+              return;
+            }
             // Gauge-based protocols (solidly_v2, solidly_cl, algebra_v3, hybra, uniswap_v3 with voter)
             const isGaugeProtocol = ["solidly_v2", "solidly_cl", "algebra_v3", "hybra"].includes(protocol.interface) ||
               (protocol.interface === "uniswap_v3" && protocol.contracts?.["voter"]);
@@ -662,11 +686,16 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       // Sort by APR descending (puts top-yield pools first; pools with no APR sink to bottom)
       results.sort((a, b) => (b.aprPercent ?? 0) - (a.aprPercent ?? 0));
       if (opts.emissionOnly) {
-        // Filter to pools that are actually distributing rewards right now (moePerDay > 0 OR rewardRate > 0)
+        // Filter to pools that are actually distributing rewards right now.
+        // Three signals depending on the source: moePerDay (Merchant Moe LB),
+        // rewardRate (on-chain Solidly/Hybra/Curve gauges), aprPercent
+        // (off-chain emission APIs like Nest blaze).
         printOutput(
           results.filter((r) =>
             r.type === "EMISSION" &&
-            ((r.moePerDay ?? 0) > 0 || (r.rewardRate && BigInt(r.rewardRate) > 0n)),
+            ((r.moePerDay ?? 0) > 0 ||
+              (r.rewardRate && BigInt(r.rewardRate) > 0n) ||
+              (r.aprPercent ?? 0) > 0),
           ),
           getOpts(),
         );
@@ -714,13 +743,32 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
       if (protocol.interface === "uniswap_v2" && protocol.contracts?.["lb_factory"]) {
         if (!poolAddr) throw new Error(`--pool is required for ${protocol.name} (Liquidity Book — pass --pool <addr>; use \`lp discover --protocol ${protocol.slug}\` to list active pools)`);
         const lbAdapter = createMerchantMoeLB(protocol, chain.effectiveRpcUrl());
-        const [tokenX, tokenY, amountX, amountY] = tokenA.toLowerCase() < tokenB.toLowerCase()
+        const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
+        // LB pool token order is canonical to the pool itself (set at pair creation),
+        // not lexicographic. Read tokenX/tokenY directly from the pool to avoid
+        // ordering mismatches that revert addLiquidity (e.g. WMON/AUSD on Monad).
+        const lbPairOrderAbi = parseAbi([
+          "function getTokenX() view returns (address)",
+          "function getTokenY() view returns (address)",
+          "function getBinStep() view returns (uint16)",
+        ]);
+        const [poolTokenX, poolTokenY, binStep] = await Promise.all([
+          client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getTokenX" }) as Promise<Address>,
+          client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getTokenY" }) as Promise<Address>,
+          client.readContract({ address: poolAddr, abi: lbPairOrderAbi, functionName: "getBinStep" }) as Promise<number>,
+        ]);
+        const aIsX = tokenA.toLowerCase() === poolTokenX.toLowerCase();
+        const bIsX = tokenB.toLowerCase() === poolTokenX.toLowerCase();
+        const aIsY = tokenA.toLowerCase() === poolTokenY.toLowerCase();
+        const bIsY = tokenB.toLowerCase() === poolTokenY.toLowerCase();
+        if (!((aIsX && bIsY) || (bIsX && aIsY))) {
+          throw new Error(
+            `[${protocol.name}] --token-a/--token-b (${tokenA}/${tokenB}) do not match pool tokens (X=${poolTokenX}, Y=${poolTokenY})`,
+          );
+        }
+        const [tokenX, tokenY, amountX, amountY] = aIsX
           ? [tokenA, tokenB, BigInt(opts.amountA), BigInt(opts.amountB)]
           : [tokenB, tokenA, BigInt(opts.amountB), BigInt(opts.amountA)];
-        const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
-        const binStep = await client.readContract({
-          address: poolAddr, abi: parseAbi(["function getBinStep() view returns (uint16)"]), functionName: "getBinStep",
-        }) as number;
         const tx = await lbAdapter.buildAddLiquidity({
           pool: poolAddr,
           tokenX, tokenY, binStep,
@@ -1189,12 +1237,30 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         const tokenB = opts.tokenB.startsWith("0x")
           ? (opts.tokenB as Address)
           : registry.resolveToken(chainName, opts.tokenB).address as Address;
-        const [tokenX, tokenY] = tokenA.toLowerCase() < tokenB.toLowerCase() ? [tokenA, tokenB] : [tokenB, tokenA];
         const binIds = (opts.bins as string).split(",").map((s) => parseInt(s.trim()));
         const client = createPublicClient({ transport: http(rpcUrl) });
-        const binStep = await client.readContract({
-          address: opts.pool as Address, abi: parseAbi(["function getBinStep() view returns (uint16)"]), functionName: "getBinStep",
-        }) as number;
+        // LB pool token order is canonical to the pool itself; resolve from pool
+        // rather than relying on lexicographic ordering of the input addresses.
+        const lbPairOrderAbi = parseAbi([
+          "function getTokenX() view returns (address)",
+          "function getTokenY() view returns (address)",
+          "function getBinStep() view returns (uint16)",
+        ]);
+        const [poolTokenX, poolTokenY, binStep] = await Promise.all([
+          client.readContract({ address: opts.pool as Address, abi: lbPairOrderAbi, functionName: "getTokenX" }) as Promise<Address>,
+          client.readContract({ address: opts.pool as Address, abi: lbPairOrderAbi, functionName: "getTokenY" }) as Promise<Address>,
+          client.readContract({ address: opts.pool as Address, abi: lbPairOrderAbi, functionName: "getBinStep" }) as Promise<number>,
+        ]);
+        const aIsX = tokenA.toLowerCase() === poolTokenX.toLowerCase();
+        const bIsX = tokenB.toLowerCase() === poolTokenX.toLowerCase();
+        const aIsY = tokenA.toLowerCase() === poolTokenY.toLowerCase();
+        const bIsY = tokenB.toLowerCase() === poolTokenY.toLowerCase();
+        if (!((aIsX && bIsY) || (bIsX && aIsY))) {
+          throw new Error(
+            `[${protocol.name}] --token-a/--token-b (${tokenA}/${tokenB}) do not match pool tokens (X=${poolTokenX}, Y=${poolTokenY})`,
+          );
+        }
+        const [tokenX, tokenY] = aIsX ? [tokenA, tokenB] : [tokenB, tokenA];
         let amounts: bigint[];
         if (opts.amounts) {
           amounts = (opts.amounts as string).split(",").map((s) => BigInt(s.trim()));
@@ -1216,6 +1282,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
           gas_estimate: 80_000,
         };
         const tx = await lbAdapter.buildRemoveLiquidity({
+          pool: opts.pool as Address,
           tokenX, tokenY, binStep,
           binIds, amounts,
           recipient,
@@ -1363,6 +1430,11 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         return;
       }
       const ZERO = "0x0000000000000000000000000000000000000000" as Address;
+      // Solidly-style adapters need the LP pair address to emit an
+      // `approvals[]` entry (the router pulls the LP token via transferFrom
+      // and reverts otherwise). --pool accepts both "TOKEN_A/TOKEN_B" symbol
+      // pairs from the protocol TOML and raw 0x addresses.
+      const removePoolAddr = opts.pool ? resolvePoolAddress(registry, opts.protocol, opts.pool) : undefined;
       const removeTx = await dexAdapter.buildRemoveLiquidity({
         protocol: protocol.name,
         token_a: tokenA ?? ZERO,
@@ -1372,6 +1444,7 @@ export function registerLP(parent: Command, getOpts: () => OutputMode, makeExecu
         token_id: opts.tokenId ? BigInt(opts.tokenId) : undefined,
         amount_a_min: opts.amountAMin !== undefined ? BigInt(opts.amountAMin) : undefined,
         amount_b_min: opts.amountBMin !== undefined ? BigInt(opts.amountBMin) : undefined,
+        pool: removePoolAddr,
       });
       const removeResult = await executor.execute(removeTx);
       printOutput({ step: "lp_remove", ...removeResult }, getOpts());

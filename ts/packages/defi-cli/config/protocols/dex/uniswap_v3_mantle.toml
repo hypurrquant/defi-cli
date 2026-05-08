@@ -5,7 +5,8 @@ category = "dex"
 interface = "uniswap_v3"
 chain = "mantle"
 native = false
-description = "Uniswap V3 on Mantle — DAO-recognized deployment by GFX Labs"
+verified = true
+description = "Uniswap V3 on Mantle — DAO-recognized deployment by GFX Labs. V3 NFT mint+remove (USDC/USDT fee=100 pool 0x8cfee38a…9d2c) live-confirmed 2026-05-08 (tokenId 1404, mint 0x2ca3fc8f…676e, remove 0xa13ecd4c…af72)."
 
 [protocol.contracts]
 router = "0x447B8E40B0CdA8e55F405C86bC635D02d0540aB8"
