@@ -102,3 +102,77 @@ describe("ThenaCLAdapter slippage protection (SSOT 7.3)", () => {
     expect(params.amount1Min).toBe(22n);
   });
 });
+
+describe("ThenaCLAdapter constructor + missing-contract guards", () => {
+  it("constructor throws when 'router' is missing", () => {
+    const broken: ProtocolEntry = {
+      ...ENTRY,
+      contracts: {
+        // intentionally omit router
+        position_manager: ENTRY.contracts!["position_manager"]!,
+        pool_factory: ENTRY.contracts!["pool_factory"]!,
+      },
+    };
+    expect(() => new ThenaCLAdapter(broken)).toThrow(/Missing 'router'/);
+  });
+
+  it("buildRemoveLiquidity throws when 'position_manager' is missing", async () => {
+    const noPm: ProtocolEntry = {
+      ...ENTRY,
+      contracts: {
+        router: ENTRY.contracts!["router"]!,
+        pool_factory: ENTRY.contracts!["pool_factory"]!,
+      },
+    };
+    const adapter = new ThenaCLAdapter(noPm);
+    await expect(
+      adapter.buildRemoveLiquidity({
+        protocol: noPm.slug,
+        token_a: LOW,
+        token_b: HIGH,
+        liquidity: 100n,
+        recipient: RECIPIENT,
+        token_id: 1n,
+        amount_a_min: 1n,
+        amount_b_min: 2n,
+      }),
+    ).rejects.toThrow(/Missing 'position_manager'/);
+  });
+
+  it("buildRemoveLiquidity throws when --token-id is missing", async () => {
+    const adapter = new ThenaCLAdapter(ENTRY);
+    await expect(
+      adapter.buildRemoveLiquidity({
+        protocol: ENTRY.slug,
+        token_a: LOW,
+        token_b: HIGH,
+        liquidity: 100n,
+        recipient: RECIPIENT,
+        // token_id intentionally omitted
+        amount_a_min: 1n,
+        amount_b_min: 2n,
+      }),
+    ).rejects.toThrow(/--token-id/);
+  });
+
+  it("buildRemoveLiquidity remaps amount_{a,b}_min when token_a > token_b (reverse sort)", async () => {
+    const adapter = new ThenaCLAdapter(ENTRY);
+    const tx = await adapter.buildRemoveLiquidity({
+      protocol: ENTRY.slug,
+      token_a: HIGH,
+      token_b: LOW,
+      liquidity: 100n,
+      recipient: RECIPIENT,
+      token_id: 7n,
+      amount_a_min: 11n,
+      amount_b_min: 22n,
+    });
+    const outer = decodeFunctionData({ abi: multicallAbi, data: tx.data as Hex });
+    const decreaseData = (outer.args[0] as readonly Hex[])[0];
+    const decoded = decodeFunctionData({ abi: decreaseAbi, data: decreaseData });
+    const params = decoded.args[0] as DecreaseTuple;
+    // sorted token0 = LOW = token_b → amount0Min = amount_b_min = 22n.
+    expect(params.amount0Min).toBe(22n);
+    expect(params.amount1Min).toBe(11n);
+  });
+});
