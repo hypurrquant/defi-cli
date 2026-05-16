@@ -73,14 +73,14 @@ the next release, move these entries under a versioned heading.
 
 ### Tests
 
-Total monorepo tests went from **201** (session baseline) to **416** (+215,
-+106.9%):
+Total monorepo tests went from **201** (session baseline) to **431** (+230,
++114.4%):
 
 | Package           | Tests (baseline → current) |
 |-------------------|----------------------------|
 | `defi-core`       | 32 → 49 (+17)              |
 | `defi-protocols`  | 63 → 147 (+84)             |
-| `defi-cli`        | 106 → 220 (+114)           |
+| `defi-cli`        | 106 → 235 (+129)           |
 
 Notable per-file coverage jumps:
 
