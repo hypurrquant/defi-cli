@@ -398,7 +398,11 @@ export function registerYield(parent: Command, getOpts: () => OutputMode, makeEx
     .description("Find the best yield opportunity and execute supply (or show cross-chain plan)")
     .requiredOption("--asset <token>", "Token symbol or address (e.g. USDC)")
     .requiredOption("--amount <amount>", "Human-readable amount to supply (e.g. 1000)")
-    .option("--min-spread <percent>", "Minimum spread % required to execute cross-chain arb", "1.0")
+    // --min-spread is compared against the raw decimal spread
+    // (s.supply_apy - b.borrow_variable_apy), not a percent. The default
+    // "1.0" therefore means "100% spread" and effectively gates plan_only
+    // off — pass e.g. "0.05" for a realistic 5% threshold.
+    .option("--min-spread <decimal>", "Minimum spread as decimal (e.g. 0.05 = 5%) for cross-chain arb plan_only", "1.0")
     .option("--target-chain <chain>", "Override auto-detected best chain")
     .option("--target-protocol <protocol>", "Override auto-detected best protocol slug")
     .action(async (opts) => {
