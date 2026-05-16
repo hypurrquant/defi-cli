@@ -8,6 +8,7 @@
  */
 
 import "dotenv/config";
+import { realpathSync } from "fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -1664,10 +1665,21 @@ server.tool(
 // ── Start server ──
 
 // Guard so importing mcp-server.ts (e.g. from tests) doesn't open a stdio
-// transport that would hang on stdin. Production: this file is the bin
-// entrypoint, so process.argv[1] resolves to the same path and the connect
-// fires. Tests: vitest is process.argv[1] → guard short-circuits.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// transport that would hang on stdin. Both sides go through realpathSync so
+// the npm/npx bin symlink (node_modules/.bin/defi-mcp → dist/mcp-server.js)
+// resolves to the same real path as `import.meta.url`. Without realpath, the
+// comparison fails when defi-mcp is invoked via npx and the stdio transport
+// never starts. Tests: vitest's process.argv[1] points elsewhere, so the
+// guard still short-circuits.
+function isMainEntrypoint(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+if (isMainEntrypoint()) {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

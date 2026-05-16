@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { realpathSync } from "fs";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
 // Load global ~/.defi/.env first, then CWD .env overrides it
@@ -72,9 +73,20 @@ async function main() {
 }
 
 // Guard so importing main.ts (in tests or other modules) doesn't fire main().
-// Production: node invokes main.js directly → process.argv[1] === resolved
-// path of this file → main() runs. Tests: vitest is process.argv[1] →
-// main() is skipped.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Both sides go through realpathSync so the npx / npm bin symlink
+// (node_modules/.bin/defi → dist/main.js) resolves to the same real path as
+// `import.meta.url`. Without realpath the comparison fails for `npx defi`
+// because process.argv[1] is the symlink and import.meta.url is the target.
+// Tests: vitest is process.argv[1], so the realpath comparison stays unequal
+// and main() is skipped.
+function isMainEntrypoint(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+if (isMainEntrypoint()) {
   main();
 }
