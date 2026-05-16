@@ -391,3 +391,59 @@ describe("CompoundV2Adapter — v1.0.6 utilization unit conversion", () => {
     expect(rates.total_supply).toBe(1_000_000n);
   });
 });
+
+describe("CompoundV2Adapter — constructor defaultVtoken fallback chain", () => {
+  // The constructor picks defaultVtoken from contracts via a `??` chain:
+  //   vusdt → vusdc → vbnb → comptroller
+  // We assert the picked address by reaching into the private field — the
+  // only way to observe each rung without routing through resolveVtoken's
+  // RPC fallback (which would need its own readContract mock).
+  function pickedDefault(adapter: object): Address {
+    return (adapter as { defaultVtoken: Address }).defaultVtoken;
+  }
+
+  it("picks vusdc when vusdt is absent", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const entry: ProtocolEntry = {
+      ...makeEntry(),
+      contracts: { vusdc: VUSDC, comptroller: COMPTROLLER },
+    };
+    const adapter = new CompoundV2Adapter(entry, "https://example/bnb");
+    expect(pickedDefault(adapter).toLowerCase()).toBe(VUSDC.toLowerCase());
+  });
+
+  it("picks vbnb when vusdt + vusdc are absent", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const entry: ProtocolEntry = {
+      ...makeEntry(),
+      contracts: { vbnb: VBNB, comptroller: COMPTROLLER },
+    };
+    const adapter = new CompoundV2Adapter(entry, "https://example/bnb");
+    expect(pickedDefault(adapter).toLowerCase()).toBe(VBNB.toLowerCase());
+  });
+
+  it("falls back to comptroller as a last-resort defaultVtoken when no v* entries exist", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const entry: ProtocolEntry = {
+      ...makeEntry(),
+      // No v* keys at all. The `??` chain settles on comptroller — that's
+      // wonky-but-deliberate so integrators wiring a brand-new Venus fork
+      // can stand the adapter up before fixture data lands. resolveVtoken
+      // will still fail without the cache, but the constructor must not.
+      contracts: { comptroller: COMPTROLLER },
+    };
+    const adapter = new CompoundV2Adapter(entry, "https://example/bnb");
+    expect(pickedDefault(adapter).toLowerCase()).toBe(COMPTROLLER.toLowerCase());
+  });
+
+  it("throws when neither v* nor comptroller is configured", async () => {
+    const { CompoundV2Adapter } = await import("./compound_v2.js");
+    const entry: ProtocolEntry = {
+      ...makeEntry(),
+      contracts: {}, // empty → !vtoken → throws
+    };
+    expect(() => new CompoundV2Adapter(entry, "https://example/bnb")).toThrow(
+      /Missing vToken or comptroller/,
+    );
+  });
+});
