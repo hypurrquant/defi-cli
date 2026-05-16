@@ -9,6 +9,7 @@
 
 import "dotenv/config";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -19,26 +20,29 @@ import type { Address } from "viem";
 
 // ── JSON envelope helpers ──
 
-function ok(data: unknown, meta?: Record<string, unknown>) {
+/** Success envelope used by every MCP tool handler — uniform shape so any
+ *  caller (Claude Desktop, an integration test) can pattern-match `ok: true`. */
+export function ok(data: unknown, meta?: Record<string, unknown>) {
   return JSON.stringify({ ok: true, data, meta }, null, 2);
 }
 
-function err(error: string, meta?: Record<string, unknown>) {
+/** Error envelope counterpart — same shape as ok() but with `ok: false`. */
+export function err(error: string, meta?: Record<string, unknown>) {
   return JSON.stringify({ ok: false, error, meta }, null, 2);
 }
 
 // ── Registry helper ──
 
-function getRegistry() {
+export function getRegistry() {
   return Registry.loadEmbedded();
 }
 
-function resolveToken(registry: Registry, chainName: string, token: string): Address {
+export function resolveToken(registry: Registry, chainName: string, token: string): Address {
   if (token.startsWith("0x")) return token as Address;
   return registry.resolveToken(chainName, token).address as Address;
 }
 
-function makeExecutor(broadcast: boolean, rpcUrl: string, explorerUrl?: string): Executor {
+export function makeExecutor(broadcast: boolean, rpcUrl: string, explorerUrl?: string): Executor {
   return new Executor(broadcast, rpcUrl, explorerUrl);
 }
 
@@ -47,7 +51,7 @@ function makeExecutor(broadcast: boolean, rpcUrl: string, explorerUrl?: string):
 const _require = createRequire(import.meta.url);
 const _pkg = _require("../package.json") as { version: string };
 
-const server = new McpServer(
+export const server = new McpServer(
   { name: "defi-cli", version: _pkg.version },
   { capabilities: { tools: {}, resources: {}, prompts: {} } },
 );
@@ -1659,5 +1663,11 @@ server.tool(
 
 // ── Start server ──
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+// Guard so importing mcp-server.ts (e.g. from tests) doesn't open a stdio
+// transport that would hang on stdin. Production: this file is the bin
+// entrypoint, so process.argv[1] resolves to the same path and the connect
+// fires. Tests: vitest is process.argv[1] → guard short-circuits.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
