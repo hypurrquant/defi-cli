@@ -212,13 +212,24 @@ export function registerSwap(
   getOpts: () => OutputMode,
   makeExecutor: () => Executor,
 ): void {
+  // `swap` is intentionally a single command (not `swap quote`/`swap broadcast`)
+  // — dry-run is the default and returns the quote + calldata; passing
+  // `--broadcast` (the global flag) actually sends the tx. Adding a `quote`
+  // subcommand would be semantic duplication with the dry-run path.
   parent
     .command("swap")
-    .description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay)")
+    .description(
+      "Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay). " +
+      "Dry-run by default returns the quote + calldata; pass --broadcast to send the tx.",
+    )
     .requiredOption("--from <token>", "Input token symbol or address")
     .requiredOption("--to <token>", "Output token symbol or address")
     .requiredOption("--amount <amount>", "Amount of input token in wei")
-    .option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber")
+    // `--provider` is the long-standing flag; `--aggregator` is the R3 alias
+    // added 2026-05-16 to match the prose used in --help (and in docs that
+    // refer to KyberSwap/OpenOcean/etc. as "aggregators"). Both accepted.
+    .option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay (alias: --aggregator)", "kyber")
+    .option("--aggregator <name>", "Aggregator: kyber, openocean, liquid, lifi, relay (alias of --provider)")
     // Default 100 bps (1%) is the SSOT 7.3 ceiling for "safe default" and
     // the sweet spot for thin-liquidity chains like Monad where the previous
     // 50 bps default produced revert-on-broadcast even when the dry-run
@@ -232,7 +243,10 @@ export function registerSwap(
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
       const registry = Registry.loadEmbedded();
-      const provider = (opts.provider as string).toLowerCase();
+      // --aggregator wins when both supplied — last-flag-wins is the common
+      // commander convention and matches user intent.
+      const providerRaw = (opts.aggregator ?? opts.provider) as string;
+      const provider = providerRaw.toLowerCase();
       const slippageBps = parseInt(opts.slippage as string, 10);
 
       // Resolve token addresses
@@ -439,6 +453,6 @@ export function registerSwap(
         return;
       }
 
-      printOutput({ error: `Unknown provider '${opts.provider}'. Choose: kyber, openocean, liquid, lifi, relay` }, getOpts());
+      printOutput({ error: `Unknown provider '${providerRaw}'. Choose: kyber, openocean, liquid, lifi, relay` }, getOpts());
     });
 }

@@ -421,3 +421,78 @@ describe("defi swap aggregator happy paths", () => {
     }
   });
 });
+
+// R3 (2026-05-16): `--aggregator` was added as an alias for `--provider` to
+// match the prose in --help and documentation. Both should produce identical
+// behaviour; --aggregator wins when both are supplied (last-flag convention).
+describe("defi swap --aggregator alias (R3)", () => {
+  it("--aggregator kyber routes through the kyber branch (identical to --provider kyber)", async () => {
+    mockFetchSequence([
+      { data: { routeSummary: { amountOut: "32301" } } },
+      { data: { routerAddress: ROUTER, data: FAKE_CALLDATA, value: "0x0" } },
+    ]);
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node", "defi", "--json", "--chain", "monad",
+        "swap",
+        "--from", EEEE_SENTINEL,
+        "--to", USDC_MONAD,
+        "--amount", "100000000000000000",
+        "--aggregator", "kyber",
+      ]);
+    } finally {
+      restore();
+    }
+    const data = JSON.parse(capture.json[0]!) as { provider: string; amount_out: string };
+    expect(data.provider).toBe("kyber");
+    expect(data.amount_out).toBe("32301");
+  });
+
+  it("--aggregator wins when both --provider and --aggregator are supplied", async () => {
+    // --provider=openocean would dispatch the openocean branch; --aggregator=
+    // kyber overrides and lands in the kyber branch. The mocked kyber response
+    // is what comes back, confirming the override won.
+    mockFetchSequence([
+      { data: { routeSummary: { amountOut: "32301" } } },
+      { data: { routerAddress: ROUTER, data: FAKE_CALLDATA, value: "0x0" } },
+    ]);
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node", "defi", "--json", "--chain", "monad",
+        "swap",
+        "--from", EEEE_SENTINEL,
+        "--to", USDC_MONAD,
+        "--amount", "100000000000000000",
+        "--provider", "openocean",
+        "--aggregator", "kyber",
+      ]);
+    } finally {
+      restore();
+    }
+    const data = JSON.parse(capture.json[0]!) as { provider: string };
+    expect(data.provider).toBe("kyber");
+  });
+
+  it("unknown --aggregator echoes the supplied value in the error envelope", async () => {
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node", "defi", "--json", "--chain", "monad",
+        "swap",
+        "--from", EEEE_SENTINEL,
+        "--to", USDC_MONAD,
+        "--amount", "100",
+        "--aggregator", "bogus_agg",
+      ]);
+    } finally {
+      restore();
+    }
+    const data = JSON.parse(capture.json[0]!) as { error: string };
+    expect(data.error).toMatch(/Unknown provider 'bogus_agg'/);
+  });
+});

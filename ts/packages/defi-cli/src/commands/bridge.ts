@@ -324,9 +324,15 @@ export async function getCctpFeeEstimate(
 }
 
 export function registerBridge(parent: Command, getOpts: () => OutputMode, makeExecutor: () => Executor): void {
+  // `bridge` is intentionally a single command (not `bridge quote`/`bridge
+  // execute`) — dry-run is the default and returns the route + calldata;
+  // passing the global `--broadcast` flag actually sends the tx.
   parent
     .command("bridge")
-    .description("Cross-chain bridge: move assets between chains")
+    .description(
+      "Cross-chain bridge: move assets between chains. " +
+      "Dry-run by default returns the route + calldata; pass --broadcast to send the tx.",
+    )
     // `--token` is the long-standing name; `--asset` is the alias added in
     // 2026-05-16 to align with `price` / `lending` / `yield`. Both accepted.
     .option("--token <token>", "Token symbol or address (alias: --asset)")
