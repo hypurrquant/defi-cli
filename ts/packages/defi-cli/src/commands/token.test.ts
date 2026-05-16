@@ -377,3 +377,63 @@ describe("defi token balance / allowance — pre-RPC guards", () => {
     expect(OWNER).toMatch(/^0x/);
   });
 });
+
+// R1 (2026-05-16): every `defi token` subcommand that takes a token argument
+// now accepts both `--token` and `--asset` (alias). These tests pin that
+// either flag produces identical calldata, plus the "neither supplied" guard.
+describe("defi token --asset alias (R1)", () => {
+  const TOKEN_HEX = "0x" + "ab".repeat(20); // 0xabab… (uppercased by viem decode)
+
+  it("approve --asset behaves identically to --token", async () => {
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node", "defi", "--json", "--chain", "hyperevm",
+        "token", "approve",
+        "--asset", TOKEN_HEX,
+        "--spender", "0x" + "cd".repeat(20),
+        "--amount", "12345",
+      ]);
+    } finally {
+      restore();
+    }
+    const data = JSON.parse(capture.json[0]!) as { details: { to: string } };
+    expect(data.details.to.toLowerCase()).toBe(TOKEN_HEX);
+  });
+
+  it("transfer --asset is accepted in place of --token", async () => {
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node", "defi", "--json", "--chain", "hyperevm",
+        "token", "transfer",
+        "--asset", TOKEN_HEX,
+        "--to", "0x" + "ef".repeat(20),
+        "--amount", "1000",
+      ]);
+    } finally {
+      restore();
+    }
+    const data = JSON.parse(capture.json[0]!) as { details: { to: string } };
+    expect(data.details.to.toLowerCase()).toBe(TOKEN_HEX);
+  });
+
+  it("approve with neither --token nor --asset emits the expected guard error", async () => {
+    const program = buildProgram();
+    const { capture, restore } = captureConsole();
+    try {
+      await program.parseAsync([
+        "node", "defi", "--json", "--chain", "hyperevm",
+        "token", "approve",
+        "--spender", "0x" + "cd".repeat(20),
+        "--amount", "1",
+      ]);
+    } finally {
+      restore();
+    }
+    const env = JSON.parse(capture.json[0]!) as { error: string };
+    expect(env.error).toMatch(/--token \(or --asset\) is required/);
+  });
+});

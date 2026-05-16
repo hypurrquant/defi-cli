@@ -327,7 +327,10 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
   parent
     .command("bridge")
     .description("Cross-chain bridge: move assets between chains")
-    .requiredOption("--token <token>", "Token symbol or address")
+    // `--token` is the long-standing name; `--asset` is the alias added in
+    // 2026-05-16 to align with `price` / `lending` / `yield`. Both accepted.
+    .option("--token <token>", "Token symbol or address (alias: --asset)")
+    .option("--asset <token>", "Token symbol or address (alias: --token)")
     .requiredOption("--amount <amount>", "Amount in wei")
     .requiredOption("--to-chain <chain>", "Destination chain name")
     .option("--recipient <address>", "Recipient address on destination chain")
@@ -338,6 +341,8 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
     .action(async (opts) => {
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const tokenArg = (opts.asset ?? opts.token) as string | undefined;
+      if (!tokenArg) { printOutput({ error: "--token (or --asset) is required" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const fromChain = registry.getChain(chainName);
       let toChain: { chain_id: number; name: string };
@@ -347,16 +352,16 @@ export function registerBridge(parent: Command, getOpts: () => OutputMode, makeE
         printOutput({ error: errMsg(e) }, getOpts());
         return;
       }
-      const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
+      const tokenAddr = tokenArg.startsWith("0x") ? tokenArg : registry.resolveToken(chainName, tokenArg).address;
       // Resolve the destination-chain equivalent of `--token`. Cross-chain
       // bridges need separate src/dst addresses because the same symbol (USDC,
       // USDT, WETH, …) lives at different contract addresses on each chain.
       // Symbol input → registry lookup on dst (if registered) → source-addr
       // fallback. Hex input → reuse on dst (caller knows what they want).
       let dstTokenAddr = tokenAddr;
-      if (!opts.token.startsWith("0x")) {
+      if (!tokenArg.startsWith("0x")) {
         try {
-          dstTokenAddr = registry.resolveToken(opts.toChain, opts.token).address;
+          dstTokenAddr = registry.resolveToken(opts.toChain, tokenArg).address;
         } catch {
           // Destination chain isn't registered or symbol not listed on it.
           // Fall back to the source address — works for native bridges (LI.FI,

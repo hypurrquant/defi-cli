@@ -9,9 +9,12 @@
  * v1.0.5 fix: `bridge --to-chain ethereum/arbitrum/...` resolves via
  * DEST_CHAIN_META map even though those chains were dropped as source chains.
  */
+import { Command } from "commander";
 import { describe, it, expect } from "vitest";
-import { cctpMinFeeGuard, resolveDestChain, DEST_CHAIN_META } from "./bridge.js";
+import { cctpMinFeeGuard, resolveDestChain, DEST_CHAIN_META, registerBridge } from "./bridge.js";
 import { Registry } from "@hypurrquant/defi-core";
+import { Executor } from "../executor.js";
+import { parseOutputMode } from "../output.js";
 
 describe("cctpMinFeeGuard — v1.0.7", () => {
   it("returns null when amount is above the fee", () => {
@@ -69,5 +72,56 @@ describe("DEST_CHAIN_META covers the canonical bridge-only chains", () => {
     expect(DEST_CHAIN_META.optimism?.chain_id).toBe(10);
     expect(DEST_CHAIN_META.polygon?.chain_id).toBe(137);
     expect(DEST_CHAIN_META.avalanche?.chain_id).toBe(43114);
+  });
+});
+
+// R1 (2026-05-16): `bridge` now accepts both --token and --asset (alias).
+// Tests verify the option surface + the "neither supplied" guard. The happy
+// path is deferred to integration tests because it dispatches to LI.FI /
+// Relay / CCTP / deBridge fetches.
+describe("defi bridge --asset alias (R1)", () => {
+  function buildProgram(): Command {
+    const program = new Command();
+    program.exitOverride();
+    program.option("--chain <chain>", "Target chain");
+    program.option("--json", "Output as JSON");
+    program.option("--ndjson", "Output as newline-delimited JSON");
+    program.option("--fields <fields>", "Filter output fields");
+    registerBridge(
+      program,
+      () => parseOutputMode(program.opts<{ json?: boolean; ndjson?: boolean; fields?: string }>()),
+      () => new Executor(false),
+    );
+    return program;
+  }
+
+  it("registers both --token and --asset on the bridge command", () => {
+    const program = buildProgram();
+    const bridge = program.commands.find((c) => c.name() === "bridge");
+    expect(bridge).toBeDefined();
+    const longFlags = bridge!.options.map((o) => o.long);
+    expect(longFlags).toContain("--token");
+    expect(longFlags).toContain("--asset");
+  });
+
+  it("emits the guard error when neither --token nor --asset is supplied", async () => {
+    const program = buildProgram();
+    const captured: string[] = [];
+    const orig = console.log;
+    console.log = (msg?: unknown) => {
+      captured.push(typeof msg === "string" ? msg : JSON.stringify(msg));
+    };
+    try {
+      await program.parseAsync([
+        "node", "defi", "--json", "--chain", "hyperevm",
+        "bridge",
+        "--amount", "1000000",
+        "--to-chain", "base",
+      ]);
+    } finally {
+      console.log = orig;
+    }
+    const env = JSON.parse(captured[0]!) as { error: string };
+    expect(env.error).toMatch(/--token \(or --asset\) is required/);
   });
 });

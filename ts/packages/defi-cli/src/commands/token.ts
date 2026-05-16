@@ -13,18 +13,24 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
   token
     .command("balance")
     .description("Query token balance for an address")
-    .requiredOption("--token <token>", "Token symbol or address")
+    // `--token` is the long-standing name; `--asset` is the alias added in
+    // 2026-05-16 to align with `price` / `lending` / `yield` which use
+    // `--asset`. Both accepted; if neither is supplied we error explicitly.
+    .option("--token <token>", "Token symbol or address (alias: --asset)")
+    .option("--asset <token>", "Token symbol or address (alias: --token)")
     .option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)")
     .action(async (opts) => {
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const tokenArg = (opts.asset ?? opts.token) as string | undefined;
+      if (!tokenArg) { printOutput({ error: "--token (or --asset) is required" }, getOpts()); return; }
       const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
       if (!owner) { printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
 
-      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg) as Address;
 
       const [balance, symbol, decimals] = await Promise.all([
         client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [owner as Address] }),
@@ -44,15 +50,18 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
   token
     .command("approve")
     .description("Approve a spender for a token")
-    .requiredOption("--token <token>", "Token symbol or address")
+    .option("--token <token>", "Token symbol or address (alias: --asset)")
+    .option("--asset <token>", "Token symbol or address (alias: --token)")
     .requiredOption("--spender <address>", "Spender address")
     .option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const tokenArg = (opts.asset ?? opts.token) as string | undefined;
+      if (!tokenArg) { printOutput({ error: "--token (or --asset) is required" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
-      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg) as Address;
 
       const amount = opts.amount === "max" ? maxUint256 : BigInt(opts.amount);
       const tx = buildApprove(tokenAddr, opts.spender as Address, amount);
@@ -63,19 +72,22 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
   token
     .command("allowance")
     .description("Check token allowance")
-    .requiredOption("--token <token>", "Token symbol or address")
+    .option("--token <token>", "Token symbol or address (alias: --asset)")
+    .option("--asset <token>", "Token symbol or address (alias: --token)")
     .option("--owner <address>", "Owner address (defaults to DEFI_WALLET_ADDRESS)")
     .requiredOption("--spender <address>", "Spender address")
     .action(async (opts) => {
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const tokenArg = (opts.asset ?? opts.token) as string | undefined;
+      if (!tokenArg) { printOutput({ error: "--token (or --asset) is required" }, getOpts()); return; }
       const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
       if (!owner) { printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
       const chain = registry.getChain(chainName);
       const client = createPublicClient({ transport: http(chain.effectiveRpcUrl()) });
 
-      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg) as Address;
 
       const allowance = await client.readContract({
         address: tokenAddr, abi: erc20Abi, functionName: "allowance",
@@ -150,15 +162,18 @@ export function registerToken(parent: Command, getOpts: () => OutputMode, makeEx
   token
     .command("transfer")
     .description("Transfer tokens to an address")
-    .requiredOption("--token <token>", "Token symbol or address")
+    .option("--token <token>", "Token symbol or address (alias: --asset)")
+    .option("--asset <token>", "Token symbol or address (alias: --token)")
     .requiredOption("--to <address>", "Recipient address")
     .requiredOption("--amount <amount>", "Amount to transfer (in wei)")
     .action(async (opts) => {
       const executor = makeExecutor();
       const chainName = requireChain(parent, getOpts);
       if (!chainName) return;
+      const tokenArg = (opts.asset ?? opts.token) as string | undefined;
+      if (!tokenArg) { printOutput({ error: "--token (or --asset) is required" }, getOpts()); return; }
       const registry = Registry.loadEmbedded();
-      const tokenAddr = resolveTokenAddress(registry, chainName, opts.token) as Address;
+      const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg) as Address;
 
       const tx = buildTransfer(tokenAddr, opts.to as Address, BigInt(opts.amount));
       const result = await executor.execute(tx);
