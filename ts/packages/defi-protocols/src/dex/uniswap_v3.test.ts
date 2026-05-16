@@ -231,3 +231,83 @@ describe("UniswapV3Adapter slippage protection (SSOT 7.3)", () => {
     expect(params.amount1Min).toBe(11n);
   });
 });
+
+// Ramses CL mint = 11-field, no sqrtPriceX96, third field is tickSpacing (int24).
+const ramsesMintAbi = parseAbi([
+  "function mint((address token0, address token1, int24 tickSpacing, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) params) returns (uint256, uint128, uint256, uint256)",
+]);
+
+// Slipstream mint = 12-field, includes trailing sqrtPriceX96 (uint160).
+const slipstreamMintAbi = parseAbi([
+  "function mint((address token0, address token1, int24 tickSpacing, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline, uint160 sqrtPriceX96) params) returns (uint256, uint128, uint256, uint256)",
+]);
+
+interface CLMintTuple {
+  token0: Address;
+  token1: Address;
+  tickSpacing: number;
+  amount0Min: bigint;
+  amount1Min: bigint;
+}
+
+interface SlipstreamMintTuple extends CLMintTuple {
+  sqrtPriceX96: bigint;
+}
+
+describe("UniswapV3Adapter CL-style mint dispatch (ramses / slipstream)", () => {
+  it("cl_style='ramses' emits the 11-field Ramses MintParams (no sqrtPriceX96)", async () => {
+    const ramsesEntry: ProtocolEntry = {
+      ...ENTRY,
+      cl_style: "ramses",
+    };
+    const adapter = new UniswapV3Adapter(ramsesEntry);
+    const tx = await adapter.buildAddLiquidity({
+      protocol: ramsesEntry.slug,
+      token_a: LOW,
+      token_b: HIGH,
+      amount_a: 1_000_000n,
+      amount_b: 2_000_000n,
+      recipient: RECIPIENT,
+      // tick_lower/upper must be explicit for ramses without slot0() RPC.
+      tick_lower: -887_220,
+      tick_upper: 887_220,
+    });
+    const decoded = decodeFunctionData({ abi: ramsesMintAbi, data: tx.data as Hex });
+    const params = decoded.args[0] as CLMintTuple;
+    expect(params.token0.toLowerCase()).toBe(LOW.toLowerCase());
+    expect(params.token1.toLowerCase()).toBe(HIGH.toLowerCase());
+    expect(params.amount0Min).toBe(995_000n);
+    expect(params.amount1Min).toBe(1_990_000n);
+    // Decoding through the slipstream ABI would also succeed but pick up an
+    // extra trailing zero; the byte-length difference proves we hit the
+    // 11-field encoder, not the 12-field one.
+    expect(() =>
+      decodeFunctionData({ abi: slipstreamMintAbi, data: tx.data as Hex }),
+    ).toThrow();
+  });
+
+  it("cl_style='slipstream' emits the 12-field Slipstream MintParams (with sqrtPriceX96=0)", async () => {
+    const slipstreamEntry: ProtocolEntry = {
+      ...ENTRY,
+      cl_style: "slipstream",
+    };
+    const adapter = new UniswapV3Adapter(slipstreamEntry);
+    const tx = await adapter.buildAddLiquidity({
+      protocol: slipstreamEntry.slug,
+      token_a: LOW,
+      token_b: HIGH,
+      amount_a: 1_000_000n,
+      amount_b: 2_000_000n,
+      recipient: RECIPIENT,
+      tick_lower: -887_220,
+      tick_upper: 887_220,
+    });
+    const decoded = decodeFunctionData({ abi: slipstreamMintAbi, data: tx.data as Hex });
+    const params = decoded.args[0] as SlipstreamMintTuple;
+    expect(params.token0.toLowerCase()).toBe(LOW.toLowerCase());
+    expect(params.token1.toLowerCase()).toBe(HIGH.toLowerCase());
+    expect(params.amount0Min).toBe(995_000n);
+    expect(params.amount1Min).toBe(1_990_000n);
+    expect(params.sqrtPriceX96).toBe(0n);
+  });
+});
