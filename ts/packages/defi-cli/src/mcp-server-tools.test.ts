@@ -138,16 +138,20 @@ async function callTool<T = unknown>(
   name: string,
   args: Record<string, unknown>,
 ): Promise<{
-  ok: boolean;
   payload: OkEnvelope<T> | ErrEnvelope;
   isError: boolean;
 }> {
+  // We don't return `ok` as a separate field even though it's tempting —
+  // destructuring `ok` strips the discriminant from the union, leaving
+  // `payload` untyped at the call site. Forcing callers to read
+  // `payload.ok` keeps TypeScript narrowing usable
+  // (`if (!payload.ok) throw …` lets the rest of the block see OkEnvelope<T>).
   const handler = registeredTools.get(name);
   if (!handler) throw new Error(`tool '${name}' was never registered`);
   const result = await handler(args);
   const text = result.content[0]?.text ?? "";
   const payload = JSON.parse(text) as OkEnvelope<T> | ErrEnvelope;
-  return { ok: payload.ok, payload, isError: !!result.isError };
+  return { payload, isError: !!result.isError };
 }
 
 const ENV_KEYS = ["DEFI_WALLET_ADDRESS", "DEFI_PRIVATE_KEY"] as const;
@@ -197,15 +201,15 @@ describe("MCP server registration", () => {
 
 describe("defi_status handler", () => {
   it("returns chain_id + protocol list for a known chain", async () => {
-    const { ok, payload } = await callTool<{
+    const { payload } = await callTool<{
       chain: string;
       chain_id: number;
       protocols: Array<{ slug: string; name: string }>;
       summary: { total_protocols: number };
     }>("defi_status", { chain: "hyperevm" });
 
-    expect(ok).toBe(true);
-    if (!ok) throw new Error("expected ok envelope");
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error("expected ok envelope");
     expect(payload.data.chain).toBe("hyperevm");
     expect(payload.data.chain_id).toBeGreaterThan(0);
     expect(payload.data.protocols.length).toBeGreaterThan(0);
@@ -213,22 +217,22 @@ describe("defi_status handler", () => {
   });
 
   it("defaults to hyperevm when chain is omitted", async () => {
-    const { ok, payload } = await callTool<{ chain: string }>(
+    const { payload } = await callTool<{ chain: string }>(
       "defi_status",
       {},
     );
-    expect(ok).toBe(true);
-    if (!ok) throw new Error();
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error();
     expect(payload.data.chain).toBe("hyperevm");
   });
 
   it("returns an err envelope (isError: true) for an unknown chain", async () => {
-    const { ok, payload, isError } = await callTool("defi_status", {
+    const { payload, isError } = await callTool("defi_status", {
       chain: "totally-fake-chain-xyz",
     });
-    expect(ok).toBe(false);
+    expect(payload.ok).toBe(false);
     expect(isError).toBe(true);
-    if (ok) throw new Error("expected err envelope");
+    if (payload.ok) throw new Error("expected err envelope");
     expect(payload.error).toMatch(/chain|unknown|not found/i);
   });
 });
@@ -239,7 +243,7 @@ describe("defi_status handler", () => {
 
 describe("defi_lending_rates handler", () => {
   it("returns the stub adapter's rates payload", async () => {
-    const { ok, payload } = await callTool<{
+    const { payload } = await callTool<{
       supply_apy: number;
       borrow_apy: number;
     }>("defi_lending_rates", {
@@ -247,21 +251,21 @@ describe("defi_lending_rates handler", () => {
       protocol: "felix-morpho",
       asset: "USDC",
     });
-    expect(ok).toBe(true);
-    if (!ok) throw new Error();
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error();
     expect(payload.data.supply_apy).toBe(0.05);
     expect(payload.data.borrow_apy).toBe(0.1);
   });
 
   it("err envelope for unknown protocol", async () => {
-    const { ok, payload, isError } = await callTool("defi_lending_rates", {
+    const { payload, isError } = await callTool("defi_lending_rates", {
       chain: "hyperevm",
       protocol: "this-protocol-does-not-exist",
       asset: "USDC",
     });
-    expect(ok).toBe(false);
+    expect(payload.ok).toBe(false);
     expect(isError).toBe(true);
-    if (ok) throw new Error();
+    if (payload.ok) throw new Error();
     expect(payload.error).toBeTruthy();
   });
 });
@@ -272,7 +276,7 @@ describe("defi_lending_rates handler", () => {
 
 describe("defi_lending_supply handler", () => {
   it("returns an executor preview for the stub adapter (broadcast omitted = dry run)", async () => {
-    const { ok, payload } = await callTool<{
+    const { payload } = await callTool<{
       status: string;
       tx?: { description?: string; to?: string };
     }>("defi_lending_supply", {
@@ -281,32 +285,32 @@ describe("defi_lending_supply handler", () => {
       asset: "USDC",
       amount: "1000000",
     });
-    expect(ok).toBe(true);
-    if (!ok) throw new Error();
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error();
     // Executor.execute in dry-run mode returns an ActionResult whose
     // .tx field includes our stub's description.
     expect(payload.data.status).toBeDefined();
   });
 
   it("threads on_behalf_of into the buildSupply call without throwing", async () => {
-    const { ok } = await callTool("defi_lending_supply", {
+    const { payload } = await callTool("defi_lending_supply", {
       chain: "hyperevm",
       protocol: "felix-morpho",
       asset: "USDC",
       amount: "500",
       on_behalf_of: "0x000000000000000000000000000000000000bEEF",
     });
-    expect(ok).toBe(true);
+    expect(payload.ok).toBe(true);
   });
 
   it("err envelope for unknown protocol", async () => {
-    const { ok, isError } = await callTool("defi_lending_supply", {
+    const { payload, isError } = await callTool("defi_lending_supply", {
       chain: "hyperevm",
       protocol: "nope",
       asset: "USDC",
       amount: "1",
     });
-    expect(ok).toBe(false);
+    expect(payload.ok).toBe(false);
     expect(isError).toBe(true);
   });
 });
@@ -317,7 +321,7 @@ describe("defi_lending_supply handler", () => {
 
 describe("defi_lending_withdraw handler", () => {
   it("returns an executor preview for the withdraw path", async () => {
-    const { ok, payload } = await callTool<{ status: string }>(
+    const { payload } = await callTool<{ status: string }>(
       "defi_lending_withdraw",
       {
         chain: "hyperevm",
@@ -326,19 +330,19 @@ describe("defi_lending_withdraw handler", () => {
         amount: "500000",
       },
     );
-    expect(ok).toBe(true);
-    if (!ok) throw new Error();
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error();
     expect(payload.data.status).toBeDefined();
   });
 
   it("err envelope for unknown chain", async () => {
-    const { ok, isError } = await callTool("defi_lending_withdraw", {
+    const { payload, isError } = await callTool("defi_lending_withdraw", {
       chain: "ghost-chain",
       protocol: "felix-morpho",
       asset: "USDC",
       amount: "1",
     });
-    expect(ok).toBe(false);
+    expect(payload.ok).toBe(false);
     expect(isError).toBe(true);
   });
 });
@@ -351,7 +355,7 @@ describe("defi_dex_quote handler", () => {
   it("returns the stub adapter's quote (amount_out + price_impact)", async () => {
     // Use a known DEX protocol slug on hyperevm. The stub adapter doesn't
     // care which slug we use — only that registry.getProtocol(slug) succeeds.
-    const { ok, payload } = await callTool<{
+    const { payload } = await callTool<{
       amount_out: string;
       price_impact: number;
     }>("defi_dex_quote", {
@@ -363,20 +367,20 @@ describe("defi_dex_quote handler", () => {
     });
     // The handler may serialise bigint via JSON; we accept either string or
     // number representation. The important thing is the round trip succeeded.
-    expect(ok).toBe(true);
-    if (!ok) throw new Error();
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error();
     expect(payload.data.price_impact).toBe(0.001);
   });
 
   it("err envelope for unknown chain", async () => {
-    const { ok, isError } = await callTool("defi_dex_quote", {
+    const { payload, isError } = await callTool("defi_dex_quote", {
       chain: "ghost-chain",
       protocol: "kittenswap",
       token_in: "USDC",
       token_out: "WHYPE",
       amount_in: "1",
     });
-    expect(ok).toBe(false);
+    expect(payload.ok).toBe(false);
     expect(isError).toBe(true);
   });
 });
@@ -387,7 +391,7 @@ describe("defi_dex_quote handler", () => {
 
 describe("defi_lp_positions handler", () => {
   it("returns empty positions when every protocol's balanceOf returns 0n", async () => {
-    const { ok, payload } = await callTool<{
+    const { payload } = await callTool<{
       chain: string;
       positions: Array<unknown>;
       total: number;
@@ -395,8 +399,8 @@ describe("defi_lp_positions handler", () => {
       chain: "hyperevm",
       address: "0x000000000000000000000000000000000000bEEF",
     });
-    expect(ok).toBe(true);
-    if (!ok) throw new Error();
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error();
     expect(payload.data.chain).toBe("hyperevm");
     expect(payload.data.positions).toEqual([]);
     expect(payload.data.total).toBe(0);
@@ -408,25 +412,25 @@ describe("defi_lp_positions handler", () => {
     // beforeEach sets DEFI_WALLET_ADDRESS, so the handler should resolve and
     // succeed even with no `address` arg. (Address-required error path is
     // covered by the next test.)
-    const { ok } = await callTool("defi_lp_positions", {
+    const { payload } = await callTool("defi_lp_positions", {
       chain: "hyperevm",
     });
-    expect(ok).toBe(true);
+    expect(payload.ok).toBe(true);
   });
 
   it("rejects when no address is given and DEFI_WALLET_ADDRESS is unset", async () => {
     delete process.env["DEFI_WALLET_ADDRESS"];
-    const { ok, isError, payload } = await callTool("defi_lp_positions", {
+    const { payload, isError } = await callTool("defi_lp_positions", {
       chain: "hyperevm",
     });
-    expect(ok).toBe(false);
+    expect(payload.ok).toBe(false);
     expect(isError).toBe(true);
-    if (ok) throw new Error();
+    if (payload.ok) throw new Error();
     expect(payload.error).toMatch(/address required/i);
   });
 
   it("--protocol filter narrows enumeration to a single protocol", async () => {
-    const { ok, payload } = await callTool<{
+    const { payload } = await callTool<{
       chain: string;
       positions: Array<unknown>;
     }>("defi_lp_positions", {
@@ -434,18 +438,18 @@ describe("defi_lp_positions handler", () => {
       protocol: "kittenswap",
       address: "0x000000000000000000000000000000000000bEEF",
     });
-    expect(ok).toBe(true);
-    if (!ok) throw new Error();
+    expect(payload.ok).toBe(true);
+    if (!payload.ok) throw new Error();
     expect(payload.data.positions).toEqual([]);
     expect(payload.meta?.["scanned_protocols"]).toBe(1);
   });
 
   it("err envelope for unknown chain", async () => {
-    const { ok, isError } = await callTool("defi_lp_positions", {
+    const { payload, isError } = await callTool("defi_lp_positions", {
       chain: "ghost-chain",
       address: "0x000000000000000000000000000000000000bEEF",
     });
-    expect(ok).toBe(false);
+    expect(payload.ok).toBe(false);
     expect(isError).toBe(true);
   });
 });
