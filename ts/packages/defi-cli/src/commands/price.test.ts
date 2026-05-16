@@ -8,8 +8,8 @@
 //      "No prices could be fetched" envelope rather than silent success.
 //   2. --asset accepts either a 40-hex address (used verbatim, decimals=18)
 //      or a registry symbol (resolved through Registry.resolveToken).
-//   3. CDP oracles only fire for the chain's native wrapper (WHYPE/HYPE on
-//      HyperEVM). Non-native assets must NOT hit createOracleFromCdp.
+//   3. The DEX leg pivots through USDC as the quote token and is skipped
+//      with a stderr warning when no USDC entry is registered.
 //
 // Mock strategy mirrors lending.test.ts — vi.mock("@hypurrquant/defi-protocols")
 // at module top so the registerPrice import binds to the stubbed factories.
@@ -19,7 +19,6 @@
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Address } from "viem";
-import { Registry, ProtocolCategory } from "@hypurrquant/defi-core";
 
 import { parseOutputMode } from "../output.js";
 
@@ -33,13 +32,11 @@ interface FakePriceData {
   timestamp?: undefined;
 }
 
-// Per-test overridable behaviour. Default = each oracle returns 1.00 and the
+// Per-test overridable behaviour. Default = oracle returns 1.00 and the
 // dex returns 1.01 so the spread calc has something non-zero to assert on.
 let oracleLendingPrice: number | "throw" = 1.0;
-let oracleCdpPrice: number | "throw" = 1.0;
 let dexQuotePrice: number | "throw" = 1.01;
 let lendingOracleCalls: number = 0;
-let cdpOracleCalls: number = 0;
 let dexCalls: number = 0;
 
 function makePriceData(
@@ -66,18 +63,6 @@ vi.mock("@hypurrquant/defi-protocols", () => {
           throw new Error(`stub lending oracle (${entry.name}) refused`);
         }
         return makePriceData(`oracle:${entry.name}`, "oracle", oracleLendingPrice, asset);
-      },
-      getPrices: async () => {
-        throw new Error("not used by price.ts");
-      },
-    }),
-    createOracleFromCdp: (entry: { name: string }, _asset: Address) => ({
-      getPrice: async (asset: Address): Promise<FakePriceData> => {
-        cdpOracleCalls++;
-        if (oracleCdpPrice === "throw") {
-          throw new Error(`stub cdp oracle (${entry.name}) refused`);
-        }
-        return makePriceData(`oracle:${entry.name}`, "oracle", oracleCdpPrice, asset);
       },
       getPrices: async () => {
         throw new Error("not used by price.ts");
@@ -156,10 +141,8 @@ function buildProgram(): Command {
 
 beforeEach(() => {
   oracleLendingPrice = 1.0;
-  oracleCdpPrice = 1.0;
   dexQuotePrice = 1.01;
   lendingOracleCalls = 0;
-  cdpOracleCalls = 0;
   dexCalls = 0;
 });
 
@@ -214,7 +197,6 @@ describe("defi price — source filter", () => {
       restore();
     }
     expect(lendingOracleCalls).toBe(0);
-    expect(cdpOracleCalls).toBe(0);
     expect(dexCalls).toBeGreaterThan(0);
     const report = lastJson<PriceReport>(capture);
     expect(report.prices.every((p) => p.source_type === "dex_spot")).toBe(true);
@@ -354,63 +336,10 @@ describe("defi price — chain validation", () => {
   });
 });
 
-describe("defi price — CDP oracle gating", () => {
-  // The CDP oracle fan-out in price.ts is wrapped in an isWhype check. Today
-  // the registry has zero CDP-category protocols (felix runs under the
-  // lending category via felix_morpho), so cdpOracleCalls would be 0 either
-  // way. To verify the gating *logic* (not just the empty-result side effect),
-  // we spy on Registry.prototype.getProtocolsByCategory and look for the
-  // Cdp call specifically.
-  function spyCategoryCalls(): { calls: ProtocolCategory[]; restore: () => void } {
-    const calls: ProtocolCategory[] = [];
-    const original = Registry.prototype.getProtocolsByCategory;
-    const spy = vi.spyOn(Registry.prototype, "getProtocolsByCategory");
-    spy.mockImplementation(function (this: Registry, category: ProtocolCategory) {
-      calls.push(category);
-      return original.call(this, category);
-    });
-    return { calls, restore: () => spy.mockRestore() };
-  }
-
-  it("--asset WHYPE asks the registry for both Lending and Cdp categories", async () => {
-    const { calls, restore: restoreSpy } = spyCategoryCalls();
-    const program = buildProgram();
-    const { restore } = captureConsole();
-    try {
-      await program.parseAsync([
-        "node", "defi", "--json", "--chain", "hyperevm",
-        "price", "--asset", "WHYPE", "--source", "oracle",
-      ]);
-    } finally {
-      restore();
-      restoreSpy();
-    }
-    expect(calls).toContain(ProtocolCategory.Lending);
-    expect(calls).toContain(ProtocolCategory.Cdp);
-  });
-
-  it("--asset USDC asks for Lending but NOT Cdp (gating prevents wasted lookup)", async () => {
-    const { calls, restore: restoreSpy } = spyCategoryCalls();
-    const program = buildProgram();
-    const { restore } = captureConsole();
-    try {
-      await program.parseAsync([
-        "node", "defi", "--json", "--chain", "hyperevm",
-        "price", "--asset", "USDC", "--source", "oracle",
-      ]);
-    } finally {
-      restore();
-      restoreSpy();
-    }
-    expect(calls).toContain(ProtocolCategory.Lending);
-    expect(calls).not.toContain(ProtocolCategory.Cdp);
-  });
-});
 
 describe("defi price — spread math + empty-result guard", () => {
   it("all probes throwing emits 'No prices could be fetched'", async () => {
     oracleLendingPrice = "throw";
-    oracleCdpPrice = "throw";
     dexQuotePrice = "throw";
     const program = buildProgram();
     const { capture, restore } = captureConsole();
@@ -428,7 +357,6 @@ describe("defi price — spread math + empty-result guard", () => {
 
   it("max_spread_pct is 0 when all sources agree", async () => {
     oracleLendingPrice = 2.5;
-    oracleCdpPrice = 2.5;
     dexQuotePrice = 2.5;
     const program = buildProgram();
     const { capture, restore } = captureConsole();
@@ -448,7 +376,6 @@ describe("defi price — spread math + empty-result guard", () => {
   it("oracle_vs_dex_spread_pct reflects the gap between average oracle and average dex", async () => {
     // Oracle says 1.00, dex says 1.10 → gap = 10% relative to the lower mean.
     oracleLendingPrice = 1.0;
-    oracleCdpPrice = 1.0;
     dexQuotePrice = 1.1;
     const program = buildProgram();
     const { capture, restore } = captureConsole();

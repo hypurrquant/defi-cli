@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import type { Address } from "viem";
 import { Registry, ProtocolCategory } from "@hypurrquant/defi-core";
-import { createOracleFromLending, createOracleFromCdp, createDex, DexSpotPrice } from "@hypurrquant/defi-protocols";
+import { createOracleFromLending, createDex, DexSpotPrice } from "@hypurrquant/defi-protocols";
 import type { OutputMode } from "../output.js";
 import { printOutput } from "../output.js";
 import { requireChain } from "../utils.js";
@@ -36,8 +36,6 @@ function resolveAsset(
   const token = registry.resolveToken(chain, asset);
   return { address: token.address, symbol: token.symbol, decimals: token.decimals };
 }
-
-const WHYPE_ADDRESS = "0x5555555555555555555555555555555555555555" as Address;
 
 export function registerPrice(parent: Command, getOpts: () => OutputMode): void {
   parent
@@ -99,33 +97,6 @@ export function registerPrice(parent: Command, getOpts: () => OutputMode): void 
             }
           }),
         );
-
-        // Oracle prices from CDP protocols (Felix) — only for WHYPE
-        const isWhype =
-          assetAddr.toLowerCase() === WHYPE_ADDRESS.toLowerCase() ||
-          assetSymbol.toUpperCase() === "WHYPE" ||
-          assetSymbol.toUpperCase() === "HYPE";
-
-        if (isWhype) {
-          const cdpProtocols = registry.getProtocolsByCategory(ProtocolCategory.Cdp)
-            .filter((p) => p.chain.toLowerCase() === chainName);
-
-          await Promise.all(
-            cdpProtocols.map(async (entry) => {
-              try {
-                const oracle = createOracleFromCdp(entry, assetAddr, rpcUrl);
-                const price = await oracle.getPrice(assetAddr);
-                allPrices.push({
-                  source: price.source,
-                  source_type: price.source_type,
-                  price_f64: price.price_f64,
-                });
-              } catch {
-                // skip
-              }
-            }),
-          );
-        }
       }
 
       // DEX spot prices
