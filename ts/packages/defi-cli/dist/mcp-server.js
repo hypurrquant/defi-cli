@@ -7946,7 +7946,9 @@ var init_dist2 = __esm({
 init_dist();
 init_dist2();
 import "dotenv/config";
+import { realpathSync } from "fs";
 import { createRequire } from "module";
+import { fileURLToPath as fileURLToPath2 } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -9737,6 +9739,24 @@ server.tool(
     }
   }
 );
-var transport = new StdioServerTransport();
-await server.connect(transport);
+function isMainEntrypoint() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath2(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+if (isMainEntrypoint()) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+export {
+  err,
+  getRegistry,
+  makeExecutor,
+  ok,
+  resolveToken,
+  server
+};
 //# sourceMappingURL=mcp-server.js.map
