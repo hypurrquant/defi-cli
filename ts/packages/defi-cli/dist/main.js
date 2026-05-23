@@ -7839,7 +7839,9 @@ var init_dist2 = __esm({
 
 // src/main.ts
 import { config } from "dotenv";
+import { realpathSync } from "fs";
 import { resolve as resolve5 } from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
 
 // src/cli.ts
 import { Command } from "commander";
@@ -10909,7 +10911,7 @@ function registerYield(parent, getOpts, makeExecutor2) {
       process.exit(1);
     }
   });
-  yieldCmd.command("execute").description("Find the best yield opportunity and execute supply (or show cross-chain plan)").requiredOption("--asset <token>", "Token symbol or address (e.g. USDC)").requiredOption("--amount <amount>", "Human-readable amount to supply (e.g. 1000)").option("--min-spread <percent>", "Minimum spread % required to execute cross-chain arb", "1.0").option("--target-chain <chain>", "Override auto-detected best chain").option("--target-protocol <protocol>", "Override auto-detected best protocol slug").action(async (opts) => {
+  yieldCmd.command("execute").description("Find the best yield opportunity and execute supply (or show cross-chain plan)").requiredOption("--asset <token>", "Token symbol or address (e.g. USDC)").requiredOption("--amount <amount>", "Human-readable amount to supply (e.g. 1000)").option("--min-spread <decimal>", "Minimum spread as decimal (e.g. 0.05 = 5%) for cross-chain arb plan_only", "1.0").option("--target-chain <chain>", "Override auto-detected best chain").option("--target-protocol <protocol>", "Override auto-detected best protocol slug").action(async (opts) => {
     try {
       const registry = Registry.loadEmbedded();
       const asset = opts.asset;
@@ -11828,7 +11830,6 @@ function resolveAsset2(registry, chain, asset) {
   const token = registry.resolveToken(chain, asset);
   return { address: token.address, symbol: token.symbol, decimals: token.decimals };
 }
-var WHYPE_ADDRESS = "0x5555555555555555555555555555555555555555";
 function registerPrice(parent, getOpts) {
   parent.command("price").description("Query asset prices from oracles and DEXes").requiredOption("--asset <token>", "Token symbol or address").option("--source <source>", "Price source: oracle, dex, or all", "all").action(async (opts) => {
     const mode = getOpts();
@@ -11874,24 +11875,6 @@ function registerPrice(parent, getOpts) {
           }
         })
       );
-      const isWhype = assetAddr.toLowerCase() === WHYPE_ADDRESS.toLowerCase() || assetSymbol.toUpperCase() === "WHYPE" || assetSymbol.toUpperCase() === "HYPE";
-      if (isWhype) {
-        const cdpProtocols = registry.getProtocolsByCategory(ProtocolCategory.Cdp).filter((p) => p.chain.toLowerCase() === chainName);
-        await Promise.all(
-          cdpProtocols.map(async (entry) => {
-            try {
-              const oracle = createOracleFromCdp(entry, assetAddr, rpcUrl);
-              const price = await oracle.getPrice(assetAddr);
-              allPrices.push({
-                source: price.source,
-                source_type: price.source_type,
-                price_f64: price.price_f64
-              });
-            } catch {
-            }
-          })
-        );
-      }
     }
     if (fetchDex) {
       let usdcToken;
@@ -12004,9 +11987,14 @@ init_dist();
 import { createPublicClient as createPublicClient27, encodeFunctionData as encodeFunctionData30, http as http27, maxUint256 as maxUint2562, parseAbi as parseAbi34 } from "viem";
 function registerToken(parent, getOpts, makeExecutor2) {
   const token = parent.command("token").description("Token operations: approve, allowance, transfer, balance");
-  token.command("balance").description("Query token balance for an address").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
+  token.command("balance").description("Query token balance for an address").option("--token <token>", "Token symbol or address (alias: --asset)").option("--asset <token>", "Token symbol or address (alias: --token)").option("--owner <address>", "Wallet address (defaults to DEFI_WALLET_ADDRESS)").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const tokenArg = opts.asset ?? opts.token;
+    if (!tokenArg) {
+      printOutput({ error: "--token (or --asset) is required" }, getOpts());
+      return;
+    }
     const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
     if (!owner) {
       printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts());
@@ -12015,7 +12003,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient27({ transport: http27(chain.effectiveRpcUrl()) });
-    const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
+    const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg);
     const [balance, symbol, decimals] = await Promise.all([
       client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "balanceOf", args: [owner] }),
       client.readContract({ address: tokenAddr, abi: erc20Abi, functionName: "symbol" }),
@@ -12029,20 +12017,30 @@ function registerToken(parent, getOpts, makeExecutor2) {
       decimals
     }, getOpts());
   });
-  token.command("approve").description("Approve a spender for a token").requiredOption("--token <token>", "Token symbol or address").requiredOption("--spender <address>", "Spender address").option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max").action(async (opts) => {
+  token.command("approve").description("Approve a spender for a token").option("--token <token>", "Token symbol or address (alias: --asset)").option("--asset <token>", "Token symbol or address (alias: --token)").requiredOption("--spender <address>", "Spender address").option("--amount <amount>", "Amount to approve (use 'max' for unlimited)", "max").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const tokenArg = opts.asset ?? opts.token;
+    if (!tokenArg) {
+      printOutput({ error: "--token (or --asset) is required" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
-    const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
+    const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg);
     const amount = opts.amount === "max" ? maxUint2562 : BigInt(opts.amount);
     const tx = buildApprove(tokenAddr, opts.spender, amount);
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
   });
-  token.command("allowance").description("Check token allowance").requiredOption("--token <token>", "Token symbol or address").option("--owner <address>", "Owner address (defaults to DEFI_WALLET_ADDRESS)").requiredOption("--spender <address>", "Spender address").action(async (opts) => {
+  token.command("allowance").description("Check token allowance").option("--token <token>", "Token symbol or address (alias: --asset)").option("--asset <token>", "Token symbol or address (alias: --token)").option("--owner <address>", "Owner address (defaults to DEFI_WALLET_ADDRESS)").requiredOption("--spender <address>", "Spender address").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const tokenArg = opts.asset ?? opts.token;
+    if (!tokenArg) {
+      printOutput({ error: "--token (or --asset) is required" }, getOpts());
+      return;
+    }
     const owner = opts.owner ?? process.env["DEFI_WALLET_ADDRESS"];
     if (!owner) {
       printOutput({ error: "--owner required (or set DEFI_WALLET_ADDRESS)" }, getOpts());
@@ -12051,7 +12049,7 @@ function registerToken(parent, getOpts, makeExecutor2) {
     const registry = Registry.loadEmbedded();
     const chain = registry.getChain(chainName);
     const client = createPublicClient27({ transport: http27(chain.effectiveRpcUrl()) });
-    const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
+    const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg);
     const allowance = await client.readContract({
       address: tokenAddr,
       abi: erc20Abi,
@@ -12106,12 +12104,17 @@ function registerToken(parent, getOpts, makeExecutor2) {
     });
     printOutput(result, getOpts());
   });
-  token.command("transfer").description("Transfer tokens to an address").requiredOption("--token <token>", "Token symbol or address").requiredOption("--to <address>", "Recipient address").requiredOption("--amount <amount>", "Amount to transfer (in wei)").action(async (opts) => {
+  token.command("transfer").description("Transfer tokens to an address").option("--token <token>", "Token symbol or address (alias: --asset)").option("--asset <token>", "Token symbol or address (alias: --token)").requiredOption("--to <address>", "Recipient address").requiredOption("--amount <amount>", "Amount to transfer (in wei)").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const tokenArg = opts.asset ?? opts.token;
+    if (!tokenArg) {
+      printOutput({ error: "--token (or --asset) is required" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
-    const tokenAddr = resolveTokenAddress(registry, chainName, opts.token);
+    const tokenAddr = resolveTokenAddress(registry, chainName, tokenArg);
     const tx = buildTransfer(tokenAddr, opts.to, BigInt(opts.amount));
     const result = await executor.execute(tx);
     printOutput(result, getOpts());
@@ -12358,9 +12361,16 @@ async function getCctpFeeEstimate(srcDomain, dstDomain, amountUsdc) {
   return { fee: 0.25, maxFeeSubunits: 250000n };
 }
 function registerBridge(parent, getOpts, makeExecutor2) {
-  parent.command("bridge").description("Cross-chain bridge: move assets between chains").requiredOption("--token <token>", "Token symbol or address").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, relay, debridge, cctp", "lifi").option("--auto-receive", "(CCTP only) After burn, poll Circle attestation and auto-call MessageTransmitter.receiveMessage on destination", false).option("--receive-timeout <seconds>", "(CCTP --auto-receive) max seconds to wait for attestation", "1200").action(async (opts) => {
+  parent.command("bridge").description(
+    "Cross-chain bridge: move assets between chains. Dry-run by default returns the route + calldata; pass --broadcast to send the tx."
+  ).option("--token <token>", "Token symbol or address (alias: --asset)").option("--asset <token>", "Token symbol or address (alias: --token)").requiredOption("--amount <amount>", "Amount in wei").requiredOption("--to-chain <chain>", "Destination chain name").option("--recipient <address>", "Recipient address on destination chain").option("--slippage <bps>", "Slippage in bps (LI.FI only)", "50").option("--provider <name>", "Bridge provider: lifi, relay, debridge, cctp", "lifi").option("--auto-receive", "(CCTP only) After burn, poll Circle attestation and auto-call MessageTransmitter.receiveMessage on destination", false).option("--receive-timeout <seconds>", "(CCTP --auto-receive) max seconds to wait for attestation", "1200").action(async (opts) => {
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
+    const tokenArg = opts.asset ?? opts.token;
+    if (!tokenArg) {
+      printOutput({ error: "--token (or --asset) is required" }, getOpts());
+      return;
+    }
     const registry = Registry.loadEmbedded();
     const fromChain = registry.getChain(chainName);
     let toChain;
@@ -12370,11 +12380,11 @@ function registerBridge(parent, getOpts, makeExecutor2) {
       printOutput({ error: errMsg(e) }, getOpts());
       return;
     }
-    const tokenAddr = opts.token.startsWith("0x") ? opts.token : registry.resolveToken(chainName, opts.token).address;
+    const tokenAddr = tokenArg.startsWith("0x") ? tokenArg : registry.resolveToken(chainName, tokenArg).address;
     let dstTokenAddr = tokenAddr;
-    if (!opts.token.startsWith("0x")) {
+    if (!tokenArg.startsWith("0x")) {
       try {
-        dstTokenAddr = registry.resolveToken(opts.toChain, opts.token).address;
+        dstTokenAddr = registry.resolveToken(opts.toChain, tokenArg).address;
       } catch {
       }
     }
@@ -12750,12 +12760,15 @@ async function liquidSwapRoute(tokenIn, tokenOut, amountIn, slippagePct) {
   };
 }
 function registerSwap(parent, getOpts, makeExecutor2) {
-  parent.command("swap").description("Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay)").requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay", "kyber").option("--slippage <bps>", "Slippage tolerance in bps", "100").action(async (opts) => {
+  parent.command("swap").description(
+    "Swap tokens via DEX aggregator (KyberSwap, OpenOcean, LiquidSwap, LI.FI, Relay). Dry-run by default returns the quote + calldata; pass --broadcast to send the tx."
+  ).requiredOption("--from <token>", "Input token symbol or address").requiredOption("--to <token>", "Output token symbol or address").requiredOption("--amount <amount>", "Amount of input token in wei").option("--provider <name>", "Aggregator: kyber, openocean, liquid, lifi, relay (alias: --aggregator)", "kyber").option("--aggregator <name>", "Aggregator: kyber, openocean, liquid, lifi, relay (alias of --provider)").option("--slippage <bps>", "Slippage tolerance in bps", "100").action(async (opts) => {
     const executor = makeExecutor2();
     const chainName = requireChain(parent, getOpts);
     if (!chainName) return;
     const registry = Registry.loadEmbedded();
-    const provider = opts.provider.toLowerCase();
+    const providerRaw = opts.aggregator ?? opts.provider;
+    const provider = providerRaw.toLowerCase();
     const slippageBps = parseInt(opts.slippage, 10);
     const fromAddr = resolveTokenAddress(registry, chainName, opts.from);
     const toAddr = resolveTokenAddress(registry, chainName, opts.to);
@@ -12915,7 +12928,7 @@ function registerSwap(parent, getOpts, makeExecutor2) {
       }
       return;
     }
-    printOutput({ error: `Unknown provider '${opts.provider}'. Choose: kyber, openocean, liquid, lifi, relay` }, getOpts());
+    printOutput({ error: `Unknown provider '${providerRaw}'. Choose: kyber, openocean, liquid, lifi, relay` }, getOpts());
   });
 }
 
@@ -13535,34 +13548,46 @@ async function showLandingPage(isJson) {
 // src/main.ts
 config({ path: resolve5(process.env.HOME || "~", ".defi", ".env"), quiet: true });
 config({ quiet: true });
+var KNOWN_SUBCOMMANDS = /* @__PURE__ */ new Set([
+  "status",
+  "schema",
+  "lp",
+  "lending",
+  "cdp",
+  "vault",
+  "yield",
+  "portfolio",
+  "price",
+  "wallet",
+  "token",
+  "bridge",
+  "swap",
+  "agent",
+  "setup",
+  "init",
+  "ows"
+]);
+function decideEntryPoint(rawArgs) {
+  const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");
+  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    return { mode: "help", isJson };
+  }
+  if (rawArgs.includes("--version") || rawArgs.includes("-V")) {
+    return { mode: "version", isJson };
+  }
+  const hasSubcommand = rawArgs.some(
+    (a) => !a.startsWith("-") && KNOWN_SUBCOMMANDS.has(a)
+  );
+  if (rawArgs.length === 0 || !hasSubcommand) {
+    return { mode: "landing", isJson };
+  }
+  return { mode: "command", isJson };
+}
 async function main() {
   try {
-    const rawArgs = process.argv.slice(2);
-    const knownSubcommands = /* @__PURE__ */ new Set([
-      "status",
-      "schema",
-      "lp",
-      "lending",
-      "cdp",
-      "vault",
-      "yield",
-      "portfolio",
-      "price",
-      "wallet",
-      "token",
-      "bridge",
-      "swap",
-      "agent",
-      "setup",
-      "init",
-      "ows"
-    ]);
-    const hasSubcommand = rawArgs.some((a) => !a.startsWith("-") && knownSubcommands.has(a));
-    const isJson = rawArgs.includes("--json") || rawArgs.includes("--ndjson");
-    const isHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
-    const isVersion = rawArgs.includes("--version") || rawArgs.includes("-V");
-    if (!isHelp && !isVersion && (rawArgs.length === 0 || !hasSubcommand)) {
-      await showLandingPage(isJson);
+    const decision = decideEntryPoint(process.argv.slice(2));
+    if (decision.mode === "landing") {
+      await showLandingPage(decision.isJson);
       return;
     }
     await program.parseAsync(process.argv);
@@ -13582,5 +13607,19 @@ async function main() {
     process.exit(1);
   }
 }
-main();
+function isMainEntrypoint() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath2(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+if (isMainEntrypoint()) {
+  main();
+}
+export {
+  KNOWN_SUBCOMMANDS,
+  decideEntryPoint
+};
 //# sourceMappingURL=main.js.map

@@ -55,6 +55,7 @@ describe("chainId integrity (SSOT 7.4)", () => {
       base: 8453,
       bnb: 56,
       monad: 143,
+      arbitrum: 42161,
     };
     for (const [key, expected] of Object.entries(canonical)) {
       const cfg = reg.chains.get(key);
@@ -80,8 +81,11 @@ describe("chainId integrity (SSOT 7.4)", () => {
   // them is a chain-list change (SSOT Section 3, requires explicit
   // approval), so for now they are tracked as known orphans. Removing an
   // entry from this set is the right move once chains.toml is extended.
+  //
+  // arbitrum was promoted to a full source chain on 2026-05-24 (chains.toml
+  // gained [chain.arbitrum] + Uniswap V3 / Aave V3 protocol configs), so it
+  // is no longer an orphan. ethereum remains bridge-only (DEST_CHAIN_META).
   const KNOWN_ORPHAN_TOKEN_TABLES = new Set<string>([
-    "arbitrum",
     "ethereum",
   ]);
 
