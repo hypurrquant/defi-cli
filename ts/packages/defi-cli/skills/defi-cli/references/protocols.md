@@ -86,12 +86,21 @@
 
 ---
 
+## Arbitrum (chain: `arbitrum`, Chain ID: 42161) — 🟡 staged
+
+| Slug | Name | Interface | Notes |
+|------|------|-----------|-------|
+| `aave-v3-arbitrum` | Aave V3 | aave_v3 | Official (bgd-labs address-book) |
+| `uniswap-v3-arbitrum` | Uniswap V3 | uniswap_v3 | V3 fee-only |
+
+---
+
 ## DEX Aggregator Providers (`defi swap --provider`)
 
 | Provider | Supported chains | Notes |
 |----------|------------------|-------|
-| `kyber` (KyberSwap) | hyperevm, base, bnb | NOT mantle, NOT monad |
-| `openocean` | hyperevm, mantle, base, bnb | Universal fallback |
+| `kyber` (KyberSwap) | hyperevm, base, bnb, arbitrum | NOT mantle, NOT monad |
+| `openocean` | hyperevm, mantle, base, bnb, arbitrum | Universal fallback |
 | `liquid` (LiquidSwap) | hyperevm | HyperEVM-native |
 | `lifi` (LI.FI) | all source chains (via chain_id) | Cross-chain capable |
 | `relay` (Relay) | all source chains (via chain_id) | Multi-step routes (auto-skips approve step) |

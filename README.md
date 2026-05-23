@@ -8,7 +8,7 @@
   ██████╔╝███████╗██║     ██║    ╚██████╗███████╗██║
   ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-  5 chains · 39 protocols · 5 aggregators
+  6 chains · 41 protocols · 5 aggregators
 ```
 
 Multi-chain DeFi toolkit with verified mainnet broadcast paths. Lending, LP farming, DEX swap, cross-chain bridge, yield comparison — all from your terminal. Built for humans and AI agents.

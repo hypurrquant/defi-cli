@@ -12,7 +12,7 @@ metadata:
 
 Multi-chain DeFi CLI — lending, DEX swaps, LP management, bridging, yield comparison.
 
-**5 chains · 39 protocols · 5 DEX aggregators**
+**6 chains · 41 protocols · 5 DEX aggregators**
 
 ## Rules
 
@@ -36,7 +36,7 @@ Use `defi` if global install works, otherwise `npx -y -p @hypurrquant/defi-cli@l
 
 ## Global Flags
 
-`--json` (required) | `--chain <chain>` (hyperevm, mantle, base, bnb, monad) | `--dry-run` (default, safe) | `--broadcast` (executes tx) | `--fields <f1,f2>` | `--ndjson`
+`--json` (required) | `--chain <chain>` (hyperevm, mantle, base, bnb, monad, arbitrum) | `--dry-run` (default, safe) | `--broadcast` (executes tx) | `--fields <f1,f2>` | `--ndjson`
 
 **Wallet**: set `DEFI_WALLET_ADDRESS` env for read queries. Set `DEFI_PRIVATE_KEY` for tx signing. Or use `DEFI_WALLET_ADDRESS=ows:<name>` after `defi ows create <name>` for encrypted vault.
 
@@ -56,12 +56,13 @@ export DEFI_PRIVATE_KEY=0xYourPrivateKey   # only needed for broadcasting
 | `base` | Base | 8453 | 🟢 production |
 | `bnb` | BNB Chain | 56 | 🟢 production |
 | `monad` | Monad | 143 | 🟡 staged |
+| `arbitrum` | Arbitrum One | 42161 | 🟡 staged |
 
 🟢 = mainnet broadcast verified | 🟡 = configs verified, awaiting funded broadcast
 
 ## References
 
-- **`references/protocols.md`** — full protocol slug catalog per chain (39 protocols across 5 chains)
+- **`references/protocols.md`** — full protocol slug catalog per chain (41 protocols across 6 chains)
 - **`references/commands.md`** — every CLI command with flags, dry-run shape, and JSON envelope notes
 
 ## Scripts (`scripts/`)
