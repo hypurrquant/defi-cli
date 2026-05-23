@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dw/@hypurrquant/defi-cli.svg)](https://www.npmjs.com/package/@hypurrquant/defi-cli)
 [![license](https://img.shields.io/npm/l/@hypurrquant/defi-cli.svg)](https://github.com/hypurrquant/defi-cli/blob/main/LICENSE)
 
-Multi-chain DeFi CLI — **5 chains · 39 protocols · 5 aggregators**. Lending, LP farming with emission claim, DEX swap via aggregator, cross-chain bridge.
+Multi-chain DeFi CLI — **6 chains · 41 protocols · 5 aggregators**. Lending, LP farming with emission claim, DEX swap via aggregator, cross-chain bridge.
 
 ```bash
 npm install -g @hypurrquant/defi-cli
